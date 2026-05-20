@@ -3,24 +3,25 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import {
   Plus, Download, Trash2, GraduationCap, ArrowLeft,
-  Edit, Phone, Mail, MapPin, BookOpen, Camera, ChevronLeft, ChevronRight
+  Edit, Phone, Mail, MapPin, BookOpen, Camera, ChevronLeft, ChevronRight, Upload
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, StatusBadge, Pagination, SearchInput, Avatar, EmptyState, PageLoader, FormRow, ColumnSelector, useColumnSelector } from '../../components/ui';
+import { BulkUploadModal } from '../../components/ui/BulkUploadModal';
 import { format } from 'date-fns';
 
 const STUDENT_COLS = [
-  { key: 'classSection',      label: 'Class & Section' },
-  { key: 'rollNumber',        label: 'Roll Number' },
-  { key: 'gender',            label: 'Gender' },
-  { key: 'status',            label: 'Status' },
+  { key: 'classSection',      label: 'Class & Section',      required: true },
+  { key: 'rollNumber',        label: 'Roll Number',          required: true },
+  { key: 'gender',            label: 'Gender',               required: true },
+  { key: 'status',            label: 'Status',               required: true },
   { key: 'mobile',            label: 'Mobile Number' },
-  { key: 'dob',               label: 'Date of Birth' },
-  { key: 'admissionNumber',   label: 'Admission Number' },
+  { key: 'dob',               label: 'Date of Birth',        required: true },
+  { key: 'admissionNumber',   label: 'Admission Number',     required: true },
   { key: 'admissionDate',     label: 'Admission Date',       default: false },
   { key: 'parentName',        label: 'Parent Name' },
-  { key: 'parentMobile',      label: 'Parent Mobile',        default: false },
+  { key: 'parentMobile',      label: 'Parent Mobile',        required: true },
   { key: 'address',           label: 'Home Address',         default: false },
   { key: 'nationality',       label: 'Nationality',          default: false },
   { key: 'religion',          label: 'Religion',             default: false },
@@ -51,6 +52,7 @@ export default function Students() {
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
   const [editStudent, setEditStudent] = useState(null);
   const [viewStudent, setViewStudent] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
@@ -298,6 +300,9 @@ export default function Students() {
               <GraduationCap size={16} /> Promote ({selected.length})
             </button>
           )}
+          <button className="btn btn-secondary" onClick={() => setShowBulkModal(true)}>
+            <Upload size={16} /> Bulk Upload
+          </button>
           <button className="btn btn-primary" onClick={openAdd}>
             <Plus size={16} /> Add Student
           </button>
@@ -428,6 +433,7 @@ export default function Students() {
         onConfirm={bulkDeleteMutation}
         title="Delete Students" message={`This will permanently delete ${selected.length} student(s) and cannot be undone.`} danger
       />
+      <BulkUploadModal open={showBulkModal} onClose={() => setShowBulkModal(false)} type="student" onSuccess={() => qc.invalidateQueries(['students'])} />
     </div>
   );
 }
@@ -475,6 +481,37 @@ function AddEditModal({
     reader.readAsDataURL(file);
   };
 
+  const handleTabSwitch = (targetTabKey) => {
+    if (formTab === targetTabKey) return;
+    
+    const values = control._formValues;
+    if (formTab === 'personal') {
+      const req = [
+        { key: 'firstName', label: 'First Name' },
+        { key: 'lastName', label: 'Last Name' },
+        { key: 'gender', label: 'Gender' },
+        { key: 'dateOfBirth', label: 'Date of Birth' },
+        { key: 'mobile', label: 'Mobile Number' },
+        { key: 'address', label: 'Address' }
+      ];
+      for (const f of req) {
+        if (!values[f.key]) return toast.error(`Please fill the mandatory field: ${f.label}`);
+      }
+    } else if (formTab === 'academics') {
+      const req = [
+        { key: 'admissionNumber', label: 'Admission Number' },
+        { key: 'admissionDate', label: 'Admission Date' },
+        { key: 'classGroup', label: 'Class Group' },
+        { key: 'section', label: 'Section' },
+        { key: 'rollNumber', label: 'Roll Number' }
+      ];
+      for (const f of req) {
+        if (!values[f.key]) return toast.error(`Please fill the mandatory field: ${f.label}`);
+      }
+    }
+    setFormTab(targetTabKey);
+  };
+
   return (
     <Modal open={open} onClose={onClose} title={editStudent ? 'Edit Student' : 'Add New Student'} size="lg"
       footer={
@@ -487,7 +524,7 @@ function AddEditModal({
           {/* Right: Next (on tabs 1–3) + Add Student (always) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {tabIdx < FORM_TABS.length - 1 && (
-              <button className="btn btn-secondary" onClick={() => setFormTab(FORM_TABS[tabIdx + 1].key)}>
+              <button type="button" className="btn btn-secondary" onClick={() => handleTabSwitch(FORM_TABS[tabIdx + 1].key)}>
                 Next <ChevronRight size={15} />
               </button>
             )}
@@ -509,7 +546,7 @@ function AddEditModal({
           const active = formTab === tab.key;
           const done = i < tabIdx;
           return (
-            <button key={tab.key} type="button" onClick={() => setFormTab(tab.key)}
+            <button key={tab.key} type="button" onClick={() => handleTabSwitch(tab.key)}
               style={{
                 flex: 1, padding: '10px 8px', border: 'none', background: 'none', cursor: 'pointer',
                 borderBottom: active ? '2px solid var(--primary)' : '2px solid transparent',
@@ -815,6 +852,7 @@ function ParentFormInline({ draft, setDraft, onSave, onCancel }) {
 // ── Student Detail Page ───────────────────────────────────────────────────────
 function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
   const [activeTab, setActiveTab] = useState('personal');
+  const [zoomImage, setZoomImage] = useState(false);
 
   const classInfo = student.currentClass;
 
@@ -840,7 +878,9 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
       {/* Profile card */}
       <div className="card" style={{ padding: 24, marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
-          <Avatar src={student.photo} name={student.name} size={80} />
+          <div onClick={() => student.photo && setZoomImage(true)} style={{ cursor: student.photo ? 'zoom-in' : 'default' }}>
+            <Avatar src={student.photo} name={student.name} size={80} />
+          </div>
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
               <h2 className="text-24-bold">{student.name}</h2>
@@ -971,6 +1011,29 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
           )}
         </div>
       </div>
+      {zoomImage && student.photo && (
+        <div 
+          onClick={() => setZoomImage(false)}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)', zIndex: 9999,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'zoom-out'
+          }}
+        >
+          <img 
+            src={student.photo} 
+            alt={student.name} 
+            onClick={(e) => e.stopPropagation()}
+            style={{ 
+              width: 320, height: 320, objectFit: 'cover', 
+              borderRadius: '50%', border: '4px solid white',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+              cursor: 'default'
+            }} 
+          />
+        </div>
+      )}
     </div>
   );
 }

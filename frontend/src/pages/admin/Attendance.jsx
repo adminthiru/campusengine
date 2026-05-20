@@ -1,35 +1,59 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { UserCheck, Save, ChevronLeft, ChevronRight } from 'lucide-react';
+import { UserCheck, Save, ChevronLeft, ChevronRight, Edit2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
-import { PageLoader, StatusBadge, Avatar } from '../../components/ui';
-import { useAuth } from '../../store/AuthContext';
+import { PageLoader, Avatar } from '../../components/ui';
+
+const BASE_STATUS_CONFIG = [
+  { key: 'present',  label: 'P',  fullLabel: 'Present',  color: '#10b981', bg: '#f0fdf4' },
+  { key: 'absent',   label: 'A',  fullLabel: 'Absent',   color: '#ef4444', bg: '#fef2f2' },
+  { key: 'half_day', label: 'H',  fullLabel: 'Half Day', color: '#f97316', bg: '#fff7ed' },
+  { key: 'late',     label: 'L',  fullLabel: 'Late',     color: '#f59e0b', bg: '#fffbeb' },
+  { key: 'excused',  label: 'E',  fullLabel: 'Excused',  color: '#6366f1', bg: '#eef2ff' },
+];
+
+// Extra statuses for employees — driven entirely by school leave config
+const LEAVE_META = {
+  od: { label: 'OD', fullLabel: 'On Duty',      color: '#0ea5e9', bg: '#f0f9ff' },
+  cl: { label: 'CL', fullLabel: 'Casual Leave', color: '#8b5cf6', bg: '#f5f3ff' },
+  sl: { label: 'SL', fullLabel: 'Sick Leave',   color: '#ec4899', bg: '#fdf2f8' },
+};
 
 export default function Attendance() {
-  const { user } = useAuth();
   const qc = useQueryClient();
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [classId, setClassId] = useState('');
-  const [subjectId, setSubjectId] = useState('');
-  const [period, setPeriod] = useState(1);
-  const [tab, setTab] = useState('student'); // student | employee
-  const [attendance, setAttendance] = useState({});
+  const [empRole, setEmpRole] = useState('');
+  const [tab, setTab] = useState('student');
+  const [attendance, setAttendance] = useState({}); // { [personId]: { status, remarks } }
+  const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const { data: classData } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes') });
-  const classes = classData?.classes || [];
+  const { data: schoolData } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
+  const school = schoolData?.school;
 
-  const { data: subjectData } = useQuery({
-    queryKey: ['subjects', classId], enabled: !!classId,
-    queryFn: () => api.get(`/subjects?classId=${classId}`)
+  // Build employee status config — fully driven by school leave settings (no hardcoded extras)
+  const empStatusConfig = (() => {
+    const leaveTypes = school?.leaveTypes?.length
+      ? school.leaveTypes
+      : [{ code: 'od', enabled: true }, { code: 'cl', enabled: true }, { code: 'sl', enabled: true }];
+    const extra = leaveTypes
+      .filter(lt => lt.enabled && LEAVE_META[lt.code])
+      .map(lt => ({ key: lt.code, ...LEAVE_META[lt.code] }));
+    return [...BASE_STATUS_CONFIG, ...extra];
+  })();
+
+  const { data: classData } = useQuery({
+    queryKey: ['classes'],
+    queryFn: () => api.get('/classes')
   });
-  const subjects = subjectData?.subjects || [];
+  const classes = classData?.classes || [];
 
   const { data: studentData, isLoading: loadingStudents } = useQuery({
     queryKey: ['students-attendance', classId],
-    enabled: !!classId,
+    enabled: tab === 'student' && !!classId,
     queryFn: () => api.get(`/students?classId=${classId}&limit=100&status=active`)
   });
   const students = studentData?.students || [];
@@ -39,53 +63,99 @@ export default function Attendance() {
     queryFn: () => api.get('/employees?limit=200&status=active'),
     enabled: tab === 'employee'
   });
-  const employees = empData?.employees || [];
+  const allEmployees = empData?.employees || [];
 
-  // Load existing attendance
-  useQuery({
-    queryKey: ['attendance-existing', date, classId, period, tab],
+  // Unique roles from employees
+  const empRoles = [...new Set(allEmployees.map(e => e.role).filter(Boolean))].sort();
+  const employees = empRole ? allEmployees.filter(e => e.role === empRole) : allEmployees;
+
+  // Parse month/year from selected date for leave balance tracking
+  const [yearStr, monthStr] = date.split('-');
+  const yearNum = Number(yearStr), monthNum = Number(monthStr);
+
+  // Monthly leave usage per employee — auto-resets each month naturally
+  const { data: leaveBalData } = useQuery({
+    queryKey: ['leave-balance', monthNum, yearNum],
+    enabled: tab === 'employee',
+    queryFn: () => api.get(`/attendance/leave-balance?month=${monthNum}&year=${yearNum}`)
+  });
+  const usedLeave = leaveBalData?.used || {};
+
+  // Monthly limits from school settings
+  const clLimit = school?.leaveTypes?.find(lt => lt.code === 'cl')?.daysPerMonth ?? 1;
+  const slLimit = school?.leaveTypes?.find(lt => lt.code === 'sl')?.daysPerMonth ?? 1;
+
+  const getRemaining = (empId, code) => {
+    const limit = code === 'cl' ? clLimit : code === 'sl' ? slLimit : null;
+    if (limit === null) return null;
+    return Math.max(0, limit - (usedLeave[empId]?.[code] || 0));
+  };
+
+  const { data: existingData } = useQuery({
+    queryKey: ['attendance-existing', date, classId, tab],
     enabled: tab === 'student' ? !!classId : true,
-    queryFn: () => api.get(`/attendance?type=${tab}&classId=${classId}&date=${date}`),
-    onSuccess: (data) => {
-      const existing = data.attendance?.[0];
-      if (existing) {
-        const map = {};
-        existing.records.forEach(r => {
-          const id = r.student?._id || r.employee?._id || r.student || r.employee;
-          if (id) map[id] = r.status;
-        });
-        setAttendance(map);
-      }
-    }
+    queryFn: () => api.get(`/attendance?type=${tab}&classId=${classId}&date=${date}`)
   });
 
+  // Populate attendance from saved data whenever query result changes
+  useEffect(() => {
+    if (existingData === undefined) return;
+    const existing = existingData?.attendance?.[0];
+    if (existing) {
+      const map = {};
+      existing.records.forEach(r => {
+        const id = r.student?._id || r.employee?._id || r.student || r.employee;
+        if (id) map[String(id)] = { status: r.status, remarks: r.remarks || '' };
+      });
+      setAttendance(map);
+    } else {
+      setAttendance({});
+    }
+    setEditMode(false);
+  }, [existingData]);
+
+  const people = tab === 'student' ? students : employees;
+  const statusConfig = tab === 'student' ? BASE_STATUS_CONFIG : empStatusConfig;
+
+  const setStatus = (id, status) => {
+    setAttendance(prev => ({
+      ...prev,
+      [id]: { status, remarks: prev[id]?.remarks || '' }
+    }));
+  };
+
+  const setRemarks = (id, remarks) => {
+    setAttendance(prev => ({
+      ...prev,
+      [id]: { status: prev[id]?.status, remarks }
+    }));
+  };
+
   const toggleAll = (status) => {
-    const people = tab === 'student' ? students : employees;
     const map = {};
-    people.forEach(p => { map[p._id] = status; });
+    people.forEach(p => {
+      map[p._id] = { status, remarks: attendance[p._id]?.remarks || '' };
+    });
     setAttendance(map);
   };
 
-  const setStatus = (id, status) => {
-    setAttendance(prev => ({ ...prev, [id]: status }));
-  };
-
   const saveAttendance = async () => {
-    const people = tab === 'student' ? students : employees;
     if (people.length === 0) return toast.error('No students/employees to mark');
     setSaving(true);
     try {
       const records = people.map(p => ({
         [tab === 'student' ? 'student' : 'employee']: p._id,
-        status: attendance[p._id] || 'present'
+        status: attendance[p._id]?.status || 'present',
+        remarks: attendance[p._id]?.remarks || ''
       }));
       if (tab === 'student') {
-        await api.post('/attendance/student', { classId, date, period, subjectId: subjectId || undefined, records });
+        await api.post('/attendance/student', { classId, date, records });
       } else {
         await api.post('/attendance/employee', { date, records });
       }
       toast.success('Attendance saved!');
       qc.invalidateQueries(['attendance-existing']);
+      setEditMode(false);
     } catch (err) {
       toast.error(err.message || 'Failed to save');
     } finally {
@@ -93,16 +163,21 @@ export default function Attendance() {
     }
   };
 
-  const statusConfig = [
-    { key: 'present', label: 'P', color: '#10b981', bg: '#f0fdf4' },
-    { key: 'absent', label: 'A', color: '#ef4444', bg: '#fef2f2' },
-    { key: 'late', label: 'L', color: '#f59e0b', bg: '#fffbeb' },
-    { key: 'excused', label: 'E', color: '#6366f1', bg: '#eef2ff' },
+  // Stats
+  const markedCount = people.filter(p => attendance[p._id]?.status).length;
+  const notMarked = people.length - markedCount;
+  const counts = statusConfig.reduce((acc, s) => {
+    acc[s.key] = people.filter(p => attendance[p._id]?.status === s.key).length;
+    return acc;
+  }, {});
+
+  const statsCards = [
+    { label: 'Total',      val: people.length, color: 'var(--text-primary)' },
+    ...statusConfig.map(s => ({ label: s.fullLabel, val: counts[s.key], color: s.color })),
+    { label: 'Not Marked', val: notMarked,      color: 'var(--text-muted)' },
   ];
 
-  const people = tab === 'student' ? students : employees;
-  const presentCount = Object.values(attendance).filter(s => s === 'present').length;
-  const absentCount = Object.values(attendance).filter(s => s === 'absent').length;
+  const isLoading = (tab === 'student' && loadingStudents) || (tab === 'employee' && loadingEmps);
 
   return (
     <div>
@@ -115,71 +190,101 @@ export default function Attendance() {
           <button className="btn btn-secondary btn-sm btn-icon" onClick={() => {
             const d = new Date(date); d.setDate(d.getDate() - 1); setDate(format(d, 'yyyy-MM-dd'));
           }}><ChevronLeft size={16} /></button>
-          <input type="date" className="form-control" style={{ width: 'auto' }} value={date} onChange={e => setDate(e.target.value)} max={format(new Date(), 'yyyy-MM-dd')} />
+          <input type="date" className="form-control" style={{ width: 'auto' }} value={date}
+            onChange={e => setDate(e.target.value)} max={format(new Date(), 'yyyy-MM-dd')} />
           <button className="btn btn-secondary btn-sm btn-icon" onClick={() => {
             const d = new Date(date); d.setDate(d.getDate() + 1); setDate(format(d, 'yyyy-MM-dd'));
           }}><ChevronRight size={16} /></button>
         </div>
       </div>
 
-      {/* Tab */}
+      {/* Tabs */}
       <div className="tabs" style={{ marginBottom: 20 }}>
         {['student', 'employee'].map(t => (
-          <button key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => { setTab(t); setAttendance({}); }}
-            style={{ textTransform: 'capitalize' }}>{t} Attendance</button>
+          <button key={t} className={`tab ${tab === t ? 'active' : ''}`}
+            onClick={() => { setTab(t); if (t === 'employee') setClassId(''); if (t === 'student') setEmpRole(''); window.scrollTo({ top: 0, behavior: 'instant' }); }}
+            style={{ textTransform: 'capitalize' }}>
+            {t} Attendance
+          </button>
         ))}
       </div>
 
-      {/* Filters */}
+      {/* Filter bar */}
       <div className="filter-bar">
         {tab === 'student' && (
-          <>
-            <select className="form-control" style={{ width: 'auto' }} value={classId} onChange={e => { setClassId(e.target.value); setAttendance({}); }}>
-              <option value="">Select Class</option>
-              {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
-            </select>
-            <select className="form-control" style={{ width: 'auto' }} value={period} onChange={e => setPeriod(Number(e.target.value))}>
-              {Array.from({ length: 8 }, (_, i) => <option key={i + 1} value={i + 1}>Period {i + 1}</option>)}
-            </select>
-            <select className="form-control" style={{ width: 'auto' }} value={subjectId} onChange={e => setSubjectId(e.target.value)}>
-              <option value="">Select Subject</option>
-              {subjects.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
-            </select>
-          </>
+          <select className="form-control" style={{ width: 'auto' }} value={classId}
+            onChange={e => setClassId(e.target.value)}>
+            <option value="">Select Class</option>
+            {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
+          </select>
         )}
-
-        <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
-          <button className="btn btn-success btn-sm" onClick={() => toggleAll('present')}>All Present</button>
-          <button className="btn btn-danger btn-sm" onClick={() => toggleAll('absent')}>All Absent</button>
+        {tab === 'employee' && empRoles.length > 0 && (
+          <select className="form-control" style={{ width: 'auto' }} value={empRole}
+            onChange={e => setEmpRole(e.target.value)}>
+            <option value="">All Roles</option>
+            {empRoles.map(r => (
+              <option key={r} value={r} style={{ textTransform: 'capitalize' }}>{r}</option>
+            ))}
+          </select>
+        )}
+        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
+          {editMode && people.length > 0 && (
+            <>
+              <button className="btn btn-success btn-sm" onClick={() => toggleAll('present')}>All Present</button>
+              <button className="btn btn-danger btn-sm" onClick={() => toggleAll('absent')}>All Absent</button>
+            </>
+          )}
+          {people.length > 0 && (
+            editMode ? (
+              <>
+                <button className="btn btn-secondary btn-sm" onClick={() => {
+                  setEditMode(false);
+                  qc.invalidateQueries(['attendance-existing']);
+                }}>Cancel</button>
+                <button className="btn btn-primary btn-sm" onClick={saveAttendance} disabled={saving}>
+                  {saving
+                    ? <><div className="spinner" style={{ width: 14, height: 14 }} />Saving...</>
+                    : <><Save size={14} /> Save Attendance</>}
+                </button>
+              </>
+            ) : (
+              <button className="btn btn-primary btn-sm" onClick={() => setEditMode(true)}>
+                <Edit2 size={14} /> Edit Attendance
+              </button>
+            )
+          )}
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats cards — full width equal columns */}
       {people.length > 0 && (
-        <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-          {[
-            { label: 'Total', val: people.length, color: 'var(--text-primary)' },
-            { label: 'Present', val: presentCount, color: '#10b981' },
-            { label: 'Absent', val: absentCount, color: '#ef4444' },
-            { label: 'Not Marked', val: people.length - Object.keys(attendance).length, color: 'var(--text-muted)' },
-          ].map(s => (
-            <div key={s.label} style={{ background: 'white', padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)', textAlign: 'center' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${statsCards.length}, 1fr)`,
+          gap: 10,
+          marginBottom: 16
+        }}>
+          {statsCards.map(s => (
+            <div key={s.label} style={{
+              background: 'white', padding: '10px 6px',
+              borderRadius: 8, border: '1px solid var(--border)', textAlign: 'center'
+            }}>
               <div className="text-20-bold" style={{ color: s.color }}>{s.val}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{s.label}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{s.label}</div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Attendance table */}
-      {(tab === 'student' && !classId) ? (
+      {/* Table */}
+      {tab === 'student' && !classId ? (
         <div className="card">
           <div className="empty-state">
             <div className="empty-state-icon"><UserCheck size={28} /></div>
             <p>Select a class to mark attendance</p>
           </div>
         </div>
-      ) : (loadingStudents && tab === 'student') || (loadingEmps && tab === 'employee') ? <PageLoader /> : (
+      ) : isLoading ? <PageLoader /> : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div className="table-container">
             <table>
@@ -187,20 +292,25 @@ export default function Attendance() {
                 <tr>
                   <th>#</th>
                   <th>Name</th>
-                  {tab === 'student' && <th>Admission No</th>}
-                  {tab === 'employee' && <th>Employee ID</th>}
+                  <th>{tab === 'student' ? 'Admission No' : 'Employee ID'}</th>
                   <th>Status</th>
-                  <th>Mark</th>
+                  {editMode && <th>Mark</th>}
+                  <th>Remarks</th>
                 </tr>
               </thead>
               <tbody>
                 {people.length === 0 && (
-                  <tr><td colSpan={5} style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>No records found</td></tr>
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
+                      No records found
+                    </td>
+                  </tr>
                 )}
                 {people.map((person, idx) => {
                   const current = attendance[person._id];
+                  const sc = statusConfig.find(s => s.key === current?.status);
                   return (
-                    <tr key={person._id} style={{ background: current === 'absent' ? '#fff5f5' : current === 'late' ? '#fffdf5' : undefined }}>
+                    <tr key={person._id} style={{ background: sc ? sc.bg + '66' : undefined }}>
                       <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{idx + 1}</td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -212,24 +322,72 @@ export default function Attendance() {
                         {tab === 'student' ? person.admissionNumber : person.employeeId}
                       </td>
                       <td>
-                        {current ? <StatusBadge status={current} /> : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Not marked</span>}
+                        {sc ? (
+                          <span style={{
+                            display: 'inline-block', padding: '2px 10px', borderRadius: 20,
+                            background: sc.bg, color: sc.color, fontSize: 12, fontWeight: 600,
+                            border: `1px solid ${sc.color}33`
+                          }}>{sc.fullLabel}</span>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Not marked</span>
+                        )}
                       </td>
+                      {editMode && (
+                        <td>
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {statusConfig.map(s => {
+                              const isTracked = s.key === 'cl' || s.key === 'sl';
+                              const remaining = isTracked ? getRemaining(person._id, s.key) : null;
+                              const isSelected = current?.status === s.key;
+                              const limit = s.key === 'cl' ? clLimit : s.key === 'sl' ? slLimit : null;
+                              // Disable only if balance exhausted AND not already selected today
+                              const isDisabled = isTracked && remaining === 0 && !isSelected;
+                              return (
+                                <button key={s.key}
+                                  onClick={() => !isDisabled && setStatus(person._id, s.key)}
+                                  disabled={isDisabled}
+                                  style={{
+                                    minWidth: 32, width: isTracked ? 'auto' : 32,
+                                    height: isTracked ? 42 : 32,
+                                    padding: isTracked ? '2px 8px' : 0,
+                                    border: `2px solid ${isSelected ? s.color : isDisabled ? '#e2e8f0' : 'var(--border)'}`,
+                                    borderRadius: 8,
+                                    background: isSelected ? s.bg : isDisabled ? '#f8fafc' : 'white',
+                                    color: isSelected ? s.color : isDisabled ? '#cbd5e1' : 'var(--text-muted)',
+                                    cursor: isDisabled ? 'not-allowed' : 'pointer',
+                                    transition: 'all 0.15s',
+                                    display: 'flex', flexDirection: 'column',
+                                    alignItems: 'center', justifyContent: 'center', gap: 1,
+                                    fontWeight: 700, fontSize: 11,
+                                  }}
+                                >
+                                  <span>{s.label}</span>
+                                  {isTracked && (
+                                    <span style={{
+                                      fontSize: 9, lineHeight: 1, fontWeight: 600,
+                                      color: isSelected ? s.color : isDisabled ? '#cbd5e1' : 'var(--text-muted)'
+                                    }}>
+                                      {remaining}/{limit}
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      )}
                       <td>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          {statusConfig.map(s => (
-                            <button
-                              key={s.key}
-                              onClick={() => setStatus(person._id, s.key)}
-                              className="text-12-bold"
-                              style={{
-                                width: 32, height: 32, border: `2px solid ${current === s.key ? s.color : 'var(--border)'}`,
-                                borderRadius: 8, background: current === s.key ? s.bg : 'white',
-                                color: current === s.key ? s.color : 'var(--text-muted)',
-                                cursor: 'pointer', transition: 'all 0.15s'
-                              }}
-                            >{s.label}</button>
-                          ))}
-                        </div>
+                        {editMode ? (
+                          <input type="text" className="form-control"
+                            style={{ fontSize: 13, padding: '4px 8px', minWidth: 160 }}
+                            placeholder="Remarks (optional)"
+                            value={current?.remarks || ''}
+                            onChange={e => setRemarks(person._id, e.target.value)} />
+                        ) : (
+                          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                            {current?.remarks || '—'}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -240,14 +398,6 @@ export default function Attendance() {
         </div>
       )}
 
-      {/* Save button */}
-      {people.length > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-          <button className="btn btn-primary btn-lg" onClick={saveAttendance} disabled={saving}>
-            {saving ? <><div className="spinner" style={{ width: 18, height: 18 }} />Saving...</> : <><Save size={16} /> Save Attendance</>}
-          </button>
-        </div>
-      )}
     </div>
   );
 }

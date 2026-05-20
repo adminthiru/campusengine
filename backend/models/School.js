@@ -67,6 +67,13 @@ const schoolSchema = new mongoose.Schema({
     twilioToken: String,
     twilioPhone: String
   },
+  leaveTypes: [{
+    code:       { type: String },
+    label:      { type: String },
+    enabled:    { type: Boolean, default: true },
+    daysPerMonth:{ type: Number, default: 0 }
+  }],
+  feeTerms: [{ name: { type: String } }],
   profileCompleted: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });

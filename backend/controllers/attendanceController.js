@@ -8,24 +8,21 @@ const { sendSMS } = require('../utils/sms');
 // Mark student attendance
 const markStudentAttendance = async (req, res) => {
   try {
-    const { classId, date, period, subjectId, records } = req.body;
+    const { classId, date, records } = req.body;
     const schoolId = req.user.school;
 
-    // Check if already marked
+    // Check if already marked (one record per class per day)
     const existing = await Attendance.findOne({
-      school: schoolId, class: classId, date: new Date(date),
-      period, type: 'student'
+      school: schoolId, class: classId, date: new Date(date), type: 'student'
     });
     if (existing) {
-      // Update
       existing.records = records;
       existing.markedBy = req.user._id;
       await existing.save();
     } else {
       await Attendance.create({
         school: schoolId, type: 'student', date: new Date(date),
-        class: classId, subject: subjectId, period,
-        markedBy: req.user._id, records
+        class: classId, markedBy: req.user._id, records
       });
     }
 

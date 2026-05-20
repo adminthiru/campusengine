@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { Plus, Trash2, BookOpen, Users, Edit } from 'lucide-react';
@@ -11,7 +11,8 @@ export function Classes() {
   const [showModal, setShowModal] = useState(false);
   const [editClass, setEditClass] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
-  const { register, handleSubmit, reset, formState: { errors } } = useForm();
+  const defaultClassValues = { name: '', section: '', capacity: 40, classTeacher: '', room: '', 'fees.feeType': 'yearly', 'fees.yearly': '', 'fees.lateFee': 0 };
+  const { register, handleSubmit, reset, formState: { errors } } = useForm({ defaultValues: defaultClassValues });
 
   const { data: empData } = useQuery({ queryKey: ['employees-teachers'], queryFn: () => api.get('/employees?role=teacher&limit=100') });
   const teachers = empData?.employees || [];
@@ -33,18 +34,11 @@ export function Classes() {
     onSuccess: () => { qc.invalidateQueries(['classes']); toast.success('Class removed'); }
   });
 
-  const currentAcademicYear = () => {
-    const now = new Date();
-    const y = now.getFullYear();
-    return now.getMonth() >= 5 ? `${y}-${String(y + 1).slice(-2)}` : `${y - 1}-${String(y).slice(-2)}`;
-  };
-
   const openEdit = (cls) => {
     setEditClass(cls);
     reset({
       name: cls.name, section: cls.section, capacity: cls.capacity,
       classTeacher: cls.classTeacher?._id || '', room: cls.room,
-      academicYear: cls.academicYear,
       'fees.yearly': cls.fees?.yearly, 'fees.monthly': cls.fees?.monthly,
       'fees.feeType': cls.fees?.feeType || 'yearly', 'fees.lateFee': cls.fees?.lateFee
     });
@@ -123,21 +117,15 @@ export function Classes() {
           </button>
         </>}>
         <form>
-          <FormRow cols={3}>
+          <FormRow>
             <div className="form-group">
               <label className="form-label">Class Name *</label>
               <input className="form-control" {...register('name', { required: 'Required' })} placeholder="e.g. Grade 10, Class 10, Std X" />
               {errors.name && <p style={{ color: '#ef4444', fontSize: 12 }}>{errors.name.message}</p>}
             </div>
             <div className="form-group">
-              <label className="form-label">Section *</label>
-              <input className="form-control" {...register('section', { required: 'Required' })} placeholder="e.g. A, B, C" />
-              {errors.section && <p style={{ color: '#ef4444', fontSize: 12 }}>{errors.section.message}</p>}
-            </div>
-            <div className="form-group">
-              <label className="form-label">Academic Year *</label>
-              <input className="form-control" {...register('academicYear', { required: 'Required' })} placeholder="e.g. 2025-26" defaultValue={currentAcademicYear()} />
-              {errors.academicYear && <p style={{ color: '#ef4444', fontSize: 12 }}>{errors.academicYear.message}</p>}
+              <label className="form-label">Section</label>
+              <input className="form-control" {...register('section')} placeholder="e.g. A, B, C (optional)" />
             </div>
           </FormRow>
           <FormRow>
@@ -150,7 +138,7 @@ export function Classes() {
             </div>
             <div className="form-group">
               <label className="form-label">Capacity</label>
-              <input className="form-control" type="number" {...register('capacity')} defaultValue={40} />
+              <input className="form-control" type="number" {...register('capacity')} />
             </div>
           </FormRow>
           <FormRow>
@@ -174,7 +162,7 @@ export function Classes() {
             </div>
             <div className="form-group">
               <label className="form-label">Late Fee per Day (₹)</label>
-              <input className="form-control" type="number" {...register('fees.lateFee')} defaultValue={0} />
+              <input className="form-control" type="number" {...register('fees.lateFee')} />
             </div>
           </FormRow>
         </form>
@@ -182,7 +170,7 @@ export function Classes() {
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)}
         onConfirm={() => deleteMutation.mutate(deleteId)}
-        title="Remove Class" message="This will deactivate the class." danger />
+        title="Remove Class" message="This will permanently delete the class." danger />
     </div>
   );
 }
@@ -190,13 +178,30 @@ export function Classes() {
 export function Subjects() {
   const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
+  const [editSubject, setEditSubject] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
-  const { register, handleSubmit, reset, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm();
+  const [customColor, setCustomColor] = useState('#000000');
 
-  const { data: classData } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes') });
+  const codeAutoFill = useRef(true);
+  const watchedName = watch('name');
+
+  const generateCode = (name) => {
+    if (!name?.trim()) return '';
+    const words = name.trim().split(/\s+/).filter(Boolean);
+    const prefix = words.length >= 2
+      ? words.map(w => w[0]).join('').toUpperCase().substring(0, 4)
+      : name.replace(/[^a-zA-Z]/g, '').substring(0, 4).toUpperCase();
+    return (prefix.length >= 2 ? prefix : name.substring(0, 4).toUpperCase()) + '01';
+  };
+
+  useEffect(() => {
+    if (codeAutoFill.current && watchedName) setValue('code', generateCode(watchedName));
+  }, [watchedName]);
+
   const { data: empData } = useQuery({ queryKey: ['employees-teachers'], queryFn: () => api.get('/employees?role=teacher&limit=100') });
-  const classes = classData?.classes || [];
   const teachers = empData?.employees || [];
+  const selectedColor = watch('color');
 
   const { data, isLoading } = useQuery({ queryKey: ['subjects'], queryFn: () => api.get('/subjects') });
   const subjects = data?.subjects || [];
@@ -212,6 +217,21 @@ export function Subjects() {
     onSuccess: () => { qc.invalidateQueries(['subjects']); toast.success('Subject removed'); }
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/subjects/${id}`, data),
+    onSuccess: () => { qc.invalidateQueries(['subjects']); toast.success('Subject updated!'); setEditSubject(null); reset(); },
+    onError: (err) => toast.error(err.message || 'Failed')
+  });
+
+  const openEdit = (sub) => {
+    codeAutoFill.current = false;
+    setEditSubject(sub);
+    reset({ name: sub.name, code: sub.code, type: sub.type, teacher: sub.teacher?._id || '', maxMarks: sub.maxMarks, passingMarks: sub.passingMarks, color: sub.color });
+    if (sub.color && !['#1a56e8','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#ec4899','#14b8a6'].includes(sub.color)) {
+      setCustomColor(sub.color);
+    }
+  };
+
   const SUBJECT_COLORS = ['#1a56e8','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#ec4899','#14b8a6'];
 
   return (
@@ -221,7 +241,7 @@ export function Subjects() {
           <h1 className="page-title">Subjects</h1>
           <p className="page-subtitle">{subjects.length} subjects configured</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { reset(); setShowModal(true); }}>
+        <button className="btn btn-primary" onClick={() => { codeAutoFill.current = true; reset(); setShowModal(true); }}>
           <Plus size={16} /> Add Subject
         </button>
       </div>
@@ -242,7 +262,10 @@ export function Subjects() {
                   <div className="text-16-bold">{sub.name}</div>
                   {sub.code && <span className="badge badge-secondary" style={{ marginTop: 4 }}>{sub.code}</span>}
                 </div>
-                <button className="btn btn-danger btn-sm btn-icon" onClick={() => setDeleteId(sub._id)}><Trash2 size={14} /></button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openEdit(sub)}><Edit size={14} /></button>
+                  <button className="btn btn-danger btn-sm btn-icon" onClick={() => setDeleteId(sub._id)}><Trash2 size={14} /></button>
+                </div>
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 12 }}>
                 <span>Max: {sub.maxMarks}</span>
@@ -259,16 +282,16 @@ export function Subjects() {
         </div>
       )}
 
-      <Modal open={showModal} onClose={() => setShowModal(false)} title="Add Subject"
+      <Modal open={showModal || !!editSubject} onClose={() => { setShowModal(false); setEditSubject(null); reset(); }} title={editSubject ? 'Edit Subject' : 'Add Subject'}
         footer={<>
-          <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
+          <button className="btn btn-secondary" onClick={() => { setShowModal(false); setEditSubject(null); reset(); }}>Cancel</button>
           <button className="btn btn-primary" onClick={handleSubmit(d => {
             if (!d.teacher) delete d.teacher;
             if (!d.code) delete d.code;
-            d.classes = Array.isArray(d.classes) ? d.classes : (d.classes ? [d.classes] : []);
-            createMutation.mutate(d);
+            if (editSubject) { updateMutation.mutate({ id: editSubject._id, data: d }); }
+            else { createMutation.mutate(d); }
           })}>
-            {createMutation.isLoading ? 'Saving...' : 'Add Subject'}
+            {(createMutation.isLoading || updateMutation.isLoading) ? 'Saving...' : editSubject ? 'Save Changes' : 'Add Subject'}
           </button>
         </>}>
         <form>
@@ -280,7 +303,8 @@ export function Subjects() {
             </div>
             <div className="form-group">
               <label className="form-label">Subject Code</label>
-              <input className="form-control" {...register('code')} placeholder="e.g. MATH01" />
+              <input className="form-control" {...register('code')} placeholder="e.g. MATH01"
+                onKeyDown={() => { codeAutoFill.current = false; }} />
             </div>
           </FormRow>
           <FormRow>
@@ -311,27 +335,35 @@ export function Subjects() {
             </div>
           </FormRow>
           <div className="form-group">
-            <label className="form-label">Assign to Classes</label>
-            <div style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {classes.length === 0 ? (
-                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>No classes available</span>
-              ) : classes.map(c => (
-                <label key={c._id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14 }}>
-                  <input type="checkbox" {...register('classes')} value={c._id} />
-                  {c.name} {c.section}
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="form-group">
             <label className="form-label">Color</label>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               {SUBJECT_COLORS.map(c => (
                 <label key={c} style={{ cursor: 'pointer' }}>
                   <input type="radio" {...register('color')} value={c} style={{ display: 'none' }} />
-                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: c, cursor: 'pointer' }} />
+                  <div style={{
+                    width: 30, height: 30, borderRadius: '50%', background: c, cursor: 'pointer',
+                    border: selectedColor === c ? '3px solid #fff' : '3px solid transparent',
+                    outline: selectedColor === c ? `3px solid ${c}` : '3px solid transparent',
+                    boxSizing: 'border-box', transition: 'outline 0.15s, border 0.15s'
+                  }} />
                 </label>
               ))}
+              <label style={{ cursor: 'pointer', position: 'relative' }} title="Custom color">
+                <input type="radio" {...register('color')} value={customColor} style={{ display: 'none' }} />
+                <div style={{
+                  width: 30, height: 30, borderRadius: '50%', background: customColor, cursor: 'pointer',
+                  border: selectedColor === customColor ? '3px solid #fff' : '3px solid transparent',
+                  outline: selectedColor === customColor ? `3px solid ${customColor}` : '3px solid #ccc',
+                  boxSizing: 'border-box', transition: 'outline 0.15s, border 0.15s',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden'
+                }}>
+                  <input type="color" value={customColor} onChange={e => {
+                    setCustomColor(e.target.value);
+                    setValue('color', e.target.value);
+                  }} style={{ opacity: 0, position: 'absolute', width: 30, height: 30, cursor: 'pointer', border: 'none', padding: 0 }} />
+                </div>
+              </label>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 2 }}>Last circle = custom</span>
             </div>
           </div>
         </form>
@@ -339,7 +371,7 @@ export function Subjects() {
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)}
         onConfirm={() => deleteMutation.mutate(deleteId)}
-        title="Remove Subject" message="This will deactivate the subject." danger />
+        title="Remove Subject" message="This will permanently delete the subject." danger />
     </div>
   );
 }

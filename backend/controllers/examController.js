@@ -9,7 +9,15 @@ const { sendSMS } = require('../utils/sms');
 // Create exam
 const createExam = async (req, res) => {
   try {
-    const exam = await Exam.create({ ...req.body, school: req.user.school, createdBy: req.user._id });
+    let { academicYear } = req.body;
+    if (!academicYear) {
+      const school = await School.findById(req.user.school);
+      academicYear = school?.academicYear?.current || (() => {
+        const now = new Date(), y = now.getFullYear();
+        return now.getMonth() >= 5 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
+      })();
+    }
+    const exam = await Exam.create({ ...req.body, academicYear, school: req.user.school, createdBy: req.user._id });
     res.status(201).json({ success: true, exam });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -43,7 +51,25 @@ const updateExam = async (req, res) => {
     const exam = await Exam.findOneAndUpdate(
       { _id: req.params.id, school: req.user.school }, req.body, { new: true }
     );
+    // Cascade unpublish to all results when reverting
+    if (req.body.isResultPublished === false) {
+      await ExamResult.updateMany(
+        { exam: req.params.id, school: req.user.school },
+        { isPublished: false }
+      );
+    }
     res.json({ success: true, exam });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Delete exam
+const deleteExam = async (req, res) => {
+  try {
+    await Exam.findOneAndDelete({ _id: req.params.id, school: req.user.school });
+    await ExamResult.deleteMany({ exam: req.params.id, school: req.user.school });
+    res.json({ success: true, message: 'Exam deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -267,4 +293,4 @@ const getAwardList = async (req, res) => {
   }
 };
 
-module.exports = { createExam, getExams, updateExam, enterMarks, publishResults, getResults, getResultCardPDF, getAwardList };
+module.exports = { createExam, getExams, updateExam, deleteExam, enterMarks, publishResults, getResults, getResultCardPDF, getAwardList };

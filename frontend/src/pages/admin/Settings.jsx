@@ -2,18 +2,20 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Settings as SettingsIcon, School, Key, CreditCard, Bell, Plus, Trash2, Check, Upload } from 'lucide-react';
+import { Settings as SettingsIcon, School, Key, CreditCard, Bell, Plus, Trash2, Check, Upload, CalendarCheck, ListOrdered } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useAuth } from '../../store/AuthContext';
 import { PageLoader, FormRow, StatCard } from '../../components/ui';
 
 const TABS = [
-  { id: 'school', label: 'School Profile', icon: School },
-  { id: 'grades', label: 'Grade Config', icon: Bell },
-  { id: 'subscription', label: 'Subscription', icon: CreditCard },
-  { id: 'password', label: 'Change Password', icon: Key },
-  { id: 'profile', label: 'My Profile', icon: SettingsIcon },
+  { id: 'school',      label: 'School Profile',  icon: School },
+  { id: 'grades',      label: 'Grade Config',    icon: Bell },
+  { id: 'leaves',      label: 'Leave Config',    icon: CalendarCheck },
+  { id: 'feeterms',    label: 'Fee Terms',       icon: ListOrdered },
+  { id: 'subscription',label: 'Subscription',    icon: CreditCard },
+  { id: 'password',    label: 'Change Password', icon: Key },
+  { id: 'profile',     label: 'My Profile',      icon: SettingsIcon },
 ];
 
 export default function Settings() {
@@ -56,11 +58,13 @@ export default function Settings() {
 
         {/* Content */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          {activeTab === 'school' && isAdmin && <SchoolSettings />}
-          {activeTab === 'grades' && isAdmin && <GradeSettings />}
+          {activeTab === 'school'       && isAdmin && <SchoolSettings />}
+          {activeTab === 'grades'       && isAdmin && <GradeSettings />}
+          {activeTab === 'leaves'       && isAdmin && <LeaveSettings />}
+          {activeTab === 'feeterms'     && isAdmin && <FeeTermsSettings />}
           {activeTab === 'subscription' && isAdmin && <SubscriptionSettings />}
           {activeTab === 'password' && <PasswordSettings />}
-          {activeTab === 'profile' && <ProfileSettings />}
+          {activeTab === 'profile'  && <ProfileSettings />}
         </div>
       </div>
     </div>
@@ -250,6 +254,281 @@ function GradeSettings() {
         </div>
         <button type="submit" className="btn btn-primary">Save Grade Config</button>
       </form>
+    </div>
+  );
+}
+
+const DEFAULT_LEAVE_TYPES = [
+  { code: 'od', label: 'On Duty',      color: '#0ea5e9', enabled: true, daysPerMonth: 0, note: 'Employee working outside school premises' },
+  { code: 'cl', label: 'Casual Leave', color: '#8b5cf6', enabled: true, daysPerMonth: 1, note: 'Short-notice personal leave' },
+  { code: 'sl', label: 'Sick Leave',   color: '#ec4899', enabled: true, daysPerMonth: 1, note: 'Medical / health-related absence' },
+];
+
+function Toggle({ on, color, onChange }) {
+  return (
+    <button onClick={onChange} style={{
+      width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+      background: on ? color : '#cbd5e1', position: 'relative',
+      transition: 'background 0.2s', flexShrink: 0
+    }}>
+      <span style={{
+        position: 'absolute', top: 3, left: on ? 22 : 3,
+        width: 18, height: 18, borderRadius: '50%',
+        background: 'white', transition: 'left 0.2s',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+      }} />
+    </button>
+  );
+}
+
+function LeaveSettings() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
+  const school = data?.school;
+
+  const [leaves, setLeaves] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const leaveTypes = leaves ?? (
+    school?.leaveTypes?.length
+      ? DEFAULT_LEAVE_TYPES.map(def => {
+          const saved = school.leaveTypes.find(l => l.code === def.code);
+          return saved ? { ...def, ...saved } : def;
+        })
+      : DEFAULT_LEAVE_TYPES
+  );
+
+  const update = (code, field, value) =>
+    setLeaves(leaveTypes.map(l => l.code === code ? { ...l, [field]: value } : l));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.put('/school/leave-config', {
+        leaveTypes: leaveTypes.map(({ color, note, ...rest }) => rest)
+      });
+      qc.invalidateQueries(['school']);
+      toast.success('Leave configuration saved!');
+    } catch (err) {
+      toast.error(err.message || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (isLoading) return <PageLoader />;
+
+  return (
+    <div className="card">
+      <div style={{ marginBottom: 24 }}>
+        <h2 className="text-18-bold">Leave Configuration</h2>
+        <p className="text-14-regular" style={{ color: 'var(--text-secondary)', marginTop: 4 }}>
+          Set monthly leave entitlement per employee. Disabled types won't appear in attendance marking.
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
+        {leaveTypes.map(lt => (
+          <div key={lt.code} style={{
+            display: 'flex', alignItems: 'center', gap: 16,
+            padding: '16px 20px', borderRadius: 10,
+            border: `1px solid ${lt.enabled ? lt.color + '44' : 'var(--border)'}`,
+            background: lt.enabled ? lt.color + '08' : '#fafafa',
+            opacity: lt.enabled ? 1 : 0.65,
+            transition: 'all 0.2s'
+          }}>
+            {/* Badge + info */}
+            <span style={{
+              fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 6,
+              background: lt.color + '22', color: lt.color, letterSpacing: '0.05em', flexShrink: 0
+            }}>{lt.code.toUpperCase()}</span>
+            <div style={{ flex: 1 }}>
+              <div className="text-14-semibold">{lt.label}</div>
+              <div className="text-12-regular" style={{ color: 'var(--text-muted)', marginTop: 1 }}>{lt.note}</div>
+            </div>
+
+            {/* Monthly input + yearly calculated total */}
+            {lt.code !== 'od' ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+                {/* Per month */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                  <label style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Days / month</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input
+                      type="number" min={0} step={0.5} className="form-control"
+                      style={{ width: 60, textAlign: 'center', padding: '4px 6px', fontSize: 16, fontWeight: 700, color: lt.color }}
+                      value={lt.daysPerMonth ?? ''}
+                      placeholder="0"
+                      disabled={!lt.enabled}
+                      onChange={e => update(lt.code, 'daysPerMonth', Number(e.target.value))}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>days</span>
+                  </div>
+                </div>
+                {/* Arrow + yearly total */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                  <label style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>= Per year</label>
+                  <div style={{
+                    padding: '4px 14px', borderRadius: 6, background: lt.color + '18',
+                    fontSize: 16, fontWeight: 700, color: lt.color, minWidth: 60, textAlign: 'center'
+                  }}>
+                    {(lt.daysPerMonth || 0) * 12}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ minWidth: 80, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>
+                No limit
+              </div>
+            )}
+
+            {/* Toggle */}
+            <Toggle on={lt.enabled} color={lt.color} onChange={() => update(lt.code, 'enabled', !lt.enabled)} />
+          </div>
+        ))}
+      </div>
+
+      {/* Summary: only CL and SL (leave types with limits) */}
+      {leaveTypes.some(lt => lt.enabled && lt.code !== 'od') && (
+        <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+          {leaveTypes.filter(lt => lt.enabled && lt.code !== 'od').map(lt => (
+            <div key={lt.code} style={{
+              flex: 1, padding: '14px 16px', borderRadius: 10,
+              background: lt.color + '10', border: `1px solid ${lt.color}33`
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                <span className="text-14-semibold" style={{ color: lt.color }}>{lt.label}</span>
+                <span style={{ fontSize: 11, background: lt.color + '22', color: lt.color, padding: '1px 7px', borderRadius: 4, fontWeight: 700 }}>
+                  {lt.code.toUpperCase()}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <span style={{ fontSize: 28, fontWeight: 800, color: lt.color, lineHeight: 1 }}>
+                  {lt.daysPerMonth || 0}
+                </span>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>days / month</span>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                = <strong style={{ color: lt.color }}>{(lt.daysPerMonth || 0) * 12}</strong> days / year
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button className="btn btn-primary" onClick={save} disabled={saving}>
+        {saving ? 'Saving...' : 'Save Leave Config'}
+      </button>
+    </div>
+  );
+}
+
+function FeeTermsSettings() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
+  const school = data?.school;
+
+  const [terms, setTerms] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [newName, setNewName] = useState('');
+
+  const currentTerms = terms ?? (school?.feeTerms?.length ? school.feeTerms : []);
+
+  const addTerm = () => {
+    const name = newName.trim();
+    if (!name) return;
+    if (currentTerms.some(t => t.name === name)) return toast.error('Term name already exists');
+    setTerms([...currentTerms, { name }]);
+    setNewName('');
+  };
+
+  const removeTerm = (name) => setTerms(currentTerms.filter(t => t.name !== name));
+
+  const renameTerm = (idx, value) => {
+    const updated = currentTerms.map((t, i) => i === idx ? { ...t, name: value } : t);
+    setTerms(updated);
+  };
+
+  const save = async () => {
+    if (currentTerms.some(t => !t.name.trim())) return toast.error('All term names must be filled');
+    setSaving(true);
+    try {
+      await api.put('/school/fee-terms', { feeTerms: currentTerms.map(t => ({ name: t.name.trim() })) });
+      qc.invalidateQueries(['school']);
+      toast.success('Fee terms saved!');
+    } catch (err) {
+      toast.error(err.message || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (isLoading) return <PageLoader />;
+
+  return (
+    <div className="card">
+      <div style={{ marginBottom: 24 }}>
+        <h2 className="text-18-bold">Fee Terms</h2>
+        <p className="text-14-regular" style={{ color: 'var(--text-secondary)', marginTop: 4 }}>
+          Define how many terms your school collects fees. These will appear when creating fee records.
+        </p>
+      </div>
+
+      {/* Term list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+        {currentTerms.length === 0 && (
+          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14, border: '1px dashed var(--border)', borderRadius: 8 }}>
+            No terms configured. Add at least one term below.
+          </div>
+        )}
+        {currentTerms.map((t, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#f8fafc', borderRadius: 10, border: '1px solid var(--border)' }}>
+            <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#eff6ff', color: 'var(--primary)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
+            <input
+              className="form-control"
+              style={{ flex: 1, border: 'none', background: 'transparent', padding: '2px 4px', fontWeight: 500 }}
+              value={t.name}
+              onChange={e => renameTerm(i, e.target.value)}
+              placeholder="Term name"
+            />
+            <button className="btn btn-danger btn-sm btn-icon" onClick={() => removeTerm(t.name)} title="Remove term">
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Add term input */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+        <input
+          className="form-control"
+          placeholder='e.g. Term 1, Q2, Annual...'
+          value={newName}
+          onChange={e => setNewName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && addTerm()}
+          style={{ flex: 1 }}
+        />
+        <button className="btn btn-secondary" onClick={addTerm} disabled={!newName.trim()}>
+          <Plus size={14} /> Add Term
+        </button>
+      </div>
+
+      {/* Example preview */}
+      {currentTerms.length > 0 && (
+        <div style={{ padding: '12px 16px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, marginBottom: 24 }}>
+          <div className="text-13-regular" style={{ color: '#15803d', fontWeight: 600, marginBottom: 6 }}>Preview — fee collection options</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {currentTerms.map(t => (
+              <span key={t.name} style={{ padding: '3px 12px', background: '#dcfce7', color: '#166534', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{t.name}</span>
+            ))}
+            <span style={{ padding: '3px 12px', background: '#dbeafe', color: '#1d4ed8', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Pay All</span>
+          </div>
+        </div>
+      )}
+
+      <button className="btn btn-primary" onClick={save} disabled={saving}>
+        {saving ? 'Saving...' : 'Save Fee Terms'}
+      </button>
     </div>
   );
 }

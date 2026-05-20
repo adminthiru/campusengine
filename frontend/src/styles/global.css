@@ -376,7 +376,17 @@ h1, h2, h3, h4, h5, h6 { font-family: 'Inter', sans-serif; font-weight: 700; lin
 
 .form-control::placeholder { color: var(--text-muted); }
 
-select.form-control { cursor: pointer; }
+select.form-control {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%230f172a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px;
+  padding-right: 36px;
+}
 
 textarea.form-control { resize: vertical; min-height: 90px; }
 
@@ -552,6 +562,7 @@ tbody tr:last-child td { border-bottom: none; }
   border-bottom: 2px solid var(--border);
   gap: 0;
   overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .tab {

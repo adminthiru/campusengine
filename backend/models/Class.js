@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const classSchema = new mongoose.Schema({
   school: { type: mongoose.Schema.Types.ObjectId, ref: 'School', required: true },
   name: { type: String, required: true }, // e.g., "Grade 10"
-  section: { type: String, required: true }, // e.g., "A"
+  section: { type: String, default: '' },
   classTeacher: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
   academicYear: { type: String, required: true },
   capacity: { type: Number, default: 40 },

@@ -5,41 +5,27 @@ const School = require('../models/School');
 const { sendSMS } = require('../utils/sms');
 const Student = require('../models/Student');
 
-// Check for timetable conflicts
-const checkConflicts = async (schoolId, classId, academicYear, day, period, teacher, excludeClassId = null) => {
+// Check for teacher double-booking conflicts across other classes
+const checkConflicts = async (schoolId, excludeClassId, academicYear, day, period, teacher) => {
   const conflicts = [];
+  if (!teacher) return conflicts;
 
-  // Check teacher conflicts across all classes on that day/period
-  const allTimetables = await Timetable.find({
+  // Only check other classes — the current class's old data is being replaced
+  const otherTimetables = await Timetable.find({
     school: schoolId, academicYear, isActive: true,
-    ...(excludeClassId ? { class: { $ne: excludeClassId } } : {})
+    class: { $ne: excludeClassId }
   });
 
-  for (const tt of allTimetables) {
+  for (const tt of otherTimetables) {
     const daySchedule = tt.schedule.find(s => s.day === day);
     if (!daySchedule) continue;
-    const periodSlot = daySchedule.periods.find(p => p.periodNumber === period);
-    if (periodSlot && periodSlot.teacher?.toString() === teacher?.toString()) {
+    const slot = daySchedule.periods.find(p => p.periodNumber === period && !p.isBreak);
+    if (slot && slot.teacher?.toString() === teacher.toString()) {
       const cls = await Class.findById(tt.class).select('name section');
       conflicts.push({
         type: 'teacher',
-        message: `Teacher is already assigned to ${cls?.name} ${cls?.section} for Period ${period} on ${day}`
+        message: `Teacher is already assigned to ${cls?.name} ${cls?.section} on ${day} Period ${period}`
       });
-    }
-  }
-
-  // Check if class already has a period assigned
-  const classTT = await Timetable.findOne({ school: schoolId, class: classId, academicYear });
-  if (classTT) {
-    const daySchedule = classTT.schedule.find(s => s.day === day);
-    if (daySchedule) {
-      const existing = daySchedule.periods.find(p => p.periodNumber === period && !p.isBreak);
-      if (existing && existing.subject) {
-        conflicts.push({
-          type: 'class',
-          message: `Class already has a subject assigned for Period ${period} on ${day}`
-        });
-      }
     }
   }
 
@@ -94,7 +80,7 @@ const saveTimetable = async (req, res) => {
         if (!period.isBreak && period.teacher) {
           const conflicts = await checkConflicts(
             schoolId, classId, academicYear,
-            daySchedule.day, period.periodNumber, period.teacher, classId
+            daySchedule.day, period.periodNumber, period.teacher
           );
           if (conflicts.length > 0) {
             return res.status(400).json({ success: false, message: conflicts[0].message, conflicts });
@@ -149,13 +135,18 @@ const getTimetable = async (req, res) => {
         .populate('schedule.periods.subject', 'name color')
         .populate('schedule.periods.teacher', 'name');
 
-      const teacherTT = allTT.map(tt => ({
-        ...tt.toObject(),
-        schedule: tt.schedule.map(d => ({
-          ...d,
-          periods: d.periods.filter(p => p.teacher?._id?.toString() === teacherId || p.teacher?.toString() === teacherId)
-        })).filter(d => d.periods.length > 0)
-      })).filter(tt => tt.schedule.length > 0);
+      const teacherTT = allTT.map(tt => {
+        const ttObj = tt.toObject();
+        return {
+          ...ttObj,
+          schedule: ttObj.schedule.map(d => ({
+            ...d,
+            periods: d.periods.filter(p =>
+              p.teacher?._id?.toString() === teacherId || p.teacher?.toString() === teacherId
+            )
+          })).filter(d => d.periods.length > 0)
+        };
+      }).filter(tt => tt.schedule.length > 0);
 
       return res.json({ success: true, timetables: teacherTT });
     }
@@ -189,4 +180,41 @@ const deletePeriod = async (req, res) => {
   }
 };
 
-module.exports = { saveTimetable, getTimetable, getTeacherFreeSlots, deletePeriod };
+// Get free teachers for every period on a given day (for substitution planning)
+const getDaySubstitutes = async (req, res) => {
+  try {
+    const { day, academicYear } = req.query;
+    const schoolId = req.user.school;
+    const school = await School.findById(schoolId);
+
+    const allTT = await Timetable.find({ school: schoolId, academicYear, isActive: true });
+
+    const busyByPeriod = {};
+    for (const tt of allTT) {
+      const daySchedule = tt.schedule.find(s => s.day === day);
+      if (!daySchedule) continue;
+      for (const period of daySchedule.periods) {
+        if (period.teacher && !period.isBreak) {
+          if (!busyByPeriod[period.periodNumber]) busyByPeriod[period.periodNumber] = new Set();
+          busyByPeriod[period.periodNumber].add(period.teacher.toString());
+        }
+      }
+    }
+
+    const allTeachers = await Employee.find({ school: schoolId, role: 'teacher', status: 'active' })
+      .select('name photo designation department');
+
+    const substitutes = {};
+    const periods = school.periodsPerDay || 8;
+    for (let p = 1; p <= periods; p++) {
+      const busy = busyByPeriod[p] || new Set();
+      substitutes[p] = allTeachers.filter(t => !busy.has(t._id.toString()));
+    }
+
+    res.json({ success: true, substitutes });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { saveTimetable, getTimetable, getTeacherFreeSlots, deletePeriod, getDaySubstitutes };

@@ -47,7 +47,7 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, danger
 // Status Badge
 export function StatusBadge({ status }) {
   const map = {
-    active: 'success', inactive: 'secondary', pending: 'warning',
+    active: 'success', inactive: 'danger', pending: 'warning',
     paid: 'success', partial: 'info', overdue: 'danger',
     trial: 'warning', expired: 'danger', cancelled: 'secondary',
     present: 'success', absent: 'danger', late: 'warning', excused: 'info',
@@ -55,7 +55,8 @@ export function StatusBadge({ status }) {
     on_leave: 'warning', resigned: 'secondary', terminated: 'danger',
   };
   const variant = map[status] || 'secondary';
-  return <span className={`badge badge-${variant}`}>{status?.replace(/_/g, ' ')}</span>;
+  const displayStatus = status === 'inactive' ? 'IN ACTIVE' : status?.replace(/_/g, ' ').toUpperCase();
+  return <span className={`badge badge-${variant}`}>{displayStatus}</span>;
 }
 
 // Pagination
@@ -155,15 +156,21 @@ export function InfoItem({ label, value }) {
 // Stat Card
 export function useColumnSelector(storageKey, cols) {
   const [visible, setVisible] = useState(() => {
+    let initial = new Set(cols.filter(c => c.default !== false).map(c => c.key));
     try {
       const saved = localStorage.getItem(`cols_${storageKey}`);
-      if (saved) return new Set(JSON.parse(saved));
+      if (saved) {
+        initial = new Set(JSON.parse(saved));
+      }
     } catch {}
-    return new Set(cols.filter(c => c.default !== false).map(c => c.key));
+    cols.filter(c => c.required).forEach(c => initial.add(c.key));
+    return initial;
   });
   const set = (next) => {
-    setVisible(next);
-    try { localStorage.setItem(`cols_${storageKey}`, JSON.stringify([...next])); } catch {}
+    const nextSet = new Set(next);
+    cols.filter(c => c.required).forEach(c => nextSet.add(c.key));
+    setVisible(nextSet);
+    try { localStorage.setItem(`cols_${storageKey}`, JSON.stringify([...nextSet])); } catch {}
   };
   return [visible, set];
 }
@@ -179,6 +186,8 @@ export function ColumnSelector({ storageKey, cols, visible, onChange }) {
   }, []);
 
   const toggle = (key) => {
+    const col = cols.find(c => c.key === key);
+    if (col?.required) return;
     const next = new Set(visible);
     next.has(key) ? next.delete(key) : next.add(key);
     onChange(next);
@@ -199,12 +208,12 @@ export function ColumnSelector({ storageKey, cols, visible, onChange }) {
           minWidth: 210, maxHeight: 360, overflowY: 'auto',
         }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--border)', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-            <input type="checkbox" checked={allOn} onChange={() => onChange(allOn ? new Set() : new Set(cols.map(c => c.key)))} />
+            <input type="checkbox" checked={allOn} onChange={() => onChange(allOn ? new Set(cols.filter(c => c.required).map(c => c.key)) : new Set(cols.map(c => c.key)))} />
             Select All
           </label>
           {cols.map(col => (
-            <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', cursor: 'pointer', fontSize: 14, color: 'var(--text-primary)' }}>
-              <input type="checkbox" checked={visible.has(col.key)} onChange={() => toggle(col.key)} />
+            <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', cursor: col.required ? 'not-allowed' : 'pointer', fontSize: 14, color: col.required ? 'var(--text-muted)' : 'var(--text-primary)' }}>
+              <input type="checkbox" checked={visible.has(col.key)} onChange={() => toggle(col.key)} disabled={col.required} />
               {col.label}
             </label>
           ))}

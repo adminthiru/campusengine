@@ -129,13 +129,12 @@ const updateEmployee = async (req, res) => {
 // Delete employee
 const deleteEmployee = async (req, res) => {
   try {
-    const employee = await Employee.findOneAndUpdate(
-      { _id: req.params.id, school: req.user.school },
-      { status: 'inactive' }, { new: true }
-    );
+    const employee = await Employee.findOneAndDelete({ _id: req.params.id, school: req.user.school });
     if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
-    if (employee.user) await User.findByIdAndUpdate(employee.user, { isActive: false });
-    res.json({ success: true, message: 'Employee deactivated' });
+    if (employee.user) {
+      await User.findByIdAndDelete(employee.user);
+    }
+    res.json({ success: true, message: 'Employee deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

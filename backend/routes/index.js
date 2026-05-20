@@ -25,6 +25,9 @@ const SmsLog = require('../models/SmsLog');
 const { Expense, Transport } = require('../models/Expense');
 const School = require('../models/School');
 const User = require('../models/User');
+const Student = require('../models/Student');
+const Employee = require('../models/Employee');
+const { v4: uuidv4 } = require('uuid');
 
 // Multer setup
 const storage = multer.diskStorage({
@@ -54,6 +57,21 @@ router.post('/school/upload-logo', protect, upload.single('logo'), schoolCtrl.up
 router.put('/school/grade-config', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
   try {
     const school = await School.findByIdAndUpdate(req.user.school, { gradeConfig: req.body }, { new: true });
+    res.json({ success: true, school });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Leave config
+router.put('/school/leave-config', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const school = await School.findByIdAndUpdate(req.user.school, { leaveTypes: req.body.leaveTypes }, { new: true });
+    res.json({ success: true, school });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.put('/school/fee-terms', protect, authorize('admin', 'correspondent'), async (req, res) => {
+  try {
+    const school = await School.findByIdAndUpdate(req.user.school, { feeTerms: req.body.feeTerms }, { new: true });
     res.json({ success: true, school });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -103,6 +121,51 @@ router.post('/employees/:id/upload-photo', protect, upload.single('photo'), asyn
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+router.post('/employees/bulk', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const { employees } = req.body;
+    if (!Array.isArray(employees) || !employees.length) return res.status(400).json({ success: false, message: 'No data provided' });
+    const schoolId = req.user.school;
+    const school = await School.findById(schoolId);
+    const results = { created: 0, failed: 0, errors: [] };
+    let baseCount = await Employee.countDocuments({ school: schoolId });
+    const validRoles = ['teacher', 'principal', 'accountant', 'maintenance', 'correspondent', 'other'];
+    for (let i = 0; i < employees.length; i++) {
+      try {
+        const e = employees[i];
+        if (!e.name?.trim()) throw new Error('Name is required');
+        if (!e.email?.trim()) throw new Error('Email is required');
+        if (!e.phone?.trim()) throw new Error('Phone is required');
+        if (!e.role?.trim()) throw new Error('Role is required');
+        const role = e.role.toLowerCase().trim();
+        if (!validRoles.includes(role)) throw new Error(`Invalid role "${e.role}". Use: ${validRoles.join(', ')}`);
+        const employeeId = `EMP${school.code}${String(baseCount + 1).padStart(4, '0')}`;
+        const emp = await Employee.create({
+          school: schoolId, employeeId, name: e.name.trim(),
+          email: e.email.trim().toLowerCase(), phone: String(e.phone).trim(), role,
+          department: e.department || undefined, designation: e.designation || undefined,
+          dateOfJoining: e.dateOfJoining ? new Date(e.dateOfJoining) : undefined,
+          dateOfBirth: e.dateOfBirth ? new Date(e.dateOfBirth) : undefined,
+          gender: e.gender?.toLowerCase().trim() || undefined,
+          bloodGroup: e.bloodGroup || undefined,
+          salary: { basic: Number(e.basicSalary) || 0, hra: Number(e.hra) || 0, da: Number(e.da) || 0 }
+        });
+        const existingUser = await User.findOne({ email: e.email.trim().toLowerCase(), school: schoolId });
+        if (!existingUser) {
+          const tempPassword = `Temp@${uuidv4().slice(0, 6)}`;
+          const userRole = ['teacher', 'principal', 'accountant', 'maintenance', 'correspondent'].includes(role) ? role : 'admin';
+          const user = await User.create({ school: schoolId, name: e.name.trim(), email: e.email.trim().toLowerCase(), phone: String(e.phone).trim(), password: tempPassword, role: userRole, employeeId: emp._id });
+          emp.user = user._id;
+          await emp.save();
+        }
+        baseCount++;
+        results.created++;
+      } catch (err) { results.failed++; results.errors.push(`Row ${i + 2}: ${err.message}`); }
+    }
+    res.json({ success: true, ...results });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // ============== STUDENTS ==============
 router.get('/students', protect, checkSubscription, stuCtrl.getStudents);
 router.post('/students', protect, checkSubscription, authorize('admin', 'correspondent', 'principal', 'accountant'), stuCtrl.createStudent);
@@ -117,6 +180,40 @@ router.post('/students/:id/upload-photo', protect, upload.single('photo'), async
     const url = `/uploads/${req.file.filename}`;
     await require('../models/Student').findByIdAndUpdate(req.params.id, { photo: url });
     res.json({ success: true, url });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.post('/students/bulk', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const { students } = req.body;
+    if (!Array.isArray(students) || !students.length) return res.status(400).json({ success: false, message: 'No data provided' });
+    const schoolId = req.user.school;
+    const school = await School.findById(schoolId);
+    const results = { created: 0, failed: 0, errors: [] };
+    let baseCount = await Student.countDocuments({ school: schoolId });
+    for (let i = 0; i < students.length; i++) {
+      try {
+        const s = students[i];
+        if (!s.name?.trim()) throw new Error('Name is required');
+        if (!s.gender?.trim()) throw new Error('Gender is required');
+        if (!s.dateOfBirth?.trim()) throw new Error('Date of Birth is required');
+        const dob = new Date(s.dateOfBirth);
+        if (isNaN(dob)) throw new Error('Invalid Date of Birth (use YYYY-MM-DD)');
+        const admissionNumber = `ADM${school.code}${new Date().getFullYear()}${String(baseCount + 1).padStart(4, '0')}`;
+        await Student.create({
+          school: schoolId, admissionNumber, name: s.name.trim(),
+          gender: s.gender.toLowerCase().trim(), dateOfBirth: dob,
+          rollNumber: s.rollNumber || undefined, bloodGroup: s.bloodGroup || undefined,
+          religion: s.religion || undefined, caste: s.caste || undefined,
+          category: s.category || undefined,
+          phone: s.phone ? String(s.phone) : undefined, email: s.email || undefined,
+          address: { street: s.address || undefined, city: s.city || undefined, state: s.state || undefined, pincode: s.pincode ? String(s.pincode) : undefined }
+        });
+        baseCount++;
+        results.created++;
+      } catch (err) { results.failed++; results.errors.push(`Row ${i + 2}: ${err.message}`); }
+    }
+    res.json({ success: true, ...results });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
@@ -147,7 +244,11 @@ router.get('/classes', protect, checkSubscription, async (req, res) => {
 router.post('/classes', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
   try {
     const school = await School.findById(req.user.school);
-    const cls = await Class.create({ ...req.body, school: req.user.school, academicYear: req.body.academicYear || school.academicYear?.current });
+    const now = new Date();
+    const y = now.getFullYear();
+    const defaultYear = now.getMonth() >= 5 ? `${y}-${String(y + 1).slice(-2)}` : `${y - 1}-${String(y).slice(-2)}`;
+    const academicYear = req.body.academicYear || school.academicYear?.current || defaultYear;
+    const cls = await Class.create({ ...req.body, school: req.user.school, academicYear });
     res.status(201).json({ success: true, class: cls });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -163,9 +264,9 @@ router.put('/classes/:id', protect, checkSubscription, async (req, res) => {
     res.json({ success: true, class: cls });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
-router.delete('/classes/:id', protect, checkSubscription, authorize('admin', 'correspondent'), async (req, res) => {
+router.delete('/classes/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
   try {
-    await Class.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, { isActive: false });
+    await Class.findOneAndDelete({ _id: req.params.id, school: req.user.school });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -198,9 +299,9 @@ router.put('/subjects/:id', protect, checkSubscription, async (req, res) => {
     res.json({ success: true, subject });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
-router.delete('/subjects/:id', protect, async (req, res) => {
+router.delete('/subjects/:id', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
   try {
-    await Subject.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, { isActive: false });
+    await Subject.findOneAndDelete({ _id: req.params.id, school: req.user.school });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -211,6 +312,29 @@ router.post('/attendance/employee', protect, checkSubscription, authorize('admin
 router.get('/attendance', protect, checkSubscription, attCtrl.getAttendance);
 router.get('/attendance/summary', protect, checkSubscription, attCtrl.getStudentAttendanceSummary);
 
+// Employee leave balance for a given month (counts CL/SL usage per employee)
+router.get('/attendance/leave-balance', protect, checkSubscription, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    const m = Number(month), y = Number(year);
+    const records = await Attendance.find({
+      school: req.user.school, type: 'employee',
+      date: { $gte: new Date(y, m - 1, 1), $lt: new Date(y, m, 1) }
+    });
+    const used = {};
+    for (const att of records) {
+      for (const rec of att.records) {
+        const id = rec.employee?.toString();
+        if (!id) continue;
+        if (!used[id]) used[id] = { cl: 0, sl: 0 };
+        if (rec.status === 'cl') used[id].cl++;
+        if (rec.status === 'sl') used[id].sl++;
+      }
+    }
+    res.json({ success: true, used });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // ============== FEES ==============
 router.get('/fees', protect, checkSubscription, feesCtrl.getFees);
 router.post('/fees', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.createFeeRecord);
@@ -218,7 +342,11 @@ router.post('/fees/collect', protect, checkSubscription, authorize('admin', 'cor
 router.post('/fees/razorpay-order', protect, checkSubscription, feesCtrl.createRazorpayOrder);
 router.post('/fees/razorpay-verify', protect, feesCtrl.verifyRazorpayPayment);
 router.get('/fees/:id/receipt', protect, feesCtrl.getReceiptPDF);
+router.post('/fees/bulk', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.createBulkFeeRecords);
 router.post('/fees/send-reminder', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.sendFeeReminder);
+router.put('/fees/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.updateFeeRecord);
+router.delete('/fees/:id/payment/:paymentId', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.reversePayment);
+router.delete('/fees/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.deleteFeeRecord);
 
 // ============== SALARY ==============
 router.get('/salaries', protect, checkSubscription, salCtrl.getSalaries);
@@ -231,12 +359,14 @@ router.get('/salaries/:id/payslip', protect, salCtrl.getPayslipPDF);
 router.get('/timetable', protect, checkSubscription, ttCtrl.getTimetable);
 router.post('/timetable', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), ttCtrl.saveTimetable);
 router.get('/timetable/free-slots', protect, checkSubscription, ttCtrl.getTeacherFreeSlots);
+router.get('/timetable/day-substitutes', protect, checkSubscription, ttCtrl.getDaySubstitutes);
 router.delete('/timetable/period', protect, checkSubscription, ttCtrl.deletePeriod);
 
 // ============== EXAMS ==============
 router.get('/exams', protect, checkSubscription, examCtrl.getExams);
 router.post('/exams', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), examCtrl.createExam);
 router.put('/exams/:id', protect, checkSubscription, examCtrl.updateExam);
+router.delete('/exams/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), examCtrl.deleteExam);
 router.post('/exams/marks', protect, checkSubscription, examCtrl.enterMarks);
 router.post('/exams/:examId/publish', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), examCtrl.publishResults);
 router.get('/exams/results', protect, checkSubscription, examCtrl.getResults);

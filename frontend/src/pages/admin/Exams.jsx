@@ -1,32 +1,61 @@
 // Exams Page
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { Plus, FileText, Download, Eye, Send } from 'lucide-react';
+import { Plus, FileText, Download, Eye, Send, Edit2, Trash2, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
-import { Modal, StatusBadge, PageLoader, EmptyState, FormRow } from '../../components/ui';
+import { Modal, ConfirmDialog, StatusBadge, PageLoader, EmptyState, FormRow } from '../../components/ui';
 import { useAuth } from '../../store/AuthContext';
+
+const EXAM_TYPES = ['unit_test', 'mid_term', 'final', 'quarterly', 'half_yearly', 'annual', 'other'];
 
 export function Exams() {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [showCreate, setShowCreate] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editExam, setEditExam] = useState(null); // null = create, object = edit
+  const [deleteId, setDeleteId] = useState(null);
   const [marksModal, setMarksModal] = useState(null);
+  const [selectedClasses, setSelectedClasses] = useState([]);
   const { register, handleSubmit, reset } = useForm();
 
   const { data: classData } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes') });
   const classes = classData?.classes || [];
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['exams'],
-    queryFn: () => api.get('/exams')
-  });
+  const { data, isLoading } = useQuery({ queryKey: ['exams'], queryFn: () => api.get('/exams') });
   const exams = data?.exams || [];
 
+  // Pre-fill form when editing
+  useEffect(() => {
+    if (editExam) {
+      reset({ name: editExam.name, type: editExam.type, term: editExam.term, status: editExam.status });
+      setSelectedClasses(editExam.classes?.map(c => c._id || c) || []);
+    } else {
+      reset({ name: '', type: 'unit_test', term: '', status: 'scheduled' });
+      setSelectedClasses([]);
+    }
+  }, [editExam, reset]);
+
+  const openCreate = () => { setEditExam(null); setShowModal(true); };
+  const openEdit = (exam) => { setEditExam(exam); setShowModal(true); };
+  const closeModal = () => { setShowModal(false); setEditExam(null); };
+
   const createMutation = useMutation({
-    mutationFn: (d) => api.post('/exams', { ...d, academicYear: user?.school?.academicYear?.current }),
-    onSuccess: () => { qc.invalidateQueries(['exams']); toast.success('Exam created!'); setShowCreate(false); reset(); },
+    mutationFn: (d) => api.post('/exams', d),
+    onSuccess: () => { qc.invalidateQueries(['exams']); toast.success('Exam created!'); closeModal(); },
+    onError: (err) => toast.error(err.message || 'Failed')
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/exams/${id}`, data),
+    onSuccess: () => { qc.invalidateQueries(['exams']); toast.success('Exam updated!'); closeModal(); },
+    onError: (err) => toast.error(err.message || 'Failed')
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/exams/${id}`),
+    onSuccess: () => { qc.invalidateQueries(['exams']); toast.success('Exam deleted!'); setDeleteId(null); },
     onError: (err) => toast.error(err.message || 'Failed')
   });
 
@@ -36,81 +65,214 @@ export function Exams() {
     onError: (err) => toast.error(err.message || 'Failed')
   });
 
+  const handleSubmitForm = handleSubmit((d) => {
+    const payload = { ...d, classes: selectedClasses };
+    if (editExam) {
+      updateMutation.mutate({ id: editExam._id, data: payload });
+    } else {
+      createMutation.mutate(payload);
+    }
+  });
+
+  const toggleClass = (id) => {
+    setSelectedClasses(prev =>
+      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+    );
+  };
+
+  const isPending = createMutation.isPending || updateMutation.isPending;
+
   return (
     <div>
       <div className="page-header">
-        <div><h1 className="page-title">Exams</h1><p className="page-subtitle">{exams.length} exams</p></div>
-        <button className="btn btn-primary" onClick={() => { reset(); setShowCreate(true); }}><Plus size={16} /> Create Exam</button>
+        <div>
+          <h1 className="page-title">Exams</h1>
+          <p className="page-subtitle">{exams.length} exams</p>
+        </div>
+        <button className="btn btn-primary" onClick={openCreate}>
+          <Plus size={16} /> Create Exam
+        </button>
       </div>
 
       {isLoading ? <PageLoader /> : (
         <div className="grid-2">
           {exams.length === 0 && (
-            <div style={{ gridColumn: '1/-1' }}><div className="card"><EmptyState icon={FileText} message="No exams scheduled." /></div></div>
+            <div style={{ gridColumn: '1/-1' }}>
+              <div className="card"><EmptyState icon={FileText} message="No exams scheduled." /></div>
+            </div>
           )}
           {exams.map(exam => (
             <div key={exam._id} className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="text-16-bold">{exam.name}</div>
-                  <div className="text-14-regular" style={{ color: 'var(--text-secondary)', marginTop: 4, textTransform: 'capitalize' }}>{exam.type?.replace('_', ' ')} · {exam.academicYear}</div>
+                  <div className="text-13-regular" style={{ color: 'var(--text-secondary)', marginTop: 4, textTransform: 'capitalize' }}>
+                    {exam.type?.replace(/_/g, ' ')} · {exam.term || 'No term'} · {exam.academicYear}
+                  </div>
                 </div>
-                <StatusBadge status={exam.status} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <StatusBadge status={exam.status} />
+                  <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openEdit(exam)}
+                    title="Edit exam">
+                    <Edit2 size={14} />
+                  </button>
+                  <button className="btn btn-danger btn-sm btn-icon" onClick={() => setDeleteId(exam._id)}
+                    title="Delete exam">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                {exam.classes?.slice(0, 4).map(c => <span key={c._id} className="badge badge-info">{c.name} {c.section}</span>)}
+
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                {exam.classes?.slice(0, 4).map(c => (
+                  <span key={c._id} className="badge badge-info">{c.name} {c.section}</span>
+                ))}
+                {exam.classes?.length > 4 && (
+                  <span className="badge badge-secondary">+{exam.classes.length - 4} more</span>
+                )}
               </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button className="btn btn-secondary btn-sm" onClick={() => setMarksModal(exam)}><Eye size={14} /> Results</button>
+
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => setMarksModal(exam)}>
+                  <Eye size={14} /> Results
+                </button>
                 {!exam.isResultPublished && exam.status !== 'cancelled' && (
-                  <button className="btn btn-success btn-sm" onClick={() => publishMutation.mutate(exam._id)}>
+                  <button className="btn btn-success btn-sm" onClick={() => publishMutation.mutate(exam._id)}
+                    disabled={publishMutation.isPending}>
                     <Send size={14} /> Publish Results
                   </button>
                 )}
-                {exam.isResultPublished && <span className="badge badge-success" style={{ alignSelf: 'center' }}>Published</span>}
+                {exam.isResultPublished && (
+                  <span className="badge badge-success" style={{ alignSelf: 'center' }}>Published</span>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Create Exam"
+      {/* Create / Edit Modal */}
+      <Modal open={showModal} onClose={closeModal}
+        title={editExam ? 'Edit Exam' : 'Create Exam'}
         footer={<>
-          <button className="btn btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSubmit(d => createMutation.mutate({ ...d, classes: d.classes ? [d.classes] : [] }))}>Create</button>
+          <button className="btn btn-secondary" onClick={closeModal}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSubmitForm} disabled={isPending}>
+            {isPending ? 'Saving...' : editExam ? 'Save Changes' : 'Create Exam'}
+          </button>
         </>}>
-        <form>
+        <form onSubmit={e => e.preventDefault()}>
           <FormRow>
-            <div className="form-group"><label className="form-label">Exam Name *</label>
-              <input className="form-control" {...register('name', { required: true })} placeholder="e.g. First Term Exam" /></div>
-            <div className="form-group"><label className="form-label">Type</label>
+            <div className="form-group">
+              <label className="form-label">Exam Name *</label>
+              <input className="form-control" {...register('name', { required: true })}
+                placeholder="e.g. First Term Exam" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Type</label>
               <select className="form-control" {...register('type')}>
-                {['unit_test','mid_term','final','quarterly','half_yearly','annual','other'].map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
-              </select></div>
+                {EXAM_TYPES.map(t => (
+                  <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
+                ))}
+              </select>
+            </div>
           </FormRow>
-          <div className="form-group"><label className="form-label">Classes</label>
-            <select className="form-control" {...register('classes')} multiple style={{ height: 100 }}>
-              {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
-            </select></div>
+
+          <div className="form-group">
+            <label className="form-label">Classes</label>
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 8, padding: '10px 12px',
+              border: '1px solid var(--border)', borderRadius: 8, background: 'white',
+              maxHeight: 140, overflowY: 'auto'
+            }}>
+              {classes.length === 0 && (
+                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>No classes available</span>
+              )}
+              {classes.map(c => {
+                const selected = selectedClasses.includes(c._id);
+                return (
+                  <button key={c._id} type="button" onClick={() => toggleClass(c._id)}
+                    style={{
+                      padding: '4px 12px', borderRadius: 20, fontSize: 13, cursor: 'pointer',
+                      border: `1.5px solid ${selected ? 'var(--primary)' : 'var(--border)'}`,
+                      background: selected ? '#eff6ff' : 'white',
+                      color: selected ? 'var(--primary)' : 'var(--text-secondary)',
+                      fontWeight: selected ? 600 : 400, transition: 'all 0.15s'
+                    }}>
+                    {c.name} {c.section}
+                  </button>
+                );
+              })}
+            </div>
+            {selectedClasses.length > 0 && (
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                {selectedClasses.length} class{selectedClasses.length > 1 ? 'es' : ''} selected
+              </p>
+            )}
+          </div>
+
           <FormRow>
-            <div className="form-group"><label className="form-label">Term</label>
+            <div className="form-group">
+              <label className="form-label">Term</label>
               <select className="form-control" {...register('term')}>
                 <option value="">Select term</option>
                 <option value="Term 1">Term 1</option>
                 <option value="Term 2">Term 2</option>
                 <option value="Term 3">Term 3</option>
-              </select></div>
-            <div className="form-group"><label className="form-label">Status</label>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Status</label>
               <select className="form-control" {...register('status')}>
                 <option value="scheduled">Scheduled</option>
                 <option value="ongoing">Ongoing</option>
                 <option value="completed">Completed</option>
-              </select></div>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
           </FormRow>
+
+          {/* Unpublish section — only shown when editing a published exam */}
+          {editExam?.isResultPublished && (
+            <div style={{
+              marginTop: 8, padding: '14px 16px', borderRadius: 8,
+              background: '#fffbeb', border: '1px solid #fde68a'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <div>
+                  <div className="text-14-semibold" style={{ color: '#92400e' }}>Results Published</div>
+                  <div className="text-12-regular" style={{ color: '#a16207', marginTop: 2 }}>
+                    Unpublishing will hide results from students and parents.
+                  </div>
+                </div>
+                <button type="button" className="btn btn-sm"
+                  style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', flexShrink: 0 }}
+                  disabled={updateMutation.isPending}
+                  onClick={() => updateMutation.mutate({
+                    id: editExam._id,
+                    data: { isResultPublished: false, status: 'completed' }
+                  })}>
+                  <EyeOff size={14} /> Unpublish
+                </button>
+              </div>
+            </div>
+          )}
         </form>
       </Modal>
 
-      {marksModal && <ResultsModal exam={marksModal} classes={classes} onClose={() => setMarksModal(null)} />}
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        open={!!deleteId}
+        title="Delete Exam"
+        message="This will permanently delete the exam and all its results. This cannot be undone."
+        confirmLabel="Delete"
+        danger
+        onConfirm={() => deleteMutation.mutate(deleteId)}
+        onClose={() => setDeleteId(null)}
+      />
+
+      {marksModal && (
+        <ResultsModal exam={marksModal} classes={classes} onClose={() => setMarksModal(null)} />
+      )}
     </div>
   );
 }
@@ -135,20 +297,26 @@ function ResultsModal({ exam, classes, onClose }) {
   };
 
   return (
-    <Modal open onClose={onClose} title={`${exam.name} - Results`} size="lg">
+    <Modal open onClose={onClose} title={`${exam.name} — Results`} size="lg">
       <div className="form-group">
         <label className="form-label">Select Class</label>
         <select className="form-control" value={classId} onChange={e => setClassId(e.target.value)}>
           <option value="">Select class</option>
-          {exam.classes?.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
+          {exam.classes?.map(c => (
+            <option key={c._id} value={c._id}>{c.name} {c.section}</option>
+          ))}
         </select>
       </div>
       {classId && (
         <div className="table-container">
           <table>
-            <thead><tr><th>Student</th><th>Total</th><th>%</th><th>Grade</th><th>Rank</th><th>PDF</th></tr></thead>
+            <thead>
+              <tr><th>Student</th><th>Total</th><th>%</th><th>Grade</th><th>Rank</th><th>PDF</th></tr>
+            </thead>
             <tbody>
-              {results.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>No results yet</td></tr>}
+              {results.length === 0 && (
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>No results yet</td></tr>
+              )}
               {results.map(r => (
                 <tr key={r._id}>
                   <td className="text-14-medium">{r.student?.name}</td>
@@ -156,7 +324,11 @@ function ResultsModal({ exam, classes, onClose }) {
                   <td>{r.percentage?.toFixed(1)}%</td>
                   <td><span className="badge badge-info">{r.grade || '—'}</span></td>
                   <td>{r.rank ? `#${r.rank}` : '—'}</td>
-                  <td><button className="btn btn-secondary btn-sm btn-icon" onClick={() => downloadPDF(r._id)}><Download size={14} /></button></td>
+                  <td>
+                    <button className="btn btn-secondary btn-sm btn-icon" onClick={() => downloadPDF(r._id)}>
+                      <Download size={14} />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

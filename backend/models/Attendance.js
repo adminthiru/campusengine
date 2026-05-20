@@ -11,7 +11,7 @@ const attendanceSchema = new mongoose.Schema({
   records: [{
     student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' },
     employee: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
-    status: { type: String, enum: ['present', 'absent', 'late', 'excused'], required: true },
+    status: { type: String, enum: ['present', 'absent', 'late', 'excused', 'half_day', 'od', 'cl', 'sl'], required: true },
     remarks: String,
     smsSent: { type: Boolean, default: false }
   }],
