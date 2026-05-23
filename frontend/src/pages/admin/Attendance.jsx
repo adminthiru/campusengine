@@ -199,14 +199,23 @@ export default function Attendance() {
       </div>
 
       {/* Tabs */}
-      <div className="tabs" style={{ marginBottom: 20 }}>
-        {['student', 'employee'].map(t => (
-          <button key={t} className={`tab ${tab === t ? 'active' : ''}`}
-            onClick={() => { setTab(t); if (t === 'employee') setClassId(''); if (t === 'student') setEmpRole(''); window.scrollTo({ top: 0, behavior: 'instant' }); }}
-            style={{ textTransform: 'capitalize' }}>
-            {t} Attendance
-          </button>
-        ))}
+      <div style={{ borderBottom: '2px solid var(--border)', marginBottom: 20 }}>
+        <div style={{ display: 'flex', overflowX: 'auto', marginBottom: -2 }}>
+          {['student', 'employee'].map(t => (
+            <button key={t}
+              onClick={() => { setTab(t); if (t === 'employee') setClassId(''); if (t === 'student') setEmpRole(''); window.scrollTo({ top: 0, behavior: 'instant' }); }}
+              style={{
+                padding: '10px 20px', border: 'none', background: 'none', cursor: 'pointer',
+                fontSize: 14, fontWeight: tab === t ? 700 : 500,
+                color: tab === t ? 'var(--primary)' : 'var(--text-secondary)',
+                borderBottom: `2px solid ${tab === t ? 'var(--primary)' : 'transparent'}`,
+                transition: 'all 0.15s', whiteSpace: 'nowrap', flexShrink: 0,
+                textTransform: 'capitalize'
+              }}>
+              {t} Attendance
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Filter bar */}

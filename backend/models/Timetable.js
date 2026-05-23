@@ -9,8 +9,8 @@ const timetableSchema = new mongoose.Schema({
     day: { type: String, enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'], required: true },
     periods: [{
       periodNumber: { type: Number, required: true },
-      startTime: { type: String, required: true },
-      endTime: { type: String, required: true },
+      startTime: { type: String },
+      endTime: { type: String },
       subject: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject' },
       teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
       room: { type: String },

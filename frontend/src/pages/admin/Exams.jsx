@@ -1,17 +1,17 @@
 // Exams Page
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { Plus, FileText, Download, Eye, Send, Edit2, Trash2, EyeOff } from 'lucide-react';
+import { Plus, FileText, Download, Send, Edit2, Trash2, EyeOff, ChevronRight, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, StatusBadge, PageLoader, EmptyState, FormRow } from '../../components/ui';
 import { useAuth } from '../../store/AuthContext';
 
-const EXAM_TYPES = ['unit_test', 'mid_term', 'final', 'quarterly', 'half_yearly', 'annual', 'other'];
-
 export function Exams() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editExam, setEditExam] = useState(null); // null = create, object = edit
@@ -29,10 +29,10 @@ export function Exams() {
   // Pre-fill form when editing
   useEffect(() => {
     if (editExam) {
-      reset({ name: editExam.name, type: editExam.type, term: editExam.term, status: editExam.status });
+      reset({ name: editExam.name, type: editExam.type, examDate: editExam.examDate?.split('T')[0] || '', status: editExam.status });
       setSelectedClasses(editExam.classes?.map(c => c._id || c) || []);
     } else {
-      reset({ name: '', type: 'unit_test', term: '', status: 'scheduled' });
+      reset({ name: '', type: '', examDate: '', status: 'scheduled' });
       setSelectedClasses([]);
     }
   }, [editExam, reset]);
@@ -102,22 +102,29 @@ export function Exams() {
             </div>
           )}
           {exams.map(exam => (
-            <div key={exam._id} className="card">
+            <div key={exam._id} className="card"
+              onClick={() => navigate(`/exams/${exam._id}`)}
+              style={{ cursor: 'pointer', transition: 'box-shadow 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.10)'}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = ''}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="text-16-bold">{exam.name}</div>
-                  <div className="text-13-regular" style={{ color: 'var(--text-secondary)', marginTop: 4, textTransform: 'capitalize' }}>
-                    {exam.type?.replace(/_/g, ' ')} · {exam.term || 'No term'} · {exam.academicYear}
+                  <div className="text-16-bold" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {exam.name}
+                    <ChevronRight size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                  </div>
+                  <div className="text-13-regular" style={{ color: 'var(--text-secondary)', marginTop: 4 }}>
+                    {exam.type || 'No type'} · {exam.examDate ? new Date(exam.examDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No date'} · {exam.academicYear}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                   <StatusBadge status={exam.status} />
-                  <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openEdit(exam)}
-                    title="Edit exam">
+                  <button className="btn btn-secondary btn-sm btn-icon" title="Edit exam"
+                    onClick={e => { e.stopPropagation(); openEdit(exam); }}>
                     <Edit2 size={14} />
                   </button>
-                  <button className="btn btn-danger btn-sm btn-icon" onClick={() => setDeleteId(exam._id)}
-                    title="Delete exam">
+                  <button className="btn btn-danger btn-sm btn-icon" title="Delete exam"
+                    onClick={e => { e.stopPropagation(); setDeleteId(exam._id); }}>
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -133,17 +140,27 @@ export function Exams() {
               </div>
 
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <button className="btn btn-secondary btn-sm" onClick={() => setMarksModal(exam)}>
-                  <Eye size={14} /> Results
-                </button>
                 {!exam.isResultPublished && exam.status !== 'cancelled' && (
-                  <button className="btn btn-success btn-sm" onClick={() => publishMutation.mutate(exam._id)}
-                    disabled={publishMutation.isPending}>
-                    <Send size={14} /> Publish Results
+                  <button
+                    onClick={e => { e.stopPropagation(); publishMutation.mutate(exam._id); }}
+                    disabled={publishMutation.isPending}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '6px 14px', borderRadius: 8, border: 'none',
+                      cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                      background: '#16a34a', color: 'white',
+                      opacity: publishMutation.isPending ? 0.7 : 1
+                    }}>
+                    <Send size={13} /> Publish Results
                   </button>
                 )}
                 {exam.isResultPublished && (
-                  <span className="badge badge-success" style={{ alignSelf: 'center' }}>Published</span>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    fontSize: 13, fontWeight: 600, color: '#16a34a'
+                  }}>
+                    <CheckCircle size={14} /> Published
+                  </span>
                 )}
               </div>
             </div>
@@ -169,11 +186,8 @@ export function Exams() {
             </div>
             <div className="form-group">
               <label className="form-label">Type</label>
-              <select className="form-control" {...register('type')}>
-                {EXAM_TYPES.map(t => (
-                  <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
-                ))}
-              </select>
+              <input className="form-control" {...register('type')}
+                placeholder="e.g. Unit Test, Mid Term, Annual..." />
             </div>
           </FormRow>
 
@@ -212,13 +226,8 @@ export function Exams() {
 
           <FormRow>
             <div className="form-group">
-              <label className="form-label">Term</label>
-              <select className="form-control" {...register('term')}>
-                <option value="">Select term</option>
-                <option value="Term 1">Term 1</option>
-                <option value="Term 2">Term 2</option>
-                <option value="Term 3">Term 3</option>
-              </select>
+              <label className="form-label">Exam Date</label>
+              <input className="form-control" type="date" {...register('examDate')} />
             </div>
             <div className="form-group">
               <label className="form-label">Status</label>
@@ -249,7 +258,7 @@ export function Exams() {
                   disabled={updateMutation.isPending}
                   onClick={() => updateMutation.mutate({
                     id: editExam._id,
-                    data: { isResultPublished: false, status: 'completed' }
+                    data: { isResultPublished: false, status: 'ongoing' }
                   })}>
                   <EyeOff size={14} /> Unpublish
                 </button>

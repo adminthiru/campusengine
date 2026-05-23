@@ -39,7 +39,6 @@ const FORM_TABS = [
   { key: 'experience', label: 'Experience' },
   { key: 'emergency', label: 'Emergency' },
   { key: 'documents', label: 'Documents' },
-  { key: 'salary', label: 'Salary' },
   { key: 'bank', label: 'Bank' },
 ];
 
@@ -851,47 +850,7 @@ function AddEditEmployeeModal({
           </>
         )}
 
-        {/* Tab 7: Salary */}
-        {formTab === 'salary' && (
-          <>
-            <FormRow>
-              <div className="form-group">
-                <label className="form-label">Salary Type</label>
-                <select className="form-control" {...register('salary.salaryType')}>
-                  <option value="">Select type</option>
-                  <option value="Monthly">Monthly</option>
-                  <option value="Hourly">Hourly</option>
-                  <option value="Contractual">Contractual</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Payment Mode</label>
-                <select className="form-control" {...register('salary.paymentMode')}>
-                  <option value="">Select mode</option>
-                  <option value="Bank Transfer">Bank Transfer</option>
-                  <option value="Cheque">Cheque</option>
-                  <option value="Cash">Cash</option>
-                </select>
-              </div>
-            </FormRow>
-            <FormRow>
-              <div className="form-group">
-                <label className="form-label">Basic Salary (₹)</label>
-                <input className="form-control" type="number" {...register('salary.basic')} defaultValue={0} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Allowances (₹)</label>
-                <input className="form-control" type="number" {...register('salary.allowances')} defaultValue={0} />
-              </div>
-            </FormRow>
-            <div className="form-group" style={{ maxWidth: '50%' }}>
-              <label className="form-label">Deductions (₹)</label>
-              <input className="form-control" type="number" {...register('salary.deductions')} defaultValue={0} />
-            </div>
-          </>
-        )}
-
-        {/* Tab 8: Bank */}
+        {/* Tab 7: Bank */}
         {formTab === 'bank' && (
           <>
             <FormRow>
@@ -945,7 +904,6 @@ function EmployeeDetail({ employee, onBack, onDelete, onDownload, onEdit, onTask
           </button>
           <div>
             <h1 className="page-title">Employee Details</h1>
-            <p className="page-subtitle">{employee.name}</p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>

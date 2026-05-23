@@ -3,8 +3,62 @@ const Student = require('../models/Student');
 const Class = require('../models/Class');
 const Subject = require('../models/Subject');
 const School = require('../models/School');
-const { generateResultCard } = require('../utils/pdf');
+const { generateResultCard, generateHallTicket } = require('../utils/pdf');
 const { sendSMS } = require('../utils/sms');
+
+// Get single exam by ID
+const getExamById = async (req, res) => {
+  try {
+    const exam = await Exam.findOne({ _id: req.params.id, school: req.user.school })
+      .populate('classes', 'name section')
+      .populate('schedule.class', 'name section')
+      .populate('schedule.subject', 'name code maxMarks')
+      .populate('schedule.invigilator', 'name');
+    if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
+    res.json({ success: true, exam });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Upload answer paper — stored per subject inside marks[]
+const uploadAnswerPaper = async (req, res) => {
+  try {
+    const { examId, studentId, classId, subjectId } = req.body;
+    const schoolId = req.user.school;
+
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+    if (!subjectId) return res.status(400).json({ success: false, message: 'subjectId required' });
+
+    let result = await ExamResult.findOne({ school: schoolId, exam: examId, student: studentId });
+    if (!result) {
+      const exam = await Exam.findById(examId);
+      result = await ExamResult.create({
+        school: schoolId, exam: examId, student: studentId, class: classId,
+        academicYear: exam?.academicYear, marks: []
+      });
+    }
+
+    const paperData = {
+      url: `/uploads/${req.file.filename}`,
+      fileName: req.file.originalname,
+      uploadedAt: new Date(),
+      uploadedBy: req.user._id
+    };
+
+    const markEntry = result.marks.find(m => m.subject?.toString() === subjectId);
+    if (markEntry) {
+      markEntry.answerPaper = paperData;
+    } else {
+      result.marks.push({ subject: subjectId, answerPaper: paperData });
+    }
+    await result.save();
+
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
 
 // Create exam
 const createExam = async (req, res) => {
@@ -293,4 +347,49 @@ const getAwardList = async (req, res) => {
   }
 };
 
-module.exports = { createExam, getExams, updateExam, deleteExam, enterMarks, publishResults, getResults, getResultCardPDF, getAwardList };
+// Hall ticket PDF
+const getHallTicket = async (req, res) => {
+  try {
+    const { examId, studentId } = req.params;
+    const exam = await Exam.findOne({ _id: examId, school: req.user.school })
+      .populate('schedule.subject', 'name')
+      .populate('schedule.class', 'name section');
+    if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
+
+    const student = await Student.findOne({ _id: studentId, school: req.user.school })
+      .populate('currentClass', 'name section');
+    if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+
+    const school = await School.findById(req.user.school);
+
+    // Build schedule rows for this student's class
+    const classId = student.currentClass?._id?.toString();
+    const scheduleRows = exam.schedule
+      .filter(s => (s.class?._id || s.class)?.toString() === classId)
+      .map(s => ({
+        subjectName: s.subject?.name || 'Unknown',
+        date: s.date,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        room: s.room
+      }))
+      .sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+
+    const studentData = {
+      name: student.name,
+      admissionNumber: student.admissionNumber,
+      rollNumber: student.rollNumber,
+      className: student.currentClass?.name,
+      section: student.currentClass?.section
+    };
+
+    const pdf = await generateHallTicket(studentData, exam.toObject(), scheduleRows, school.toObject());
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=HallTicket_${student.admissionNumber}.pdf`);
+    res.send(pdf);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { getExamById, createExam, getExams, updateExam, deleteExam, enterMarks, publishResults, getResults, getResultCardPDF, getAwardList, uploadAnswerPaper, getHallTicket };

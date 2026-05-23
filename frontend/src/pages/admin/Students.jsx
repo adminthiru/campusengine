@@ -74,6 +74,11 @@ export default function Students() {
   const { data: classesData } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes') });
   const classes = classesData?.classes || [];
 
+  const { data: transportData } = useQuery({ queryKey: ['transport'], queryFn: () => api.get('/transport') });
+  const transports = (transportData?.routes || []).filter(r => r.isActive);
+
+  const [selectedTransport, setSelectedTransport] = useState('');
+
   const { data, isLoading } = useQuery({
     queryKey: ['students', page, search, classFilter],
     queryFn: () => api.get(`/students?page=${page}&limit=20&search=${search}&classId=${classFilter}`),
@@ -159,6 +164,7 @@ export default function Students() {
       identificationMark: data.identificationMark,
       medicalInfo: { conditions: data.medicalIssue ? data.medicalIssue.split(',').map(s => s.trim()).filter(Boolean) : [] },
       remarks: data.remarks,
+      transportRoute: selectedTransport || undefined,
     };
   };
 
@@ -182,12 +188,14 @@ export default function Students() {
     setParents([]);
     setParentForm(null);
     setProfilePreview(null);
+    setSelectedTransport('');
     reset({});
   };
 
   const openAdd = () => {
     setEditStudent(null);
     setFormTab('personal');
+    setSelectedTransport('');
     setParents([]);
     setParentForm(null);
     setProfilePreview(null);
@@ -229,6 +237,7 @@ export default function Students() {
     })));
     setStudentStatus(stu.status || 'active');
     setProfilePreview(stu.photo || null);
+    setSelectedTransport(stu.transportRoute?._id || stu.transportRoute || '');
     setParentForm(null);
     setShowModal(true);
   };
@@ -281,6 +290,7 @@ export default function Students() {
           profilePreview={profilePreview} setProfilePreview={setProfilePreview}
           imgInputRef={imgInputRef}
           studentStatus={studentStatus} setStudentStatus={setStudentStatus} control={control}
+          transports={transports} selectedTransport={selectedTransport} setSelectedTransport={setSelectedTransport}
         />
       </>
     );
@@ -415,6 +425,7 @@ export default function Students() {
         profilePreview={profilePreview} setProfilePreview={setProfilePreview}
         imgInputRef={imgInputRef}
         studentStatus={studentStatus} setStudentStatus={setStudentStatus} control={control}
+        transports={transports} selectedTransport={selectedTransport} setSelectedTransport={setSelectedTransport}
         onDeleteStudent={(id) => { setDeleteId(id); closeModal(); }}
       />
 
@@ -446,7 +457,8 @@ function AddEditModal({
   uniqueClassNames, filteredSections, watchedClassGroup,
   parents, setParents, parentForm, setParentForm, parentDraft, setParentDraft,
   profilePreview, setProfilePreview, imgInputRef,
-  studentStatus, setStudentStatus, control
+  studentStatus, setStudentStatus, control,
+  transports, selectedTransport, setSelectedTransport
 }) {
   // useWatch subscribes to field changes inside this component and re-renders reactively
   const watched = useWatch({
@@ -632,8 +644,13 @@ function AddEditModal({
                 {errors.mobile && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.mobile.message}</p>}
               </div>
               <div className="form-group">
-                <label className="form-label">Alternative Mobile</label>
-                <input className="form-control" {...register('alternativeMobile')} placeholder="9876543210" />
+                <label className="form-label">Assign Transport <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>(optional)</span></label>
+                <select className="form-control" value={selectedTransport} onChange={e => setSelectedTransport(e.target.value)}>
+                  <option value="">No transport</option>
+                  {(transports || []).map(t => (
+                    <option key={t._id} value={t._id}>{t.vehicleType ? t.vehicleType.charAt(0).toUpperCase() + t.vehicleType.slice(1) + ' — ' : ''}{t.routeName}{t.vehicleNumber ? ' (' + t.vehicleNumber + ')' : ''}</option>
+                  ))}
+                </select>
               </div>
             </FormRow>
             <div className="form-group">
@@ -865,7 +882,6 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
           </button>
           <div>
             <h1 className="page-title">Student Details</h1>
-            <p className="page-subtitle">{student.name}</p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>

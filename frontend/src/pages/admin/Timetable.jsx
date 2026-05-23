@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock, Plus, Save, AlertTriangle, BookOpen, Users, UserX, ChevronRight } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Clock, Plus, Save, AlertTriangle, BookOpen, Users, UserX, ChevronRight, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { PageLoader, EmptyState, Modal, FormRow } from '../../components/ui';
@@ -14,8 +14,13 @@ const DAY_FULL = { monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday',
 export default function Timetable() {
   const { user } = useAuth();
   const [view, setView] = useState('class');
-  const academicYear = user?.school?.academicYear?.current || '2024-2025';
-  const periodsPerDay = user?.school?.periodsPerDay || 8;
+
+  const { data: schoolData } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
+  const school = schoolData?.school;
+
+  const academicYear = school?.academicYear?.current || user?.school?.academicYear?.current || '2024-2025';
+  const periodsPerDay = school?.periodsPerDay || user?.school?.periodsPerDay || 8;
+  const workingDays = school?.workingDays || user?.school?.workingDays;
 
   const { data: classData } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes') });
   const classes = classData?.classes || [];
@@ -47,7 +52,7 @@ export default function Timetable() {
       </div>
 
       {view === 'class'
-        ? <ClassView classes={classes} teachers={teachers} user={user} academicYear={academicYear} periodsPerDay={periodsPerDay} />
+        ? <ClassView classes={classes} teachers={teachers} workingDays={workingDays} academicYear={academicYear} periodsPerDay={periodsPerDay} />
         : <TeacherView teachers={teachers} academicYear={academicYear} periodsPerDay={periodsPerDay} />
       }
     </div>
@@ -55,7 +60,7 @@ export default function Timetable() {
 }
 
 // ─── Class View ────────────────────────────────────────────────────────────────
-function ClassView({ classes, teachers, user, academicYear, periodsPerDay }) {
+function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay }) {
   const qc = useQueryClient();
   const [classId, setClassId] = useState('');
   const [editMode, setEditMode] = useState(false);
@@ -83,7 +88,7 @@ function ClassView({ classes, teachers, user, academicYear, periodsPerDay }) {
   }, [ttData]);
 
   const initSchedule = () => {
-    const activeDays = DAYS.filter(d => { const wd = user?.school?.workingDays; return !wd || wd[d] !== false; });
+    const activeDays = DAYS.filter(d => !workingDays || workingDays[d] !== false);
     setSchedule(activeDays.map(day => ({
       day,
       periods: Array.from({ length: periodsPerDay }, (_, i) => ({
@@ -155,70 +160,148 @@ function ClassView({ classes, teachers, user, academicYear, periodsPerDay }) {
 
       {!classId ? (
         <div className="card"><EmptyState icon={Clock} message="Select a class to view or edit its timetable" /></div>
-      ) : isLoading ? <PageLoader /> : (
-        <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-          <table style={{ minWidth: 700 }}>
-            <thead>
-              <tr style={{ background: '#0f172a' }}>
-                <th style={{ padding: '12px 16px', color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', width: 110 }}>Period</th>
-                {activeDays.map(day => (
-                  <th key={day} style={{ padding: '12px 16px', color: 'white', textAlign: 'center', fontSize: 14, fontWeight: 700, textTransform: 'capitalize' }}>
-                    {DAY_LABELS[day] || day}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from({ length: periodsPerDay }, (_, i) => i + 1).map(p => (
-                <tr key={p} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={{ padding: '8px 16px', background: '#f8fafc', color: 'var(--text-secondary)', textAlign: 'center', borderRight: '1px solid var(--border)', whiteSpace: 'nowrap' }}>
-                    <div style={{ fontWeight: 700, fontSize: 13 }}>P{p}</div>
-                    {getPeriodTimeLabel(p) && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{getPeriodTimeLabel(p)}</div>}
-                  </td>
-                  {activeDays.map(day => {
-                    const cell = getCell(day, p);
-                    const subj = cell?.subject ? (typeof cell.subject === 'object' ? cell.subject : subjects.find(s => s._id === cell.subject)) : null;
-                    const tchr = cell?.teacher ? (typeof cell.teacher === 'object' ? cell.teacher : teachers.find(t => t._id === cell.teacher)) : null;
-                    return (
-                      <td key={day} style={{ padding: 4, textAlign: 'center', verticalAlign: 'top', minWidth: 110 }}>
-                        {cell?.isBreak ? (
-                          <div style={{ background: '#f1f5f9', borderRadius: 8, padding: '8px 4px', color: 'var(--text-muted)', fontSize: 12, fontStyle: 'italic' }}>{cell.breakName || 'Break'}</div>
-                        ) : editMode ? (
-                          <button onClick={() => setEditCell({ day, period: p })} style={{
-                            width: '100%', minHeight: 60, border: `2px dashed ${subj ? subj.color || 'var(--primary)' : 'var(--border)'}`,
-                            borderRadius: 8, background: subj ? `${subj.color || '#1a56e8'}15` : 'white', cursor: 'pointer', padding: '6px 8px'
-                          }}>
-                            {subj ? <>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: subj.color || 'var(--primary)' }}>{subj.name}</div>
-                              {tchr && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{tchr.name}</div>}
-                            </> : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>+ Add</span>}
-                          </button>
-                        ) : (
-                          <div style={{ minHeight: 60, borderRadius: 8, padding: 8, background: subj ? `${subj.color || '#1a56e8'}12` : '#f8fafc', border: `1px solid ${subj ? `${subj.color || '#1a56e8'}30` : 'transparent'}` }}>
-                            {subj ? <>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: subj.color || 'var(--primary)' }}>{subj.name}</div>
-                              {tchr && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{tchr.name}</div>}
-                            </> : <span style={{ fontSize: 12, color: '#e2e8f0' }}>—</span>}
-                          </div>
-                        )}
-                      </td>
+      ) : isLoading ? <PageLoader /> : (() => {
+        const fmtTime = t => { if (!t) return ''; const [h, m] = t.split(':'); const hr = parseInt(h); return `${hr % 12 || 12}:${m} ${hr >= 12 ? 'PM' : 'AM'}`; };
+        const periods = Array.from({ length: periodsPerDay }, (_, i) => i + 1);
+        const breakInfoByPeriod = {};
+        periods.forEach(p => {
+          const cell = activeDays.map(d => getCell(d, p)).find(c => c?.isBreak);
+          if (cell) breakInfoByPeriod[p] = cell;
+        });
+
+        return (
+          <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+            <table style={{ minWidth: 600 }}>
+              <thead>
+                <tr style={{ background: '#0f172a' }}>
+                  <th style={{ padding: '12px 16px', color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', width: 100 }}>Day</th>
+                  {periods.map(p => {
+                    const brk = breakInfoByPeriod[p];
+                    const timeLabel = brk?.startTime && brk?.endTime ? `${fmtTime(brk.startTime)} – ${fmtTime(brk.endTime)}` : getPeriodTimeLabel(p);
+                    return brk ? (
+                      <th key={p} style={{ padding: '8px 4px', textAlign: 'center', background: '#78350f', width: 64 }}>
+                        <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 10, fontWeight: 700, color: '#fde68a', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 auto' }}>
+                          {brk.breakName || 'Break'}
+                        </div>
+                      </th>
+                    ) : (
+                      <th key={p} style={{ padding: '12px 8px', color: 'white', textAlign: 'center', fontSize: 13, fontWeight: 700, minWidth: 110 }}>
+                        <div>P{p}</div>
+                        {getPeriodTimeLabel(p) && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', fontWeight: 400, marginTop: 2 }}>{getPeriodTimeLabel(p)}</div>}
+                      </th>
                     );
                   })}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {activeDays.map((day, dayIdx) => (
+                  <tr key={day} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '8px 16px', background: '#f8fafc', borderRight: '1px solid var(--border)', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>{DAY_FULL[day]}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{DAY_LABELS[day]}</div>
+                    </td>
+                    {periods.map(p => {
+                      const brk = breakInfoByPeriod[p];
+                      if (brk) {
+                        if (dayIdx > 0) return null;
+                        const timeLabel = brk.startTime && brk.endTime ? `${fmtTime(brk.startTime)} – ${fmtTime(brk.endTime)}` : null;
+                        return (
+                          <td key={p} rowSpan={activeDays.length} style={{
+                            padding: '6px 4px',
+                            background: 'white',
+                            verticalAlign: 'middle',
+                            textAlign: 'center',
+                            width: 64,
+                          }}>
+                            <div style={{
+                              display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                              background: '#fffbeb',
+                              border: '1.5px solid #fde68a',
+                              borderRadius: 16,
+                              padding: '18px 8px',
+                              gap: 10,
+                              width: 44,
+                              minHeight: 140,
+                            }}>
+                              <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 11, fontWeight: 800, color: '#78350f', letterSpacing: '0.08em', textTransform: 'uppercase', lineHeight: 1.2 }}>
+                                {brk.breakName || 'Break'}
+                              </div>
+                              {timeLabel && (
+                                <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 9, color: '#b45309', fontWeight: 600, lineHeight: 1.3 }}>
+                                  {timeLabel}
+                                </div>
+                              )}
+                              {editMode && (
+                                <button
+                                  onClick={() => setEditCell({ day: activeDays[0], period: p })}
+                                  style={{ background: 'none', border: '1px dashed #d97706', borderRadius: 6, padding: '3px 5px', cursor: 'pointer', writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 9, color: '#d97706', fontWeight: 700, lineHeight: 1 }}>
+                                  Edit
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      }
+
+                      const cell = getCell(day, p);
+                      const subj = cell?.subject ? (typeof cell.subject === 'object' ? cell.subject : subjects.find(s => s._id === cell.subject)) : null;
+                      const tchr = cell?.teacher ? (typeof cell.teacher === 'object' ? cell.teacher : teachers.find(t => t._id === cell.teacher)) : null;
+                      return (
+                        <td key={p} style={{ padding: 4, textAlign: 'center', verticalAlign: 'top', minWidth: 110 }}>
+                          {editMode ? (
+                            <button onClick={() => setEditCell({ day, period: p })} style={{
+                              width: '100%', minHeight: 60, border: `2px dashed ${subj ? subj.color || 'var(--primary)' : 'var(--border)'}`,
+                              borderRadius: 8, background: subj ? `${subj.color || '#1a56e8'}15` : 'white', cursor: 'pointer', padding: '6px 8px'
+                            }}>
+                              {subj ? <>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: subj.color || 'var(--primary)' }}>{subj.name}</div>
+                                {tchr && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{tchr.name}</div>}
+                              </> : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>+ Add</span>}
+                            </button>
+                          ) : (
+                            <div style={{ minHeight: 60, borderRadius: 8, padding: 8, background: subj ? `${subj.color || '#1a56e8'}12` : '#f8fafc', border: `1px solid ${subj ? `${subj.color || '#1a56e8'}30` : 'transparent'}` }}>
+                              {subj ? <>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: subj.color || 'var(--primary)' }}>{subj.name}</div>
+                                {tchr && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{tchr.name}</div>}
+                              </> : <span style={{ fontSize: 12, color: '#e2e8f0' }}>—</span>}
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
 
       {editCell && (
         <EditCellModal
           cell={getCell(editCell.day, editCell.period)}
           day={editCell.day} period={editCell.period}
           subjects={subjects} teachers={teachers}
-          onSave={u => { updateCell(editCell.day, editCell.period, u); setEditCell(null); }}
+          onSave={u => {
+            if (u.isBreak) {
+              activeDays.forEach(d => updateCell(d, editCell.period, u));
+            } else {
+              if (activeDays.some(d => getCell(d, editCell.period)?.isBreak)) {
+                activeDays.forEach(d => updateCell(d, editCell.period, { subject: null, teacher: null, room: '', isBreak: false, breakName: '' }));
+              }
+              updateCell(editCell.day, editCell.period, u);
+            }
+            setEditCell(null);
+          }}
           onClose={() => setEditCell(null)}
-          onClear={() => { updateCell(editCell.day, editCell.period, { subject: null, teacher: null, room: '', isBreak: false, breakName: '' }); setEditCell(null); }}
+          onClear={() => {
+            if (activeDays.some(d => getCell(d, editCell.period)?.isBreak)) {
+              activeDays.forEach(d => updateCell(d, editCell.period, { subject: null, teacher: null, room: '', isBreak: false, breakName: '' }));
+            } else {
+              updateCell(editCell.day, editCell.period, { subject: null, teacher: null, room: '', isBreak: false, breakName: '' });
+            }
+            setEditCell(null);
+          }}
         />
       )}
     </div>
@@ -362,12 +445,15 @@ function TeacherScheduleGrid({ teacherId, teacher, academicYear, periodsPerDay }
 
 // ─── Substitution Panel ────────────────────────────────────────────────────────
 function SubstitutionPanel({ teacherId, teacher, academicYear }) {
+  const qc = useQueryClient();
   const [absentDate, setAbsentDate] = useState('');
+  const [pickingPeriod, setPickingPeriod] = useState(null); // periodNumber being assigned
 
   const absentDay = absentDate
     ? ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date(absentDate + 'T00:00:00').getDay()]
     : null;
 
+  // Teacher's own periods on the absent day
   const { data: ttData } = useQuery({
     queryKey: ['timetable-teacher', teacherId, academicYear],
     queryFn: () => api.get(`/timetable?teacherId=${teacherId}&academicYear=${academicYear}`),
@@ -375,12 +461,38 @@ function SubstitutionPanel({ teacherId, teacher, academicYear }) {
   });
   const timetables = ttData?.timetables || [];
 
+  // Free teachers per period on that day
   const { data: subData, isLoading: subLoading } = useQuery({
     queryKey: ['day-substitutes', absentDay, academicYear],
     queryFn: () => api.get(`/timetable/day-substitutes?day=${absentDay}&academicYear=${academicYear}`),
     enabled: !!absentDay
   });
-  const substitutes = subData?.substitutes || {};
+  const freeSubs = subData?.substitutes || {};
+
+  // Already-assigned substitutions for this teacher+date
+  const { data: assignedData, isLoading: assignedLoading } = useQuery({
+    queryKey: ['substitutions', teacherId, absentDate],
+    queryFn: () => api.get(`/timetable/substitutions?date=${absentDate}&absentTeacherId=${teacherId}`),
+    enabled: !!(teacherId && absentDate)
+  });
+  const assigned = assignedData?.substitutions || [];
+
+  const assignMutation = useMutation({
+    mutationFn: ({ substituteTeacherId, periodNumber, classId, subjectId }) =>
+      api.post('/timetable/substitutions', { date: absentDate, absentTeacherId: teacherId, substituteTeacherId, periodNumber, classId, subjectId, academicYear }),
+    onSuccess: () => {
+      qc.invalidateQueries(['substitutions', teacherId, absentDate]);
+      setPickingPeriod(null);
+      toast.success('Substitute assigned!');
+    },
+    onError: (err) => toast.error(err.message || 'Failed')
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (id) => api.delete(`/timetable/substitutions/${id}`),
+    onSuccess: () => { qc.invalidateQueries(['substitutions', teacherId, absentDate]); toast.success('Assignment removed'); },
+    onError: () => toast.error('Failed to remove')
+  });
 
   const teacherPeriods = absentDay ? (() => {
     const periods = [];
@@ -388,7 +500,7 @@ function SubstitutionPanel({ teacherId, teacher, academicYear }) {
       const ds = tt.schedule.find(s => s.day === absentDay);
       if (!ds) continue;
       for (const p of ds.periods) {
-        periods.push({ periodNumber: p.periodNumber, subject: p.subject, cls: tt.class });
+        if (!p.isBreak) periods.push({ periodNumber: p.periodNumber, subject: p.subject, cls: tt.class });
       }
     }
     return periods.sort((a, b) => a.periodNumber - b.periodNumber);
@@ -400,7 +512,7 @@ function SubstitutionPanel({ teacherId, teacher, academicYear }) {
         <UserX size={18} color="#ef4444" />
         <div>
           <div style={{ fontWeight: 700, fontSize: 15 }}>Substitution Planner</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Mark {teacher?.name} absent and find available substitutes for each period</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Assign substitute teachers for {teacher?.name}'s periods</div>
         </div>
       </div>
 
@@ -408,82 +520,161 @@ function SubstitutionPanel({ teacherId, teacher, academicYear }) {
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
           <div className="form-group" style={{ margin: 0 }}>
             <label className="form-label">Absent Date</label>
-            <input type="date" className="form-control" style={{ maxWidth: 180 }} value={absentDate} onChange={e => setAbsentDate(e.target.value)} />
+            <input type="date" className="form-control" style={{ maxWidth: 180 }} value={absentDate}
+              onChange={e => { setAbsentDate(e.target.value); setPickingPeriod(null); }} />
           </div>
           {absentDay && (
             <div style={{ padding: '6px 14px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 20, fontSize: 13, fontWeight: 600, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <UserX size={13} />
-              {teacher?.name} absent on {DAY_FULL[absentDay]}
+              <UserX size={13} /> {teacher?.name} absent on {DAY_FULL[absentDay]}
             </div>
           )}
         </div>
 
         {!absentDay && (
           <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 14 }}>
-            Select a date to see substitution suggestions
+            Select a date to manage substitutions
           </div>
         )}
 
-        {absentDay && teacherPeriods.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 14 }}>
-            {teacher?.name} has no periods on {DAY_FULL[absentDay]}. No substitutions needed.
-          </div>
-        )}
-
-        {absentDay && teacherPeriods.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>
-              {teacherPeriods.length} period{teacherPeriods.length > 1 ? 's' : ''} need coverage on {DAY_FULL[absentDay]}:
+        {absentDay && !subLoading && !assignedLoading && (
+          <div>
+            {/* summary strip */}
+            <div style={{ display: 'flex', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                <strong style={{ color: 'var(--text-primary)' }}>{teacherPeriods.length}</strong> period{teacherPeriods.length !== 1 ? 's' : ''} need coverage &nbsp;·&nbsp;
+                <strong style={{ color: '#16a34a' }}>{assigned.length}</strong> assigned
+                {teacherPeriods.length - assigned.length > 0 && <span style={{ color: '#dc2626' }}> &nbsp;·&nbsp; <strong>{teacherPeriods.length - assigned.length}</strong> pending</span>}
+              </span>
             </div>
-            {teacherPeriods.map(tp => {
-              const freeSubs = substitutes[tp.periodNumber] || [];
-              // Exclude the absent teacher from suggestions
-              const availSubs = freeSubs.filter(t => t._id !== teacherId);
-              return (
-                <div key={tp.periodNumber} style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-                  {/* Period header */}
-                  <div style={{ padding: '10px 16px', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: 6, background: tp.subject?.color || 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12 }}>P{tp.periodNumber}</div>
-                      <div>
-                        <span style={{ fontWeight: 700, fontSize: 14 }}>{tp.subject?.name || 'No Subject'}</span>
-                        <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{tp.cls?.name} {tp.cls?.section}</span>
-                      </div>
-                    </div>
-                    {subLoading ? (
-                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading...</span>
-                    ) : (
-                      <span style={{ fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20, background: availSubs.length > 0 ? '#dcfce7' : '#fef2f2', color: availSubs.length > 0 ? '#15803d' : '#dc2626' }}>
-                        {availSubs.length} available
-                      </span>
-                    )}
-                  </div>
 
-                  {/* Free teachers list */}
-                  <div style={{ padding: '10px 16px' }}>
-                    {subLoading ? (
-                      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Finding available teachers...</span>
-                    ) : availSubs.length === 0 ? (
-                      <span style={{ fontSize: 13, color: '#dc2626' }}>No free teachers available for this period</span>
-                    ) : (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {availSubs.map(t => (
-                          <div key={t._id} style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 20, padding: '5px 12px 5px 6px' }}>
-                            <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
-                              {t.name.charAt(0).toUpperCase()}
+            {/* period table */}
+            <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+              {/* header */}
+              <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr 1fr 180px 80px', background: '#0f172a', padding: '10px 16px', gap: 8 }}>
+                {['Period', 'Subject / Class', 'Free Teachers', 'Assigned Substitute', ''].map((h, i) => (
+                  <div key={i} style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
+                ))}
+              </div>
+
+              {Array.from({ length: 8 }, (_, i) => i + 1).map((pNum, idx) => {
+                const tp = teacherPeriods.find(p => p.periodNumber === pNum);
+                const assignedRow = tp ? assigned.find(a => a.periodNumber === pNum) : null;
+                const availList = tp ? (freeSubs[pNum] || []).filter(t => t._id !== teacherId) : [];
+                const isPicking = pickingPeriod === pNum;
+                const isBusy = !tp;
+
+                return (
+                  <div key={pNum}>
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: '56px 1fr 1fr 180px 80px', padding: '12px 16px', gap: 8, alignItems: 'center',
+                      background: assignedRow ? '#f0fdf4' : isBusy ? '#fafafa' : 'white',
+                      borderTop: idx > 0 ? '1px solid var(--border)' : 'none',
+                      opacity: isBusy ? 0.5 : 1,
+                    }}>
+                      {/* Period badge */}
+                      <div style={{ width: 34, height: 34, borderRadius: 8, background: isBusy ? '#e2e8f0' : (tp?.subject?.color || 'var(--primary)'), color: isBusy ? '#94a3b8' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12 }}>
+                        P{pNum}
+                      </div>
+
+                      {/* Subject / Class */}
+                      <div>
+                        {tp ? (
+                          <>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{tp.subject?.name || 'No Subject'}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{tp.cls?.name} {tp.cls?.section}</div>
+                          </>
+                        ) : (
+                          <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No class</span>
+                        )}
+                      </div>
+
+                      {/* Free teachers count */}
+                      <div>
+                        {tp ? (
+                          <span style={{ fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20, background: availList.length > 0 ? '#dcfce7' : '#fef2f2', color: availList.length > 0 ? '#15803d' : '#dc2626' }}>
+                            {availList.length} free
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
+                        )}
+                      </div>
+
+                      {/* Assigned substitute */}
+                      <div>
+                        {assignedRow ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#16a34a', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+                              {assignedRow.substituteTeacher?.name?.charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <div style={{ fontSize: 12, fontWeight: 600, color: '#065f46', lineHeight: 1.2 }}>{t.name}</div>
-                              {t.designation && <div style={{ fontSize: 10, color: '#047857', lineHeight: 1.2 }}>{t.designation}</div>}
+                              <div style={{ fontSize: 12, fontWeight: 600, color: '#15803d' }}>{assignedRow.substituteTeacher?.name}</div>
+                              {assignedRow.substituteTeacher?.designation && <div style={{ fontSize: 10, color: '#047857' }}>{assignedRow.substituteTeacher.designation}</div>}
                             </div>
                           </div>
-                        ))}
+                        ) : tp ? (
+                          <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500 }}>Not assigned</span>
+                        ) : (
+                          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
+                        )}
+                      </div>
+
+                      {/* Action */}
+                      <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                        {tp && (
+                          <>
+                            <button className="btn btn-primary btn-sm"
+                              onClick={() => setPickingPeriod(isPicking ? null : pNum)}
+                              style={{ fontSize: 12, padding: '4px 12px' }}>
+                              {assignedRow ? 'Change' : 'Assign'}
+                            </button>
+                            {assignedRow && (
+                              <button className="btn btn-secondary btn-sm btn-icon"
+                                onClick={() => removeMutation.mutate(assignedRow._id)}
+                                style={{ color: '#ef4444' }} title="Remove">
+                                <X size={13} />
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Expandable teacher picker */}
+                    {isPicking && (
+                      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', background: '#f8fafc' }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
+                          Select a substitute for Period {pNum}:
+                        </div>
+                        {availList.length === 0 ? (
+                          <span style={{ fontSize: 13, color: '#dc2626' }}>No free teachers available for this period</span>
+                        ) : (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                            {availList.map(t => {
+                              const isCurrentlyAssigned = assignedRow?.substituteTeacher?._id === t._id || assignedRow?.substituteTeacher === t._id;
+                              return (
+                                <button key={t._id}
+                                  onClick={() => assignMutation.mutate({ substituteTeacherId: t._id, periodNumber: pNum, classId: tp?.cls?._id, subjectId: tp?.subject?._id })}
+                                  disabled={assignMutation.isPending}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 8, background: isCurrentlyAssigned ? '#dcfce7' : 'white', border: `1.5px solid ${isCurrentlyAssigned ? '#86efac' : 'var(--border)'}`, borderRadius: 10, padding: '7px 14px 7px 8px', cursor: 'pointer', transition: 'all 0.15s' }}>
+                                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: isCurrentlyAssigned ? '#16a34a' : 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                                    {t.name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div style={{ textAlign: 'left' }}>
+                                    <div style={{ fontSize: 13, fontWeight: 600, color: isCurrentlyAssigned ? '#15803d' : 'var(--text-primary)' }}>{t.name}</div>
+                                    {t.designation && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.designation}</div>}
+                                  </div>
+                                  {isCurrentlyAssigned && <Check size={13} color="#16a34a" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -516,10 +707,22 @@ function EditCellModal({ cell, day, period, subjects, teachers, onSave, onClose,
         </label>
       </div>
       {isBreak ? (
-        <div className="form-group">
-          <label className="form-label">Break Name</label>
-          <input className="form-control" value={breakName} onChange={e => setBreakName(e.target.value)} placeholder="e.g. Lunch Break" />
-        </div>
+        <>
+          <div className="form-group">
+            <label className="form-label">Break Name</label>
+            <input className="form-control" value={breakName} onChange={e => setBreakName(e.target.value)} placeholder="e.g. Lunch Break" />
+          </div>
+          <FormRow>
+            <div className="form-group">
+              <label className="form-label">Start Time</label>
+              <input className="form-control" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">End Time</label>
+              <input className="form-control" type="time" value={endTime} onChange={e => setEndTime(e.target.value)} />
+            </div>
+          </FormRow>
+        </>
       ) : <>
         <div className="form-group">
           <label className="form-label">Subject</label>

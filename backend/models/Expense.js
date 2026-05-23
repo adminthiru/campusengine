@@ -22,6 +22,7 @@ const expenseSchema = new mongoose.Schema({
 
 const transportSchema = new mongoose.Schema({
   school: { type: mongoose.Schema.Types.ObjectId, ref: 'School', required: true },
+  vehicleType: { type: String, enum: ['bus', 'van', 'car', 'auto', 'bike', 'other'], default: 'bus' },
   routeName: { type: String, required: true },
   routeNumber: { type: String },
   vehicleNumber: { type: String },
@@ -29,6 +30,7 @@ const transportSchema = new mongoose.Schema({
   driverPhone: { type: String },
   conductorName: { type: String },
   conductorPhone: { type: String },
+  routeDescription: { type: String },
   capacity: { type: Number },
   stops: [{
     name: String,

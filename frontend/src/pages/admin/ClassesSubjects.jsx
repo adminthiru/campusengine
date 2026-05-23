@@ -11,11 +11,15 @@ export function Classes() {
   const [showModal, setShowModal] = useState(false);
   const [editClass, setEditClass] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  const [selectedSubjects, setSelectedSubjects] = useState([]);
   const defaultClassValues = { name: '', section: '', capacity: 40, classTeacher: '', room: '', 'fees.feeType': 'yearly', 'fees.yearly': '', 'fees.lateFee': 0 };
   const { register, handleSubmit, reset, formState: { errors } } = useForm({ defaultValues: defaultClassValues });
 
   const { data: empData } = useQuery({ queryKey: ['employees-teachers'], queryFn: () => api.get('/employees?role=teacher&limit=100') });
   const teachers = empData?.employees || [];
+
+  const { data: subjectsData } = useQuery({ queryKey: ['subjects'], queryFn: () => api.get('/subjects') });
+  const allSubjects = subjectsData?.subjects || [];
 
   const { data, isLoading } = useQuery({
     queryKey: ['classes'],
@@ -42,8 +46,12 @@ export function Classes() {
       'fees.yearly': cls.fees?.yearly, 'fees.monthly': cls.fees?.monthly,
       'fees.feeType': cls.fees?.feeType || 'yearly', 'fees.lateFee': cls.fees?.lateFee
     });
+    setSelectedSubjects(cls.subjects?.map(s => s._id || s) || []);
     setShowModal(true);
   };
+
+  const toggleSubject = (id) =>
+    setSelectedSubjects(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
 
   return (
     <div>
@@ -52,7 +60,7 @@ export function Classes() {
           <h1 className="page-title">Classes</h1>
           <p className="page-subtitle">{classes.length} classes configured</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setEditClass(null); reset(); setShowModal(true); }}>
+        <button className="btn btn-primary" onClick={() => { setEditClass(null); reset(); setSelectedSubjects([]); setShowModal(true); }}>
           <Plus size={16} /> Add Class
         </button>
       </div>
@@ -82,7 +90,7 @@ export function Classes() {
                   <button className="btn btn-danger btn-sm btn-icon" onClick={() => setDeleteId(cls._id)}><Trash2 size={14} /></button>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
+              <div style={{ display: 'flex', gap: 16, fontSize: 13, marginBottom: cls.subjects?.length ? 10 : 0 }}>
                 <div>
                   <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>STUDENTS</div>
                   <div style={{ fontWeight: 600 }}>{cls.studentCount || 0} / {cls.capacity}</div>
@@ -100,6 +108,19 @@ export function Classes() {
                   <div style={{ fontWeight: 600 }}>₹{(cls.fees?.yearly || cls.fees?.monthly || 0).toLocaleString('en-IN')}</div>
                 </div>
               </div>
+              {cls.subjects?.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                  {cls.subjects.slice(0, 5).map(s => (
+                    <span key={s._id || s} className="badge badge-secondary"
+                      style={{ fontSize: 11, borderLeft: s.color ? `3px solid ${s.color}` : undefined }}>
+                      {s.name || s}
+                    </span>
+                  ))}
+                  {cls.subjects.length > 5 && (
+                    <span className="badge badge-secondary" style={{ fontSize: 11 }}>+{cls.subjects.length - 5}</span>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -111,7 +132,7 @@ export function Classes() {
           <button className="btn btn-secondary" onClick={() => { setShowModal(false); setEditClass(null); }}>Cancel</button>
           <button className="btn btn-primary" onClick={handleSubmit(d => {
             if (!d.classTeacher) delete d.classTeacher;
-            createMutation.mutate(d);
+            createMutation.mutate({ ...d, subjects: selectedSubjects });
           })}>
             {createMutation.isLoading ? 'Saving...' : editClass ? 'Update Class' : 'Add Class'}
           </button>
@@ -165,6 +186,43 @@ export function Classes() {
               <input className="form-control" type="number" {...register('fees.lateFee')} />
             </div>
           </FormRow>
+
+          <div className="form-group">
+            <label className="form-label">
+              Subjects
+              {selectedSubjects.length > 0 && (
+                <span style={{ marginLeft: 6, fontSize: 12, color: 'var(--primary)', fontWeight: 500 }}>
+                  {selectedSubjects.length} selected
+                </span>
+              )}
+            </label>
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 8, padding: '10px 12px',
+              border: '1px solid var(--border)', borderRadius: 8, background: 'white',
+              maxHeight: 150, overflowY: 'auto'
+            }}>
+              {allSubjects.length === 0 && (
+                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                  No subjects yet — add subjects in the Subjects tab first
+                </span>
+              )}
+              {allSubjects.map(s => {
+                const selected = selectedSubjects.includes(s._id);
+                return (
+                  <button key={s._id} type="button" onClick={() => toggleSubject(s._id)}
+                    style={{
+                      padding: '4px 12px', borderRadius: 20, fontSize: 13, cursor: 'pointer',
+                      border: `1.5px solid ${selected ? (s.color || 'var(--primary)') : 'var(--border)'}`,
+                      background: selected ? `${s.color || 'var(--primary)'}18` : 'white',
+                      color: selected ? (s.color || 'var(--primary)') : 'var(--text-secondary)',
+                      fontWeight: selected ? 600 : 400, transition: 'all 0.15s'
+                    }}>
+                    {s.name}{s.code ? ` · ${s.code}` : ''}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </form>
       </Modal>
 

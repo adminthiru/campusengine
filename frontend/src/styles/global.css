@@ -559,10 +559,19 @@ tbody tr:last-child td { border-bottom: none; }
 /* Tabs */
 .tabs {
   display: flex;
-  border-bottom: 2px solid var(--border);
   gap: 0;
   overflow-x: auto;
-  overflow-y: hidden;
+  position: relative;
+}
+.tabs::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--border);
+  pointer-events: none;
 }
 
 .tab {
@@ -578,12 +587,22 @@ tbody tr:last-child td { border-bottom: none; }
   cursor: pointer;
   transition: var(--transition);
   white-space: nowrap;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
+  position: relative;
+  z-index: 1;
 }
 
 .tab:hover { color: var(--primary); }
-.tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.tab.active { color: var(--primary); font-weight: 600; }
+.tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--primary);
+  z-index: 2;
+}
 
 /* Search bar */
 .search-bar {

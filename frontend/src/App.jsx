@@ -13,7 +13,9 @@ import Fees from './pages/admin/Fees';
 import Timetable from './pages/admin/Timetable';
 import Salary from './pages/admin/Salary';
 import Exams from './pages/admin/Exams';
+import ExamDetail from './pages/admin/ExamDetail';
 import Expenses from './pages/admin/Expenses';
+import Transport from './pages/admin/Transport';
 import IDCards from './pages/admin/IDCards';
 import Settings from './pages/admin/Settings';
 import { SuperAdminDashboard } from './pages/superadmin/Dashboard';
@@ -53,18 +55,6 @@ function SMSLogs() {
   );
 }
 
-function Transport() {
-  return (
-    <div>
-      <div className="page-header"><h1 className="page-title">Transport</h1></div>
-      <div className="card" style={{ textAlign: 'center', padding: 48 }}>
-        <div style={{ fontSize: 64, marginBottom: 16 }}>🚌</div>
-        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Transport Management</h3>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Bus routes, stops and student assignment module.</p>
-      </div>
-    </div>
-  );
-}
 
 function ProtectedRoute({ children, roles }) {
   const { user } = useAuth();
@@ -111,6 +101,7 @@ export default function App() {
       <Route path="/timetable" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Timetable /></ProtectedRoute>} />
       <Route path="/salary" element={<ProtectedRoute roles={ADMIN}><Salary /></ProtectedRoute>} />
       <Route path="/exams" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Exams /></ProtectedRoute>} />
+      <Route path="/exams/:id" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><ExamDetail /></ProtectedRoute>} />
       <Route path="/expenses" element={<ProtectedRoute roles={ADMIN}><Expenses /></ProtectedRoute>} />
       <Route path="/transport" element={<ProtectedRoute roles={ADMIN}><Transport /></ProtectedRoute>} />
       <Route path="/id-cards" element={<ProtectedRoute roles={ADMIN}><IDCards /></ProtectedRoute>} />

@@ -3,7 +3,7 @@ const Student = require('../models/Student');
 const Class = require('../models/Class');
 const School = require('../models/School');
 const Razorpay = require('razorpay');
-const { generateFeeReceipt } = require('../utils/pdf');
+const { generateFeeReceipt, generateFeesReport } = require('../utils/pdf');
 const { sendSMS } = require('../utils/sms');
 
 const getRazorpay = () => new Razorpay({
@@ -241,7 +241,7 @@ const getFees = async (req, res) => {
 
     const total = await FeeCollection.countDocuments(query);
     const fees = await FeeCollection.find(query)
-      .populate('student', 'name admissionNumber rollNumber')
+      .populate({ path: 'student', select: 'name admissionNumber rollNumber phone currentClass', populate: { path: 'currentClass', select: 'name section' } })
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(Number(limit));
@@ -320,22 +320,54 @@ const sendFeeReminder = async (req, res) => {
   }
 };
 
-// Update fee record — edit discount for a specific term
+// Update fee record — edit breakdown and/or discount for a specific term
 const updateFeeRecord = async (req, res) => {
   try {
-    const { termName, discount } = req.body;
+    const { termName, discount, feeBreakdown } = req.body;
     const fee = await FeeCollection.findOne({ _id: req.params.id, school: req.user.school });
     if (!fee) return res.status(404).json({ success: false, message: 'Fee record not found' });
 
-    const term = termName ? fee.terms.find(t => t.name === termName) : fee.terms[0];
+    let term = termName ? fee.terms.find(t => t.name === termName) : fee.terms[0];
+
+    // If term not found by name, create a new one
+    if (!term && termName) {
+      const bd = (feeBreakdown || []).map(f => ({ type: f.type, amount: Number(f.amount) || 0 }));
+      const totalAmount = bd.reduce((s, f) => s + f.amount, 0);
+      const discAmt = Number(discount?.amount) || 0;
+      const netAmount = Math.max(0, totalAmount - discAmt);
+      fee.terms.push({
+        name: termName,
+        feeBreakdown: bd,
+        totalAmount,
+        discount: { amount: discAmt, reason: discount?.reason || '' },
+        netAmount,
+        paidAmount: 0,
+        pendingAmount: netAmount,
+        status: netAmount <= 0 ? 'paid' : 'pending'
+      });
+      recalcAggregates(fee);
+      await fee.save();
+      return res.json({ success: true, fee });
+    }
     if (!term) return res.status(404).json({ success: false, message: 'Term not found' });
 
+    // Update fee breakdown items if provided
+    if (feeBreakdown !== undefined) {
+      const bd = (feeBreakdown || []).map(f => ({ type: f.type, amount: Number(f.amount) || 0 }));
+      term.feeBreakdown = bd;
+      term.totalAmount = bd.reduce((s, f) => s + f.amount, 0);
+    }
+
+    // Update discount if provided
     if (discount !== undefined) {
       term.discount = { amount: Number(discount.amount) || 0, reason: discount.reason || '' };
-      term.netAmount = Math.max(0, term.totalAmount - term.discount.amount);
-      term.pendingAmount = Math.max(0, term.netAmount - term.paidAmount);
-      term.status = term.pendingAmount <= 0 ? 'paid' : term.paidAmount > 0 ? 'partial' : 'pending';
     }
+
+    // Recalculate term amounts
+    const discAmt = Number(term.discount?.amount) || 0;
+    term.netAmount = Math.max(0, term.totalAmount - discAmt);
+    term.pendingAmount = Math.max(0, term.netAmount - term.paidAmount);
+    term.status = term.pendingAmount <= 0 ? 'paid' : term.paidAmount > 0 ? 'partial' : 'pending';
 
     recalcAggregates(fee);
     await fee.save();
@@ -388,6 +420,82 @@ const reversePayment = async (req, res) => {
   }
 };
 
+// Update fee structure for all students in a class
+const updateClassFeeStructure = async (req, res) => {
+  try {
+    const { classId, academicYear, terms: termsInput } = req.body;
+    const schoolId = req.user.school;
+
+    if (!classId || !academicYear || !termsInput?.length) {
+      return res.status(400).json({ success: false, message: 'classId, academicYear, and terms are required' });
+    }
+
+    const students = await Student.find({ school: schoolId, currentClass: classId, status: 'active' }).select('_id');
+    const studentIds = students.map(s => s._id);
+
+    const fees = await FeeCollection.find({ school: schoolId, student: { $in: studentIds }, academicYear });
+    if (!fees.length) {
+      return res.status(404).json({ success: false, message: 'No fee records found for this class and academic year. Create records first.' });
+    }
+
+    for (const fee of fees) {
+      for (const termUpdate of termsInput) {
+        const termObj = fee.terms.find(t => t.name === termUpdate.name);
+        if (termObj) {
+          const bd = (termUpdate.feeBreakdown || []).map(f => ({ type: f.type, amount: Number(f.amount) || 0 }));
+          termObj.feeBreakdown = bd;
+          termObj.totalAmount = bd.reduce((s, f) => s + f.amount, 0);
+          const discAmt = Number(termObj.discount?.amount) || 0;
+          termObj.netAmount = Math.max(0, termObj.totalAmount - discAmt);
+          termObj.pendingAmount = Math.max(0, termObj.netAmount - termObj.paidAmount);
+          termObj.status = termObj.pendingAmount <= 0 ? 'paid' : termObj.paidAmount > 0 ? 'partial' : 'pending';
+        } else {
+          // New category — add it as a new term
+          const bd = (termUpdate.feeBreakdown || []).map(f => ({ type: f.type, amount: Number(f.amount) || 0 }));
+          const totalAmount = bd.reduce((s, f) => s + f.amount, 0);
+          fee.terms.push({
+            name: termUpdate.name,
+            feeBreakdown: bd,
+            totalAmount,
+            discount: { amount: 0, reason: '' },
+            netAmount: totalAmount,
+            paidAmount: 0,
+            pendingAmount: totalAmount,
+            status: 'pending'
+          });
+        }
+      }
+      recalcAggregates(fee);
+      await fee.save();
+    }
+
+    res.json({ success: true, updated: fees.length, message: `Updated fee structure for ${fees.length} student${fees.length !== 1 ? 's' : ''}` });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Remove a single term from a fee record (only allowed when paidAmount === 0)
+const deleteFeeTerm = async (req, res) => {
+  try {
+    const { termName } = req.body;
+    if (!termName) return res.status(400).json({ success: false, message: 'termName is required' });
+    const fee = await FeeCollection.findOne({ _id: req.params.id, school: req.user.school });
+    if (!fee) return res.status(404).json({ success: false, message: 'Fee record not found' });
+    const term = fee.terms.find(t => t.name === termName);
+    if (!term) return res.status(404).json({ success: false, message: `Term "${termName}" not found` });
+    if (term.paidAmount > 0) {
+      return res.status(400).json({ success: false, message: `Cannot remove "${termName}" — ₹${term.paidAmount.toLocaleString('en-IN')} already collected` });
+    }
+    fee.terms = fee.terms.filter(t => t.name !== termName);
+    recalcAggregates(fee);
+    await fee.save();
+    res.json({ success: true, fee });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // Delete fee record
 const deleteFeeRecord = async (req, res) => {
   try {
@@ -399,4 +507,37 @@ const deleteFeeRecord = async (req, res) => {
   }
 };
 
-module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, collectPayment, reversePayment, createRazorpayOrder, verifyRazorpayPayment, getFees, getReceiptPDF, sendFeeReminder, deleteFeeRecord };
+// Fees report PDF
+const getFeesReport = async (req, res) => {
+  try {
+    const { classId, status, academicYear } = req.query;
+    const query = { school: req.user.school };
+    if (status) query.status = status;
+    if (academicYear) query.academicYear = academicYear;
+
+    let className = '';
+    if (classId) {
+      const Class = require('../models/Class');
+      const cls = await Class.findById(classId);
+      className = cls ? `${cls.name}${cls.section ? ' ' + cls.section : ''}` : '';
+      const students = await Student.find({ school: req.user.school, currentClass: classId }).select('_id');
+      query.student = { $in: students.map(s => s._id) };
+    }
+
+    const fees = await FeeCollection.find(query)
+      .populate({ path: 'student', select: 'name admissionNumber phone currentClass', populate: { path: 'currentClass', select: 'name section' } })
+      .sort({ createdAt: 1 });
+
+    const school = await School.findById(req.user.school);
+    const pdf = await generateFeesReport(fees.map(f => f.toObject()), school.toObject(), { className, status, academicYear });
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=fees_report_${dateStr}.pdf`);
+    res.send(pdf);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, createRazorpayOrder, verifyRazorpayPayment, getFees, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm };

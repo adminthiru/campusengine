@@ -231,7 +231,7 @@ router.get('/classes', protect, checkSubscription, async (req, res) => {
     const { academicYear } = req.query;
     const query = { school: req.user.school };
     if (academicYear) query.academicYear = academicYear;
-    const classes = await Class.find(query).populate('classTeacher', 'name').sort({ name: 1, section: 1 });
+    const classes = await Class.find(query).populate('classTeacher', 'name').populate('subjects', 'name code color').sort({ name: 1, section: 1 });
     // Add student count
     const Student = require('../models/Student');
     const classesWithCount = await Promise.all(classes.map(async (cls) => {
@@ -248,19 +248,31 @@ router.post('/classes', protect, checkSubscription, authorize('admin', 'correspo
     const y = now.getFullYear();
     const defaultYear = now.getMonth() >= 5 ? `${y}-${String(y + 1).slice(-2)}` : `${y - 1}-${String(y).slice(-2)}`;
     const academicYear = req.body.academicYear || school.academicYear?.current || defaultYear;
-    const cls = await Class.create({ ...req.body, school: req.user.school, academicYear });
+    const { subjects, ...rest } = req.body;
+    const cls = await Class.create({ ...rest, subjects: subjects || [], school: req.user.school, academicYear });
+    if (subjects?.length) {
+      await Subject.updateMany({ _id: { $in: subjects } }, { $addToSet: { classes: cls._id } });
+    }
     res.status(201).json({ success: true, class: cls });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 router.put('/classes/:id', protect, checkSubscription, async (req, res) => {
   try {
-    const { name, section, capacity, room, classTeacher, academicYear, fees } = req.body;
+    const { name, section, capacity, room, classTeacher, academicYear, fees, subjects } = req.body;
     const $set = { name, section, capacity, room, academicYear };
     if (fees) $set.fees = fees;
+    if (subjects !== undefined) $set.subjects = subjects;
     const $unset = {};
     if (classTeacher) $set.classTeacher = classTeacher; else $unset.classTeacher = '';
     const update = Object.keys($unset).length ? { $set, $unset } : { $set };
     const cls = await Class.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, update, { new: true });
+    // Sync Subject.classes — remove this class from all subjects then re-add selected ones
+    if (subjects !== undefined) {
+      await Subject.updateMany({ school: req.user.school }, { $pull: { classes: cls._id } });
+      if (subjects.length) {
+        await Subject.updateMany({ _id: { $in: subjects } }, { $addToSet: { classes: cls._id } });
+      }
+    }
     res.json({ success: true, class: cls });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -337,6 +349,7 @@ router.get('/attendance/leave-balance', protect, checkSubscription, async (req, 
 
 // ============== FEES ==============
 router.get('/fees', protect, checkSubscription, feesCtrl.getFees);
+router.get('/fees/report', protect, checkSubscription, feesCtrl.getFeesReport);
 router.post('/fees', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.createFeeRecord);
 router.post('/fees/collect', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.collectPayment);
 router.post('/fees/razorpay-order', protect, checkSubscription, feesCtrl.createRazorpayOrder);
@@ -344,15 +357,21 @@ router.post('/fees/razorpay-verify', protect, feesCtrl.verifyRazorpayPayment);
 router.get('/fees/:id/receipt', protect, feesCtrl.getReceiptPDF);
 router.post('/fees/bulk', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.createBulkFeeRecords);
 router.post('/fees/send-reminder', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.sendFeeReminder);
+router.put('/fees/class-structure', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.updateClassFeeStructure);
 router.put('/fees/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.updateFeeRecord);
 router.delete('/fees/:id/payment/:paymentId', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.reversePayment);
+router.delete('/fees/:id/term', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.deleteFeeTerm);
 router.delete('/fees/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.deleteFeeRecord);
 
 // ============== SALARY ==============
 router.get('/salaries', protect, checkSubscription, salCtrl.getSalaries);
+router.get('/salaries/attendance-preview', protect, checkSubscription, salCtrl.getAttendanceSummary);
+router.post('/salaries', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.createSalaryRecord);
 router.post('/salaries/generate', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.generateSalary);
 router.put('/salaries/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.updateSalary);
 router.post('/salaries/:id/pay', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.paySalary);
+router.post('/salaries/:id/revert', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.revertSalary);
+router.delete('/salaries/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.deleteSalaryRecord);
 router.get('/salaries/:id/payslip', protect, salCtrl.getPayslipPDF);
 
 // ============== TIMETABLE ==============
@@ -362,18 +381,94 @@ router.get('/timetable/free-slots', protect, checkSubscription, ttCtrl.getTeache
 router.get('/timetable/day-substitutes', protect, checkSubscription, ttCtrl.getDaySubstitutes);
 router.delete('/timetable/period', protect, checkSubscription, ttCtrl.deletePeriod);
 
+// Substitution assignments
+router.get('/timetable/substitutions', protect, checkSubscription, async (req, res) => {
+  try {
+    const Substitution = require('../models/Substitution');
+    const { date, absentTeacherId } = req.query;
+    if (!date || !absentTeacherId) return res.status(400).json({ success: false, message: 'date and absentTeacherId required' });
+    const start = new Date(date + 'T00:00:00.000Z');
+    const end   = new Date(date + 'T23:59:59.999Z');
+    const subs = await Substitution.find({ school: req.user.school, absentTeacher: absentTeacherId, date: { $gte: start, $lte: end } })
+      .populate('substituteTeacher', 'name designation department')
+      .populate('classRef', 'name section')
+      .populate('subject', 'name color');
+    res.json({ success: true, substitutions: subs });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.post('/timetable/substitutions', protect, checkSubscription, async (req, res) => {
+  try {
+    const Substitution = require('../models/Substitution');
+    const { date, absentTeacherId, substituteTeacherId, periodNumber, classId, subjectId, academicYear, note } = req.body;
+    if (!date || !absentTeacherId || !substituteTeacherId || !periodNumber) {
+      return res.status(400).json({ success: false, message: 'date, absentTeacherId, substituteTeacherId, periodNumber required' });
+    }
+    const dateObj = new Date(date + 'T00:00:00.000Z');
+    const sub = await Substitution.findOneAndUpdate(
+      { school: req.user.school, date: dateObj, absentTeacher: absentTeacherId, periodNumber: Number(periodNumber) },
+      { $set: { substituteTeacher: substituteTeacherId, classRef: classId || null, subject: subjectId || null, academicYear, note: note || '', school: req.user.school, date: dateObj, absentTeacher: absentTeacherId, periodNumber: Number(periodNumber) } },
+      { upsert: true, new: true }
+    ).populate('substituteTeacher', 'name designation department');
+    res.json({ success: true, substitution: sub });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.delete('/timetable/substitutions/:id', protect, checkSubscription, async (req, res) => {
+  try {
+    const Substitution = require('../models/Substitution');
+    await Substitution.findOneAndDelete({ _id: req.params.id, school: req.user.school });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // ============== EXAMS ==============
 router.get('/exams', protect, checkSubscription, examCtrl.getExams);
 router.post('/exams', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), examCtrl.createExam);
-router.put('/exams/:id', protect, checkSubscription, examCtrl.updateExam);
-router.delete('/exams/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), examCtrl.deleteExam);
 router.post('/exams/marks', protect, checkSubscription, examCtrl.enterMarks);
+router.post('/exams/answer-paper', protect, checkSubscription, upload.single('answerPaper'), examCtrl.uploadAnswerPaper);
+router.delete('/exams/results/:resultId/answer-paper', protect, checkSubscription, async (req, res) => {
+  try {
+    const { ExamResult } = require('../models/Exam');
+    const { subjectId } = req.body;
+    const result = await ExamResult.findOne({ _id: req.params.resultId, school: req.user.school });
+    if (!result) return res.status(404).json({ success: false, message: 'Not found' });
+    const markEntry = result.marks.find(m => m.subject?.toString() === subjectId);
+    if (markEntry) { markEntry.answerPaper = undefined; await result.save(); }
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
 router.post('/exams/:examId/publish', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), examCtrl.publishResults);
 router.get('/exams/results', protect, checkSubscription, examCtrl.getResults);
 router.get('/exams/results/:id/pdf', protect, examCtrl.getResultCardPDF);
 router.get('/exams/award-list', protect, examCtrl.getAwardList);
+router.get('/exams/:examId/hall-ticket/:studentId', protect, examCtrl.getHallTicket);
+router.get('/exams/:id', protect, checkSubscription, examCtrl.getExamById);
+router.put('/exams/:id', protect, checkSubscription, examCtrl.updateExam);
+router.delete('/exams/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), examCtrl.deleteExam);
 
 // ============== EXPENSES ==============
+router.get('/expenses/report', protect, checkSubscription, async (req, res) => {
+  try {
+    const { startDate, endDate, category } = req.query;
+    const query = { school: req.user.school };
+    if (category) query.category = category;
+    if (startDate || endDate) {
+      query.date = {};
+      if (startDate) query.date.$gte = new Date(startDate);
+      if (endDate) { const e = new Date(endDate); e.setHours(23, 59, 59, 999); query.date.$lte = e; }
+    }
+    const expenses = await Expense.find(query).populate('createdBy', 'name').sort({ date: 1 });
+    const school   = await School.findById(req.user.school);
+    const { generateExpensesReport } = require('../utils/pdf');
+    const pdf = await generateExpensesReport(expenses.map(e => e.toObject()), school.toObject(), { startDate, endDate, category });
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=expenses_report_${dateStr}.pdf`);
+    res.send(pdf);
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 router.get('/expenses', protect, checkSubscription, async (req, res) => {
   try {
     const { category, month, year } = req.query;
@@ -407,14 +502,46 @@ router.delete('/expenses/:id', protect, authorize('admin', 'correspondent'), asy
 // ============== TRANSPORT ==============
 router.get('/transport', protect, async (req, res) => {
   try {
-    const routes = await Transport.find({ school: req.user.school }).populate('students', 'name admissionNumber');
-    res.json({ success: true, routes });
+    const routes = await Transport.find({ school: req.user.school });
+    // Count students via Student.transportRoute (the authoritative field)
+    const studentCounts = await Student.aggregate([
+      { $match: { school: req.user.school, transportRoute: { $in: routes.map(r => r._id) }, status: { $ne: 'dropped' } } },
+      { $group: { _id: '$transportRoute', count: { $sum: 1 } } }
+    ]);
+    const countMap = {};
+    studentCounts.forEach(s => { countMap[s._id.toString()] = s.count; });
+    const result = routes.map(r => ({ ...r.toObject(), studentCount: countMap[r._id.toString()] || 0 }));
+    res.json({ success: true, routes: result });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+router.get('/transport/:id/students', protect, async (req, res) => {
+  try {
+    const students = await Student.find({
+      school: req.user.school, transportRoute: req.params.id, status: { $ne: 'dropped' }
+    }).populate('currentClass', 'name section').select('name admissionNumber phone currentClass gender photo rollNumber').sort({ name: 1 });
+    res.json({ success: true, students });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 router.post('/transport', protect, authorize('admin', 'correspondent'), async (req, res) => {
   try {
     const route = await Transport.create({ ...req.body, school: req.user.school });
     res.status(201).json({ success: true, route });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+router.put('/transport/:id', protect, authorize('admin', 'correspondent'), async (req, res) => {
+  try {
+    const route = await Transport.findOneAndUpdate(
+      { _id: req.params.id, school: req.user.school }, req.body, { new: true }
+    );
+    if (!route) return res.status(404).json({ success: false, message: 'Not found' });
+    res.json({ success: true, route });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+router.delete('/transport/:id', protect, authorize('admin', 'correspondent'), async (req, res) => {
+  try {
+    const route = await Transport.findOneAndDelete({ _id: req.params.id, school: req.user.school });
+    if (!route) return res.status(404).json({ success: false, message: 'Not found' });
+    res.json({ success: true, message: 'Deleted' });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 

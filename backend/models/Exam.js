@@ -4,8 +4,8 @@ const examSchema = new mongoose.Schema({
   school: { type: mongoose.Schema.Types.ObjectId, ref: 'School', required: true },
   name: { type: String, required: true }, // e.g., "Mid Term Exam"
   academicYear: { type: String, required: true },
-  term: { type: String },
-  type: { type: String, enum: ['unit_test', 'mid_term', 'final', 'quarterly', 'half_yearly', 'annual', 'other'] },
+  examDate: { type: Date },
+  type: { type: String },
   classes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Class' }],
   schedule: [{
     class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class' },
@@ -40,14 +40,20 @@ const examResultSchema = new mongoose.Schema({
     grade: String,
     remarks: String,
     isAbsent: { type: Boolean, default: false },
-    enteredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    enteredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    answerPaper: {
+      url: String,
+      fileName: String,
+      uploadedAt: Date,
+      uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    }
   }],
   totalMarksObtained: { type: Number },
   totalMaxMarks: { type: Number },
   percentage: { type: Number },
   grade: { type: String },
   rank: { type: Number },
-  attendance: { type: Number }, // attendance % during exam period
+  attendance: { type: Number },
   teacherRemarks: { type: String },
   isPublished: { type: Boolean, default: false }
 }, { timestamps: true });

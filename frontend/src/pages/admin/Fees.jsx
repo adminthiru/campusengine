@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { Plus, Download, MessageSquare, Eye, CreditCard, IndianRupee, Trash2, Edit2, Users, User, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
+import { Plus, Download, MessageSquare, CreditCard, IndianRupee, Trash2, Edit2, Users, User, RotateCcw, Tag } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, StatusBadge, Pagination, SearchInput, PageLoader, FormRow, EmptyState, StatCard, ColumnSelector, useColumnSelector } from '../../components/ui';
 
 const FEE_COLS = [
+  { key: 'mobile',       label: 'Mobile' },
   { key: 'academicYear', label: 'Academic Year' },
   { key: 'terms',        label: 'Terms' },
   { key: 'total',        label: 'Total (₹)' },
@@ -15,7 +16,7 @@ const FEE_COLS = [
   { key: 'status',       label: 'Status' },
 ];
 
-const emptyTerm = (name = '') => ({ name, feeBreakdown: [{ type: 'Tuition Fee', amount: '' }], discount: { amount: '', reason: '' } });
+const emptyItem = () => ({ type: '', amount: '' });
 
 export default function Fees() {
   const qc = useQueryClient();
@@ -25,13 +26,14 @@ export default function Fees() {
   const [showCreate, setShowCreate] = useState(false);
   const [createMode, setCreateMode] = useState('individual');
   const [indivClassId, setIndivClassId] = useState('');
-  const [termRows, setTermRows] = useState([emptyTerm('Term 1')]);
+  const [feeItems, setFeeItems] = useState([{ type: 'Tuition Fee', amount: '' }]);
   const [showCollect, setShowCollect] = useState(null);
   const [viewFee, setViewFee] = useState(null);
   const [editFee, setEditFee] = useState(null);
   const [reverseTarget, setReverseTarget] = useState(null); // { feeId, paymentId, amount, termName }
   const [selected, setSelected] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showEditClassFee, setShowEditClassFee] = useState(false);
 
   const { data: classData } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes') });
   const classes = classData?.classes || [];
@@ -64,10 +66,10 @@ export default function Fees() {
   const students = studentData?.students || [];
 
   const openCreateModal = () => {
-    const rows = feeTerms.length > 0
-      ? feeTerms.map(t => emptyTerm(t.name))
-      : [emptyTerm('Term 1')];
-    setTermRows(rows);
+    const items = feeTerms.length > 0
+      ? feeTerms.map(t => ({ type: t.name, amount: '' }))
+      : [{ type: 'Tuition Fee', amount: '' }];
+    setFeeItems(items);
     reset();
     setCreateMode('individual');
     setIndivClassId('');
@@ -83,6 +85,30 @@ export default function Fees() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = 'receipt.pdf'; a.click();
     } catch { toast.error('Failed'); }
+  };
+
+  const [reportLoading, setReportLoading] = useState(false);
+
+  const downloadReport = async () => {
+    setReportLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (classFilter) params.append('classId', classFilter);
+      if (statusFilter) params.append('status', statusFilter);
+      const res = await fetch(`/api/fees/report?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (!res.ok) throw new Error('Failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fees_report_${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Fees report downloaded');
+    } catch { toast.error('Failed to download report'); }
+    finally { setReportLoading(false); }
   };
 
   const sendReminders = async () => {
@@ -111,22 +137,12 @@ export default function Fees() {
     onError: () => { toast.error('Failed to delete'); setConfirmDelete(false); }
   });
 
-  // Term row helpers
-  const updateTermName = (i, val) => setTermRows(r => r.map((t, idx) => idx === i ? { ...t, name: val } : t));
-  const addTermRow = () => setTermRows(r => [...r, emptyTerm(`Term ${r.length + 1}`)]);
-  const removeTermRow = (i) => setTermRows(r => r.filter((_, idx) => idx !== i));
-  const addBreakdownItem = (i) => setTermRows(r => r.map((t, idx) => idx === i ? { ...t, feeBreakdown: [...t.feeBreakdown, { type: '', amount: '' }] } : t));
-  const removeBreakdownItem = (ti, bi) => setTermRows(r => r.map((t, idx) => idx === ti ? { ...t, feeBreakdown: t.feeBreakdown.filter((_, bi2) => bi2 !== bi) } : t));
-  const updateBreakdown = (ti, bi, field, val) => setTermRows(r => r.map((t, idx) => idx === ti ? { ...t, feeBreakdown: t.feeBreakdown.map((f, fi) => fi === bi ? { ...f, [field]: val } : f) } : t));
-  const updateDiscount = (i, field, val) => setTermRows(r => r.map((t, idx) => idx === i ? { ...t, discount: { ...t.discount, [field]: val } } : t));
-
   const handleCreate = handleSubmit((formData) => {
-    const terms = termRows.map(t => ({
-      name: t.name,
-      feeBreakdown: t.feeBreakdown.map(f => ({ type: f.type, amount: Number(f.amount) || 0 })),
-      discount: { amount: Number(t.discount.amount) || 0, reason: t.discount.reason }
+    if (!feeItems.length || feeItems.some(f => !f.type.trim())) return toast.error('All categories need a name');
+    const terms = feeItems.map(f => ({
+      name: f.type,
+      feeBreakdown: [{ type: f.type, amount: Number(f.amount) || 0 }]
     }));
-    if (!terms.length || terms.some(t => !t.name.trim())) return toast.error('All terms need a name');
     const payload = { ...formData, terms };
     createMode === 'class' ? bulkMutation.mutate(payload) : createMutation.mutate(payload);
   });
@@ -136,6 +152,7 @@ export default function Fees() {
 
   const totalPending = fees.reduce((s, f) => s + (f.pendingAmount || 0), 0);
   const totalCollected = fees.reduce((s, f) => s + (f.paidAmount || 0), 0);
+  const totalDiscount = fees.reduce((s, f) => s + (f.terms || []).reduce((ts, t) => ts + (t.discount?.amount || 0), 0), 0);
   const isPending = createMutation.isPending || bulkMutation.isPending;
 
   return (
@@ -156,15 +173,21 @@ export default function Fees() {
               </button>
             </>
           )}
+          {total > 0 && (
+            <button className="btn btn-secondary" onClick={() => setShowEditClassFee(true)}>
+              <Edit2 size={16} /> Edit Fee Structure
+            </button>
+          )}
           <button className="btn btn-primary" onClick={openCreateModal}>
             <Plus size={16} /> Add Fee Record
           </button>
         </div>
       </div>
 
-      <div className="grid-3" style={{ marginBottom: 24 }}>
+      <div className="grid-4" style={{ marginBottom: 24 }}>
         <StatCard title="Total Collected" value={`₹${totalCollected.toLocaleString('en-IN')}`} icon={IndianRupee} color="#10b981" bg="#f0fdf4" />
         <StatCard title="Pending Amount" value={`₹${totalPending.toLocaleString('en-IN')}`} icon={IndianRupee} color="#ef4444" bg="#fef2f2" />
+        <StatCard title="Total Discount" value={`₹${totalDiscount.toLocaleString('en-IN')}`} icon={Tag} color="#f59e0b" bg="#fffbeb" />
         <StatCard title="Total Records" value={total} icon={CreditCard} color="#1a56e8" bg="#eff6ff" />
       </div>
 
@@ -178,6 +201,11 @@ export default function Fees() {
           {['pending', 'partial', 'paid', 'overdue'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
         </select>
         <ColumnSelector storageKey="fees" cols={FEE_COLS} visible={visibleCols} onChange={setVisibleCols} />
+        <div style={{ marginLeft: 'auto' }}>
+          <button className="btn btn-secondary" onClick={downloadReport} disabled={reportLoading}>
+            <Download size={15} /> {reportLoading ? 'Preparing…' : 'Download Report'}
+          </button>
+        </div>
       </div>
 
       {isLoading ? <PageLoader /> : (
@@ -188,6 +216,7 @@ export default function Fees() {
                 <tr>
                   <th><input type="checkbox" onChange={e => setSelected(e.target.checked ? fees.map(f => f._id) : [])} /></th>
                   <th>Student</th>
+                  {col('mobile')       && <th>Mobile</th>}
                   {col('academicYear') && <th>Year</th>}
                   {col('terms')        && <th>Terms</th>}
                   {col('total')        && <th>Total (₹)</th>}
@@ -204,12 +233,13 @@ export default function Fees() {
                   </td></tr>
                 )}
                 {fees.map(fee => (
-                  <tr key={fee._id}>
-                    <td><input type="checkbox" checked={selected.includes(fee._id)} onChange={e => setSelected(p => e.target.checked ? [...p, fee._id] : p.filter(i => i !== fee._id))} /></td>
+                  <tr key={fee._id} onClick={() => setViewFee(fee)} style={{ cursor: 'pointer' }}>
+                    <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={selected.includes(fee._id)} onChange={e => setSelected(p => e.target.checked ? [...p, fee._id] : p.filter(i => i !== fee._id))} /></td>
                     <td className="text-14-medium">
                       <div>{fee.student?.name}</div>
                       <div className="text-12-regular" style={{ color: 'var(--text-muted)' }}>{fee.student?.admissionNumber}</div>
                     </td>
+                    {col('mobile') && <td className="text-14-regular" style={{ color: 'var(--text-secondary)' }}>{fee.student?.phone || '—'}</td>}
                     {col('academicYear') && <td className="text-14-regular">{fee.academicYear}</td>}
                     {col('terms') && (
                       <td>
@@ -227,10 +257,9 @@ export default function Fees() {
                     {col('paid')    && <td className="text-14-medium" style={{ color: '#10b981' }}>₹{(fee.paidAmount || 0).toLocaleString('en-IN')}</td>}
                     {col('pending') && <td className="text-14-medium" style={{ color: fee.pendingAmount > 0 ? '#ef4444' : '#10b981' }}>₹{(fee.pendingAmount || 0).toLocaleString('en-IN')}</td>}
                     {col('status')  && <td><StatusBadge status={fee.status} /></td>}
-                    <td>
+                    <td onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setViewFee(fee)} title="View details"><Eye size={14} /></button>
-                        <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setEditFee(fee)} title="Edit concession"><Edit2 size={14} /></button>
+                        <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setEditFee(fee)} title="Edit fee structure"><Edit2 size={14} /></button>
                         {fee.paidAmount > 0 && (
                           <button className="btn btn-secondary btn-sm btn-icon" onClick={() => downloadReceipt(fee._id)} title="Download receipt"><Download size={14} /></button>
                         )}
@@ -315,49 +344,10 @@ export default function Fees() {
             </FormRow>
           )}
 
-          {/* Terms */}
+          {/* Fee Categories */}
           <div style={{ marginTop: 4 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <label className="form-label" style={{ marginBottom: 0 }}>Fee Terms *</label>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={addTermRow}>
-                <Plus size={13} /> Add Term
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {termRows.map((term, ti) => {
-                const termTotal = term.feeBreakdown.reduce((s, f) => s + (Number(f.amount) || 0), 0);
-                const discAmt = createMode === 'individual' ? (Number(term.discount.amount) || 0) : 0;
-                const net = Math.max(0, termTotal - discAmt);
-                return (
-                  <TermSection key={ti}
-                    term={term} index={ti} net={net} termTotal={termTotal}
-                    showDiscount={createMode === 'individual'}
-                    canRemove={termRows.length > 1}
-                    onNameChange={val => updateTermName(ti, val)}
-                    onRemove={() => removeTermRow(ti)}
-                    onAddItem={() => addBreakdownItem(ti)}
-                    onRemoveItem={bi => removeBreakdownItem(ti, bi)}
-                    onUpdateItem={(bi, field, val) => updateBreakdown(ti, bi, field, val)}
-                    onDiscountChange={(field, val) => updateDiscount(ti, field, val)}
-                  />
-                );
-              })}
-            </div>
-
-            {/* Grand total */}
-            {termRows.length > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#eff6ff', borderRadius: 8, marginTop: 10 }}>
-                <span className="text-14-semibold" style={{ color: 'var(--primary)' }}>Total (all terms)</span>
-                <span className="text-16-bold" style={{ color: 'var(--primary)' }}>
-                  ₹{termRows.reduce((s, t) => {
-                    const sub = t.feeBreakdown.reduce((ss, f) => ss + (Number(f.amount) || 0), 0);
-                    const disc = createMode === 'individual' ? (Number(t.discount.amount) || 0) : 0;
-                    return s + Math.max(0, sub - disc);
-                  }, 0).toLocaleString('en-IN')}
-                </span>
-              </div>
-            )}
+            <label className="form-label">Fee Categories *</label>
+            <FeeItemsEditor items={feeItems} onChange={setFeeItems} />
           </div>
         </form>
       </Modal>
@@ -395,81 +385,109 @@ export default function Fees() {
       {viewFee && (
         <Modal open onClose={() => setViewFee(null)} title="Fee Details" size="lg">
           <div>
-            <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 10, marginBottom: 16 }}>
-              <div className="text-16-bold">{viewFee.student?.name}</div>
-              <div className="text-14-regular" style={{ color: 'var(--text-secondary)' }}>{viewFee.academicYear}</div>
-            </div>
-
-            {/* Per-term breakdown */}
-            {(viewFee.terms || []).map((t, i) => (
-              <div key={i} style={{ marginBottom: 12, border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
-                  <span className="text-14-semibold">{t.name}</span>
-                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, fontWeight: 600,
-                    background: t.status === 'paid' ? '#dcfce7' : t.status === 'partial' ? '#fef9c3' : '#fee2e2',
-                    color: t.status === 'paid' ? '#166534' : t.status === 'partial' ? '#92400e' : '#dc2626'
-                  }}>{t.status}</span>
-                </div>
-                <div style={{ padding: '8px 14px' }}>
-                  {t.feeBreakdown?.map((f, j) => (
-                    <div key={j} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: j < t.feeBreakdown.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
-                      <span className="text-13-regular">{f.type}</span>
-                      <span className="text-13-medium">₹{(f.amount || 0).toLocaleString('en-IN')}</span>
-                    </div>
-                  ))}
-                  {t.discount?.amount > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: '#16a34a' }}>
-                      <span className="text-13-regular">Discount ({t.discount.reason})</span>
-                      <span className="text-13-medium">−₹{t.discount.amount.toLocaleString('en-IN')}</span>
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--border)' }}>
-                    <span className="text-13-semibold">Net: ₹{(t.netAmount || 0).toLocaleString('en-IN')}</span>
-                    <span className="text-13-semibold" style={{ color: t.pendingAmount > 0 ? '#ef4444' : '#16a34a' }}>
-                      Pending: ₹{(t.pendingAmount || 0).toLocaleString('en-IN')}
-                    </span>
-                  </div>
+            {/* Header strip */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(135deg, #1a56e8 0%, #3b82f6 100%)', borderRadius: 12, padding: '14px 18px', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'white' }}>{viewFee.student?.name}</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
+                  {viewFee.student?.admissionNumber} · {viewFee.academicYear}
                 </div>
               </div>
-            ))}
-
-            {/* Totals */}
-            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-              <div style={{ flex: 1, background: '#f0fdf4', padding: 12, borderRadius: 8, textAlign: 'center' }}>
-                <div className="text-12-regular" style={{ color: '#16a34a' }}>Paid</div>
-                <div className="text-16-bold" style={{ color: '#16a34a' }}>₹{(viewFee.paidAmount || 0).toLocaleString('en-IN')}</div>
-              </div>
-              <div style={{ flex: 1, background: '#fef2f2', padding: 12, borderRadius: 8, textAlign: 'center' }}>
-                <div className="text-12-regular" style={{ color: '#dc2626' }}>Pending</div>
-                <div className="text-16-bold" style={{ color: '#dc2626' }}>₹{(viewFee.pendingAmount || 0).toLocaleString('en-IN')}</div>
-              </div>
-            </div>
-
-            {/* Payment history */}
-            {viewFee.payments?.length > 0 && (
-              <div style={{ marginTop: 16 }}>
-                <div className="text-14-semibold" style={{ marginBottom: 8 }}>Payment History</div>
-                {viewFee.payments.map((p, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: '#f8fafc', borderRadius: 6, marginBottom: 4 }}>
-                    <div style={{ flex: 1 }}>
-                      <span className="text-13-regular">{new Date(p.date).toLocaleDateString('en-IN')} · {p.method}</span>
-                      {p.termName && <span style={{ marginLeft: 6, fontSize: 11, padding: '1px 7px', borderRadius: 10, background: '#eff6ff', color: 'var(--primary)', fontWeight: 600 }}>{p.termName}</span>}
-                      {p.receiptNumber && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>#{p.receiptNumber}</span>}
-                    </div>
-                    <span className="text-14-semibold">₹{p.amount.toLocaleString('en-IN')}</span>
-                    <button
-                      className="btn btn-sm btn-icon"
-                      title="Reverse this payment"
-                      onClick={() => setReverseTarget({ feeId: viewFee._id, paymentId: p._id, amount: p.amount, termName: p.termName })}
-                      style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', flexShrink: 0 }}>
-                      <RotateCcw size={13} />
-                    </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[
+                  { label: 'Total', val: viewFee.netAmount, color: 'rgba(255,255,255,0.95)' },
+                  { label: 'Paid', val: viewFee.paidAmount, color: '#86efac' },
+                  { label: 'Pending', val: viewFee.pendingAmount, color: viewFee.pendingAmount > 0 ? '#fca5a5' : '#86efac' },
+                ].map(({ label, val, color }) => (
+                  <div key={label} style={{ textAlign: 'center', background: 'rgba(255,255,255,0.15)', borderRadius: 8, padding: '6px 12px', minWidth: 72 }}>
+                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.65)', marginBottom: 2 }}>{label}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color }}>₹{(val || 0).toLocaleString('en-IN')}</div>
                   </div>
                 ))}
               </div>
-            )}
+            </div>
+
+            {/* Fee terms table */}
+            <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
+              <div className="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Category</th>
+                      <th style={{ textAlign: 'right' }}>Amount</th>
+                      <th style={{ textAlign: 'right' }}>Discount</th>
+                      <th style={{ textAlign: 'right' }}>Net</th>
+                      <th style={{ textAlign: 'right' }}>Paid</th>
+                      <th style={{ textAlign: 'right' }}>Pending</th>
+                      <th>Status</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(viewFee.terms || []).map((t, i) => {
+                      const lastPayment =
+                        (viewFee.payments || []).filter(p => p.termName === t.name).slice(-1)[0] ||
+                        (viewFee.payments || []).filter(p => !p.termName).slice(-1)[0];
+                      return (
+                        <tr key={i}>
+                          <td className="text-14-medium">{t.name}</td>
+                          <td className="text-14-regular" style={{ textAlign: 'right' }}>₹{(t.totalAmount || 0).toLocaleString('en-IN')}</td>
+                          <td className="text-13-regular" style={{ textAlign: 'right', color: t.discount?.amount > 0 ? '#16a34a' : 'var(--text-muted)' }}>
+                            {t.discount?.amount > 0 ? `−₹${t.discount.amount.toLocaleString('en-IN')}` : '—'}
+                          </td>
+                          <td className="text-14-semibold" style={{ textAlign: 'right' }}>₹{(t.netAmount || 0).toLocaleString('en-IN')}</td>
+                          <td className="text-14-medium" style={{ textAlign: 'right', color: '#10b981' }}>₹{(t.paidAmount || 0).toLocaleString('en-IN')}</td>
+                          <td className="text-14-medium" style={{ textAlign: 'right', color: t.pendingAmount > 0 ? '#ef4444' : '#10b981' }}>₹{(t.pendingAmount || 0).toLocaleString('en-IN')}</td>
+                          <td>
+                            <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, fontWeight: 600,
+                              background: t.status === 'paid' ? '#dcfce7' : t.status === 'partial' ? '#fef9c3' : '#fee2e2',
+                              color: t.status === 'paid' ? '#166534' : t.status === 'partial' ? '#92400e' : '#dc2626'
+                            }}>{t.status}</span>
+                          </td>
+                          <td>
+                            {t.paidAmount > 0 && lastPayment && (
+                              <button className="btn btn-sm btn-icon" title="Reverse last payment for this term"
+                                onClick={() => setReverseTarget({ feeId: viewFee._id, paymentId: lastPayment._id, amount: lastPayment.amount, termName: t.name })}
+                                style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                                <RotateCcw size={13} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {/* Totals row */}
+                    <tr style={{ background: '#f8fafc' }}>
+                      <td className="text-14-semibold">Total</td>
+                      <td className="text-14-semibold" style={{ textAlign: 'right' }}>₹{(viewFee.totalAmount || 0).toLocaleString('en-IN')}</td>
+                      <td className="text-13-regular" style={{ textAlign: 'right', color: '#16a34a' }}>
+                        {(viewFee.terms || []).reduce((s, t) => s + (t.discount?.amount || 0), 0) > 0
+                          ? `−₹${(viewFee.terms || []).reduce((s, t) => s + (t.discount?.amount || 0), 0).toLocaleString('en-IN')}`
+                          : '—'}
+                      </td>
+                      <td className="text-14-semibold" style={{ textAlign: 'right' }}>₹{(viewFee.netAmount || 0).toLocaleString('en-IN')}</td>
+                      <td className="text-14-semibold" style={{ textAlign: 'right', color: '#10b981' }}>₹{(viewFee.paidAmount || 0).toLocaleString('en-IN')}</td>
+                      <td className="text-14-semibold" style={{ textAlign: 'right', color: viewFee.pendingAmount > 0 ? '#ef4444' : '#10b981' }}>₹{(viewFee.pendingAmount || 0).toLocaleString('en-IN')}</td>
+                      <td><StatusBadge status={viewFee.status} /></td>
+                      <td></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
           </div>
         </Modal>
+      )}
+
+      {/* Edit Fee Structure — class-level modal */}
+      {showEditClassFee && (
+        <EditClassFeeModal
+          classes={classes}
+          schoolFeeTerms={feeTerms}
+          onClose={() => setShowEditClassFee(false)}
+          onSuccess={() => { qc.invalidateQueries(['fees']); setShowEditClassFee(false); }}
+        />
       )}
 
       {/* Reverse payment confirmation — must render AFTER view modal to stack on top */}
@@ -486,77 +504,56 @@ export default function Fees() {
   );
 }
 
-// Collapsible term section inside create modal
-function TermSection({ term, index, net, termTotal, showDiscount, canRemove, onNameChange, onRemove, onAddItem, onRemoveItem, onUpdateItem, onDiscountChange }) {
-  const [open, setOpen] = useState(true);
-  const discAmt = showDiscount ? (Number(term.discount.amount) || 0) : 0;
+// Shared flat fee items editor used in create, class edit, and per-student edit
+function FeeItemsEditor({ items, onChange, readonlyTypes = false }) {
+  const add = () => onChange([...items, emptyItem()]);
+  const remove = (i) => onChange(items.filter((_, idx) => idx !== i));
+  const update = (i, field, val) => onChange(items.map((item, idx) => idx === i ? { ...item, [field]: val } : item));
+  const total = items.reduce((s, f) => s + (Number(f.amount) || 0), 0);
 
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-      {/* Term header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#f8fafc', borderBottom: open ? '1px solid var(--border)' : 'none' }}>
-        <input
-          className="form-control"
-          style={{ flex: 1, border: 'none', background: 'transparent', fontWeight: 600, fontSize: 14, padding: '2px 0' }}
-          value={term.name}
-          onChange={e => onNameChange(e.target.value)}
-          placeholder="Term name"
-        />
-        <span className="text-13-regular" style={{ color: 'var(--text-muted)', flexShrink: 0 }}>
-          ₹{net.toLocaleString('en-IN')}
-        </span>
-        {canRemove && (
-          <button type="button" className="btn btn-danger btn-sm btn-icon" onClick={onRemove} title="Remove term">
-            <Trash2 size={13} />
-          </button>
-        )}
-        <button type="button" onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2 }}>
-          {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </button>
+    <div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {items.map((item, i) => (
+          <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              className="form-control"
+              value={item.type}
+              onChange={e => update(i, 'type', e.target.value)}
+              placeholder="Category name (e.g. Tuition Fee, Exam Fee)"
+              style={{ flex: 1 }}
+              readOnly={readonlyTypes}
+            />
+            <input
+              className="form-control"
+              type="number"
+              min={0}
+              value={item.amount}
+              onChange={e => update(i, 'amount', e.target.value)}
+              placeholder="Amount (₹)"
+              style={{ width: 140 }}
+            />
+            {!readonlyTypes && items.length > 1 && (
+              <button type="button" className="btn btn-danger btn-sm btn-icon" onClick={() => remove(i)}>
+                <Trash2 size={13} />
+              </button>
+            )}
+          </div>
+        ))}
       </div>
-
-      {open && (
-        <div style={{ padding: '12px 14px' }}>
-          {/* Fee breakdown items */}
-          <div style={{ marginBottom: 8 }}>
-            {term.feeBreakdown.map((f, bi) => (
-              <div key={bi} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-                <input className="form-control" value={f.type} onChange={e => onUpdateItem(bi, 'type', e.target.value)} placeholder="Fee type" style={{ flex: 1 }} />
-                <input className="form-control" type="number" value={f.amount} onChange={e => onUpdateItem(bi, 'amount', e.target.value)} placeholder="Amount" style={{ width: 120 }} />
-                {bi > 0 && (
-                  <button type="button" className="btn btn-danger btn-sm btn-icon" onClick={() => onRemoveItem(bi)}>
-                    <Trash2 size={13} />
-                  </button>
-                )}
-              </div>
-            ))}
-            <button type="button" className="btn btn-secondary btn-sm" onClick={onAddItem} style={{ marginTop: 2 }}>
-              <Plus size={13} /> Add Item
-            </button>
-          </div>
-
-          {/* Discount row — individual mode only */}
-          {showDiscount && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Discount (₹)</label>
-                <input className="form-control" type="number" min={0} value={term.discount.amount} onChange={e => onDiscountChange('amount', e.target.value)} placeholder="0" />
-              </div>
-              <div style={{ flex: 2 }}>
-                <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Discount Reason</label>
-                <input className="form-control" value={term.discount.reason} onChange={e => onDiscountChange('reason', e.target.value)} placeholder="e.g. Sibling concession" />
-              </div>
-            </div>
-          )}
-
-          {/* Term subtotal */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8, fontSize: 13 }}>
-            <span style={{ color: 'var(--text-muted)' }}>Subtotal: ₹{termTotal.toLocaleString('en-IN')}</span>
-            {discAmt > 0 && <span style={{ color: '#16a34a', marginLeft: 8 }}>−₹{discAmt.toLocaleString('en-IN')}</span>}
-            <span style={{ fontWeight: 700, marginLeft: 8, color: 'var(--primary)' }}>= ₹{net.toLocaleString('en-IN')}</span>
-          </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+        {!readonlyTypes ? (
+          <button type="button" className="btn btn-secondary btn-sm" onClick={add}>
+            <Plus size={13} /> Add Item
+          </button>
+        ) : <span />}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Total:</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--primary)' }}>
+            ₹{total.toLocaleString('en-IN')}
+          </span>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -566,21 +563,38 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
   const [selectedTerm, setSelectedTerm] = useState(pendingTerms.length === 1 ? pendingTerms[0].name : 'all');
   const [method, setMethod] = useState('cash');
   const [loading, setLoading] = useState(false);
+  const [payAmount, setPayAmount] = useState(() => {
+    if (pendingTerms.length === 1) return String(pendingTerms[0].pendingAmount);
+    return String(pendingTerms.reduce((s, t) => s + t.pendingAmount, 0));
+  });
 
-  const autoAmount = selectedTerm === 'all'
+  const handleSelectTerm = (val) => {
+    setSelectedTerm(val);
+    const max = val === 'all'
+      ? pendingTerms.reduce((s, t) => s + t.pendingAmount, 0)
+      : fee.terms?.find(t => t.name === val)?.pendingAmount || 0;
+    setPayAmount(String(max));
+  };
+
+  const maxAmount = selectedTerm === 'all'
     ? pendingTerms.reduce((s, t) => s + t.pendingAmount, 0)
     : fee.terms?.find(t => t.name === selectedTerm)?.pendingAmount || 0;
 
+  const enteredAmount = Math.max(0, parseFloat(payAmount) || 0);
+  const isPartial = enteredAmount < maxAmount && enteredAmount > 0;
+  const isValid = enteredAmount > 0 && enteredAmount <= maxAmount;
+
   const handleCollect = async () => {
+    if (!isValid) return toast.error(`Amount must be between ₹1 and ₹${maxAmount.toLocaleString('en-IN')}`);
     setLoading(true);
     try {
       await api.post('/fees/collect', {
         feeId: fee._id,
         termName: selectedTerm === 'all' ? undefined : selectedTerm,
-        amount: autoAmount,
+        amount: enteredAmount,
         method
       });
-      toast.success('Payment collected!');
+      toast.success(isPartial ? `Partial payment of ₹${enteredAmount.toLocaleString('en-IN')} collected!` : 'Payment collected!');
       onSuccess();
     } catch (err) {
       toast.error(err.message || 'Failed');
@@ -589,12 +603,59 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
     }
   };
 
+  const AmountInput = ({ pendingAmt }) => (
+    <div style={{ padding: '10px 14px', borderTop: '1px solid #dbeafe', background: '#f0f7ff' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Amount to Collect (₹)</div>
+          <input
+            className="form-control"
+            type="number"
+            min={1}
+            max={pendingAmt}
+            value={payAmount}
+            onChange={e => setPayAmount(e.target.value)}
+            style={{ fontSize: 15, fontWeight: 600, textAlign: 'right' }}
+            placeholder={`Max ₹${pendingAmt.toLocaleString('en-IN')}`}
+            autoFocus
+          />
+          {enteredAmount > pendingAmt && (
+            <p style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>
+              Cannot exceed ₹{pendingAmt.toLocaleString('en-IN')}
+            </p>
+          )}
+        </div>
+        {enteredAmount !== pendingAmt && (
+          <button type="button"
+            onClick={() => setPayAmount(String(pendingAmt))}
+            style={{ alignSelf: 'flex-end', fontSize: 12, color: 'var(--primary)', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
+            Pay full ₹{pendingAmt.toLocaleString('en-IN')}
+          </button>
+        )}
+      </div>
+      {enteredAmount > 0 && enteredAmount <= pendingAmt && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <div style={{ flex: 1, background: 'white', borderRadius: 8, padding: '6px 10px', textAlign: 'center', border: '1px solid #bfdbfe' }}>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Paying</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#16a34a' }}>₹{enteredAmount.toLocaleString('en-IN')}</div>
+          </div>
+          <div style={{ flex: 1, background: 'white', borderRadius: 8, padding: '6px 10px', textAlign: 'center', border: '1px solid #bfdbfe' }}>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Balance After</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: pendingAmt - enteredAmount > 0 ? '#d97706' : '#16a34a' }}>
+              ₹{(pendingAmt - enteredAmount).toLocaleString('en-IN')}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <Modal open onClose={onClose} title="Collect Payment"
       footer={<>
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-        <button className="btn btn-primary" onClick={handleCollect} disabled={loading || autoAmount <= 0}>
-          {loading ? 'Processing...' : `✓ Collect ₹${autoAmount.toLocaleString('en-IN')}`}
+        <button className="btn btn-primary" onClick={handleCollect} disabled={loading || !isValid}>
+          {loading ? 'Processing...' : `✓ Collect ₹${enteredAmount > 0 ? enteredAmount.toLocaleString('en-IN') : '0'}`}
         </button>
       </>}>
       <div style={{ marginBottom: 16 }}>
@@ -602,38 +663,43 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
         <div className="text-13-regular" style={{ color: 'var(--text-muted)' }}>{fee.academicYear}</div>
       </div>
 
-      {/* Term selector */}
       <div className="form-group">
         <label className="form-label">Select Payment For</label>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {/* All pending option */}
+          {/* Pay All option */}
           {pendingTerms.length > 1 && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: `1.5px solid ${selectedTerm === 'all' ? 'var(--primary)' : 'var(--border)'}`, background: selectedTerm === 'all' ? '#eff6ff' : 'white', cursor: 'pointer' }}>
-              <input type="radio" name="term" checked={selectedTerm === 'all'} onChange={() => setSelectedTerm('all')} />
-              <div style={{ flex: 1 }}>
-                <div className="text-14-semibold" style={{ color: selectedTerm === 'all' ? 'var(--primary)' : undefined }}>Pay All Pending</div>
-                <div className="text-12-regular" style={{ color: 'var(--text-muted)' }}>{pendingTerms.map(t => t.name).join(' + ')}</div>
-              </div>
-              <span className="text-14-semibold" style={{ color: selectedTerm === 'all' ? 'var(--primary)' : undefined }}>
-                ₹{pendingTerms.reduce((s, t) => s + t.pendingAmount, 0).toLocaleString('en-IN')}
-              </span>
-            </label>
+            <div style={{ border: `1.5px solid ${selectedTerm === 'all' ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, overflow: 'hidden', background: selectedTerm === 'all' ? '#eff6ff' : 'white' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer' }}>
+                <input type="radio" name="term" checked={selectedTerm === 'all'} onChange={() => handleSelectTerm('all')} />
+                <div style={{ flex: 1 }}>
+                  <div className="text-14-semibold" style={{ color: selectedTerm === 'all' ? 'var(--primary)' : undefined }}>Pay All Pending</div>
+                  <div className="text-12-regular" style={{ color: 'var(--text-muted)' }}>{pendingTerms.map(t => t.name).join(' + ')}</div>
+                </div>
+                <span className="text-14-semibold" style={{ color: selectedTerm === 'all' ? 'var(--primary)' : undefined }}>
+                  ₹{pendingTerms.reduce((s, t) => s + t.pendingAmount, 0).toLocaleString('en-IN')}
+                </span>
+              </label>
+              {selectedTerm === 'all' && <AmountInput pendingAmt={pendingTerms.reduce((s, t) => s + t.pendingAmount, 0)} />}
+            </div>
           )}
 
           {/* Individual terms */}
           {pendingTerms.map(t => (
-            <label key={t.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: `1.5px solid ${selectedTerm === t.name ? 'var(--primary)' : 'var(--border)'}`, background: selectedTerm === t.name ? '#eff6ff' : 'white', cursor: 'pointer' }}>
-              <input type="radio" name="term" checked={selectedTerm === t.name} onChange={() => setSelectedTerm(t.name)} />
-              <div style={{ flex: 1 }}>
-                <div className="text-14-semibold" style={{ color: selectedTerm === t.name ? 'var(--primary)' : undefined }}>{t.name}</div>
-                <div className="text-12-regular" style={{ color: 'var(--text-muted)' }}>
-                  Net ₹{(t.netAmount || 0).toLocaleString('en-IN')} · Paid ₹{(t.paidAmount || 0).toLocaleString('en-IN')}
+            <div key={t.name} style={{ border: `1.5px solid ${selectedTerm === t.name ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, overflow: 'hidden', background: selectedTerm === t.name ? '#eff6ff' : 'white' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer' }}>
+                <input type="radio" name="term" checked={selectedTerm === t.name} onChange={() => handleSelectTerm(t.name)} />
+                <div style={{ flex: 1 }}>
+                  <div className="text-14-semibold" style={{ color: selectedTerm === t.name ? 'var(--primary)' : undefined }}>{t.name}</div>
+                  <div className="text-12-regular" style={{ color: 'var(--text-muted)' }}>
+                    Net ₹{(t.netAmount || 0).toLocaleString('en-IN')} · Paid ₹{(t.paidAmount || 0).toLocaleString('en-IN')}
+                  </div>
                 </div>
-              </div>
-              <span className="text-14-semibold" style={{ color: selectedTerm === t.name ? 'var(--primary)' : '#ef4444' }}>
-                ₹{t.pendingAmount.toLocaleString('en-IN')}
-              </span>
-            </label>
+                <span className="text-14-semibold" style={{ color: selectedTerm === t.name ? 'var(--primary)' : '#ef4444' }}>
+                  ₹{t.pendingAmount.toLocaleString('en-IN')}
+                </span>
+              </label>
+              {selectedTerm === t.name && <AmountInput pendingAmt={t.pendingAmount} />}
+            </div>
           ))}
         </div>
       </div>
@@ -651,27 +717,135 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
   );
 }
 
-function EditFeeModal({ fee, onClose, onSuccess }) {
-  const [termIdx, setTermIdx] = useState(0);
-  const [discounts, setDiscounts] = useState(
-    (fee.terms || []).map(t => ({ amount: t.discount?.amount || 0, reason: t.discount?.reason || '' }))
+function EditClassFeeModal({ classes, schoolFeeTerms, onClose, onSuccess }) {
+  const [classId, setClassId] = useState('');
+  const [academicYear, setAcademicYear] = useState('');
+  const [feeItems, setFeeItems] = useState([{ type: 'Tuition Fee', amount: '' }]);
+
+  const { data: existingData, isFetching } = useQuery({
+    queryKey: ['fees-class-preview', classId],
+    queryFn: () => api.get(`/fees?classId=${classId}&limit=1`),
+    enabled: !!classId,
+  });
+
+  useEffect(() => {
+    if (!classId || existingData === undefined) return;
+    const sample = existingData?.fees?.[0];
+    if (sample?.terms?.length) {
+      if (sample.academicYear) setAcademicYear(sample.academicYear);
+      setFeeItems(sample.terms.map(t => ({
+        type: t.name,
+        amount: String(t.feeBreakdown?.[0]?.amount ?? t.totalAmount ?? '')
+      })));
+    } else {
+      setFeeItems(schoolFeeTerms.length > 0 ? schoolFeeTerms.map(t => ({ type: t.name, amount: '' })) : [{ type: 'Tuition Fee', amount: '' }]);
+    }
+  }, [existingData, classId]);
+
+  const saveMutation = useMutation({
+    mutationFn: (d) => api.put('/fees/class-structure', d),
+    onSuccess: (res) => { toast.success(res.message || 'Fee structure updated!'); onSuccess(); },
+    onError: (err) => toast.error(err.message || 'Failed')
+  });
+
+  const handleSave = () => {
+    if (!classId) return toast.error('Select a class');
+    if (!academicYear.trim()) return toast.error('Enter academic year');
+    if (feeItems.some(f => !f.type.trim())) return toast.error('All categories need a name');
+    const terms = feeItems.map(f => ({
+      name: f.type,
+      feeBreakdown: [{ type: f.type, amount: Number(f.amount) || 0 }]
+    }));
+    saveMutation.mutate({ classId, academicYear: academicYear.trim(), terms });
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Edit Fee Structure (Class)" size="lg"
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={handleSave} disabled={saveMutation.isPending || !classId}>
+          {saveMutation.isPending ? 'Saving...' : 'Update All Students in Class'}
+        </button>
+      </>}>
+      <FormRow style={{ marginBottom: 16 }}>
+        <div className="form-group">
+          <label className="form-label">Class *</label>
+          <select className="form-control" value={classId} onChange={e => setClassId(e.target.value)}>
+            <option value="">Select class</option>
+            {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Academic Year *</label>
+          <input className="form-control" value={academicYear} onChange={e => setAcademicYear(e.target.value)} placeholder="e.g. 2024-2025" />
+        </div>
+      </FormRow>
+
+      {classId && isFetching && (
+        <div style={{ padding: '8px 12px', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 14, fontSize: 13, color: 'var(--text-muted)' }}>
+          Loading existing fee structure…
+        </div>
+      )}
+      {classId && !isFetching && existingData?.fees?.[0] && (
+        <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, marginBottom: 14, fontSize: 13, color: '#166534' }}>
+          Loaded existing structure · {existingData.fees[0].academicYear}. Changes will apply to all students in this class.
+        </div>
+      )}
+      {classId && !isFetching && existingData && !existingData?.fees?.[0] && (
+        <div style={{ padding: '8px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, marginBottom: 14, fontSize: 13, color: '#92400e' }}>
+          No fee records found for this class. Create fee records first using "Add Fee Record".
+        </div>
+      )}
+
+      <label className="form-label">Fee Categories *</label>
+      <FeeItemsEditor items={feeItems} onChange={setFeeItems} />
+    </Modal>
   );
+}
+
+function EditFeeModal({ fee, onClose, onSuccess }) {
+  const [rows, setRows] = useState(
+    (fee.terms || []).map(t => ({
+      termName: t.name,
+      type: t.name,
+      amount: String(t.feeBreakdown?.[0]?.amount ?? t.totalAmount ?? ''),
+      discAmount: String(t.discount?.amount || ''),
+      discReason: t.discount?.reason || '',
+      paidAmount: t.paidAmount || 0,
+      isNew: false
+    }))
+  );
+  const [deletedTerms, setDeletedTerms] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const term = fee.terms?.[termIdx];
-  const disc = discounts[termIdx] || { amount: 0, reason: '' };
-  const net = Math.max(0, (term?.totalAmount || 0) - (Number(disc.amount) || 0));
-
-  const updateDisc = (field, val) => setDiscounts(d => d.map((item, i) => i === termIdx ? { ...item, [field]: val } : item));
+  const updateRow = (i, field, val) => setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: val } : r));
+  const addRow = () => setRows(prev => [...prev, { termName: '', type: '', amount: '', discAmount: '', discReason: '', paidAmount: 0, isNew: true }]);
+  const removeRow = (i) => {
+    const row = rows[i];
+    if (!row.isNew) setDeletedTerms(prev => [...prev, row.termName]);
+    setRows(prev => prev.filter((_, idx) => idx !== i));
+  };
+  const overallTotal = rows.reduce((s, r) => s + Math.max(0, (Number(r.amount) || 0) - (Number(r.discAmount) || 0)), 0);
 
   const handleSave = async () => {
+    if (rows.length === 0) return toast.error('At least one fee category is required');
+    if (rows.some(r => !r.type.trim())) return toast.error('All categories need a name');
+    const badRow = rows.find(r => !r.isNew && Number(r.amount) > 0 && Number(r.amount) < r.paidAmount);
+    if (badRow) return toast.error(`${badRow.type}: amount can't be less than already paid ₹${badRow.paidAmount.toLocaleString('en-IN')}`);
     setLoading(true);
     try {
-      await api.put(`/fees/${fee._id}`, {
-        termName: term?.name,
-        discount: { amount: Number(disc.amount) || 0, reason: disc.reason }
-      });
-      toast.success('Concession updated!');
+      for (const termName of deletedTerms) {
+        await api.delete(`/fees/${fee._id}/term`, { data: { termName } });
+      }
+      for (const r of rows) {
+        const nameToUse = r.isNew ? r.type : r.termName;
+        await api.put(`/fees/${fee._id}`, {
+          termName: nameToUse,
+          feeBreakdown: [{ type: r.type, amount: Number(r.amount) || 0 }],
+          discount: { amount: Number(r.discAmount) || 0, reason: r.discReason }
+        });
+      }
+      toast.success('Fee updated!');
       onSuccess();
     } catch (err) {
       toast.error(err.message || 'Failed');
@@ -681,70 +855,87 @@ function EditFeeModal({ fee, onClose, onSuccess }) {
   };
 
   return (
-    <Modal open onClose={onClose} title="Edit Concession"
+    <Modal open onClose={onClose} title="Edit Fee Structure"
       footer={<>
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
         <button className="btn btn-primary" onClick={handleSave} disabled={loading}>
           {loading ? 'Saving...' : 'Save Changes'}
         </button>
       </>}>
-      <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 10, marginBottom: 20 }}>
+      <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: 10, marginBottom: 16 }}>
         <div className="text-14-semibold">{fee.student?.name}</div>
-        <div className="text-13-regular" style={{ color: 'var(--text-secondary)' }}>{fee.academicYear}</div>
+        <div className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>{fee.academicYear}</div>
       </div>
 
-      {/* Term tabs (if multiple) */}
-      {(fee.terms || []).length > 1 && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-          {fee.terms.map((t, i) => (
-            <button key={t.name} type="button" onClick={() => setTermIdx(i)}
-              style={{ padding: '5px 14px', borderRadius: 20, fontSize: 13, cursor: 'pointer', border: `1.5px solid ${termIdx === i ? 'var(--primary)' : 'var(--border)'}`, background: termIdx === i ? '#eff6ff' : 'white', color: termIdx === i ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: termIdx === i ? 600 : 400 }}>
-              {t.name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {term && (
-        <>
-          {/* Breakdown read-only */}
-          <div style={{ marginBottom: 16 }}>
-            {term.feeBreakdown?.map((f, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f1f5f9' }}>
-                <span className="text-14-regular">{f.type}</span>
-                <span className="text-14-medium">₹{(f.amount || 0).toLocaleString('en-IN')}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {rows.map((r, i) => {
+          const net = Math.max(0, (Number(r.amount) || 0) - (Number(r.discAmount) || 0));
+          const tooLow = !r.isNew && Number(r.amount) > 0 && Number(r.amount) < r.paidAmount;
+          return (
+            <div key={i} style={{ border: `1px solid ${r.isNew ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, overflow: 'hidden' }}>
+              <div style={{ padding: '7px 14px', background: r.isNew ? '#eff6ff' : '#f8fafc', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                {r.isNew ? (
+                  <input
+                    className="form-control"
+                    value={r.type}
+                    onChange={e => updateRow(i, 'type', e.target.value)}
+                    placeholder="New category name (e.g. Exam Fee)"
+                    style={{ flex: 1, fontWeight: 600, fontSize: 13 }}
+                    autoFocus
+                  />
+                ) : (
+                  <span className="text-14-semibold">{r.type}</span>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  {!r.isNew && r.paidAmount > 0 && (
+                    <span style={{ fontSize: 11, color: '#16a34a', background: '#dcfce7', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
+                      Paid ₹{r.paidAmount.toLocaleString('en-IN')}
+                    </span>
+                  )}
+                  {r.paidAmount === 0 && (
+                    <button type="button" className="btn btn-danger btn-sm btn-icon" onClick={() => removeRow(i)} title="Remove category">
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
               </div>
-            ))}
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', fontWeight: 600 }}>
-              <span>Subtotal</span>
-              <span>₹{(term.totalAmount || 0).toLocaleString('en-IN')}</span>
+              <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Amount (₹)</label>
+                    <input className="form-control" type="number" min={0} value={r.amount}
+                      onChange={e => updateRow(i, 'amount', e.target.value)} />
+                    {tooLow && <p style={{ fontSize: 11, color: '#ef4444', marginTop: 2 }}>Can't be less than paid ₹{r.paidAmount.toLocaleString('en-IN')}</p>}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Discount (₹)</label>
+                    <input className="form-control" type="number" min={0} value={r.discAmount}
+                      onChange={e => updateRow(i, 'discAmount', e.target.value)} placeholder="0" />
+                  </div>
+                  <div style={{ flex: 2 }}>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Discount Reason</label>
+                    <input className="form-control" value={r.discReason}
+                      onChange={e => updateRow(i, 'discReason', e.target.value)} placeholder="e.g. Merit, Sibling" />
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>
+                  Net: <span style={{ fontWeight: 700, color: 'var(--primary)', fontSize: 13 }}>₹{net.toLocaleString('en-IN')}</span>
+                </div>
+              </div>
             </div>
-          </div>
+          );
+        })}
+      </div>
 
-          {/* Concession inputs */}
-          <div style={{ padding: 16, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, marginBottom: 16 }}>
-            <div className="text-14-semibold" style={{ color: '#92400e', marginBottom: 12 }}>Concession / Discount</div>
-            <FormRow>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Discount Amount (₹)</label>
-                <input className="form-control" type="number" min={0} max={term.totalAmount}
-                  value={disc.amount} onChange={e => updateDisc('amount', e.target.value)} />
-              </div>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Reason</label>
-                <input className="form-control" value={disc.reason}
-                  onChange={e => updateDisc('reason', e.target.value)}
-                  placeholder="e.g. Sibling concession, Merit" />
-              </div>
-            </FormRow>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#eff6ff', borderRadius: 10 }}>
-            <span className="text-14-semibold">Net Payable ({term.name})</span>
-            <span className="text-16-bold" style={{ color: 'var(--primary)' }}>₹{net.toLocaleString('en-IN')}</span>
-          </div>
-        </>
-      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={addRow}>
+          <Plus size={13} /> Add Category
+        </button>
+        <div style={{ padding: '8px 14px', background: '#eff6ff', borderRadius: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span className="text-13-regular" style={{ color: 'var(--primary)' }}>Total Net:</span>
+          <span className="text-15-bold" style={{ color: 'var(--primary)', fontWeight: 700 }}>₹{overallTotal.toLocaleString('en-IN')}</span>
+        </div>
+      </div>
     </Modal>
   );
 }

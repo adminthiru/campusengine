@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { Plus, Trash2, DollarSign, TrendingDown } from 'lucide-react';
+import { Plus, Trash2, Edit2, Download, DollarSign, TrendingDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, StatusBadge, PageLoader, EmptyState, StatCard, FormRow, ColumnSelector, useColumnSelector } from '../../components/ui';
@@ -22,7 +22,11 @@ export default function Expenses() {
   const [year, setYear] = useState(now.getFullYear());
   const [category, setCategory] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [deleteId, setDeleteId] = useState(null);
+  const [selected, setSelected] = useState([]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editExpense, setEditExpense] = useState(null);
+  const [showReport, setShowReport] = useState(false);
+  const [viewExpense, setViewExpense] = useState(null);
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
 
   const { data, isLoading } = useQuery({
@@ -33,7 +37,7 @@ export default function Expenses() {
   const total = data?.total || 0;
 
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const categories = ['furniture','electronics','maintenance','stationery','transport','utilities','events','other'];
+  const categories = ['furniture','electronics','maintenance','stationery','transport','utilities','salary','events','other'];
 
   const createMutation = useMutation({
     mutationFn: (d) => api.post('/expenses', d),
@@ -42,18 +46,30 @@ export default function Expenses() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => api.delete(`/expenses/${id}`),
-    onSuccess: () => { qc.invalidateQueries(['expenses']); toast.success('Expense deleted'); }
+    mutationFn: () => Promise.all(selected.map(id => api.delete(`/expenses/${id}`))),
+    onSuccess: () => {
+      qc.invalidateQueries(['expenses']);
+      toast.success(`${selected.length} expense${selected.length > 1 ? 's' : ''} deleted`);
+      setSelected([]);
+      setConfirmDelete(false);
+    },
+    onError: () => { toast.error('Failed to delete'); setConfirmDelete(false); }
   });
 
   const [visibleCols, setVisibleCols] = useColumnSelector('expenses', EXPENSE_COLS);
   const col = (key) => visibleCols.has(key);
+
+  const allSelected = expenses.length > 0 && expenses.every(e => selected.includes(e._id));
+  const toggleAll = (checked) => setSelected(checked ? expenses.map(e => e._id) : []);
+  const toggleOne = (id, checked) => setSelected(p => checked ? [...p, id] : p.filter(i => i !== id));
 
   // Category totals
   const byCategory = categories.map(cat => ({
     cat,
     total: expenses.filter(e => e.category === cat).reduce((s, e) => s + e.amount, 0)
   })).filter(c => c.total > 0).sort((a, b) => b.total - a.total);
+
+  const visibleColCount = EXPENSE_COLS.filter(c => visibleCols.has(c.key)).length;
 
   return (
     <div>
@@ -62,9 +78,19 @@ export default function Expenses() {
           <h1 className="page-title">Expenses</h1>
           <p className="page-subtitle">Track school expenditures</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { reset(); setShowModal(true); }}>
-          <Plus size={16} /> Add Expense
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {selected.length > 0 && (
+            <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
+              <Trash2 size={16} /> Delete ({selected.length})
+            </button>
+          )}
+          <button className="btn btn-secondary" onClick={() => setShowReport(true)}>
+            <Download size={16} /> Download Report
+          </button>
+          <button className="btn btn-primary" onClick={() => { reset(); setShowModal(true); }}>
+            <Plus size={16} /> Add Expense
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -83,11 +109,10 @@ export default function Expenses() {
       </div>
 
       {/* Stats */}
-      <div className="grid-4" style={{ marginBottom: 24 }}>
-        <StatCard title="Total This Month" value={`₹${total.toLocaleString('en-IN')}`} icon={TrendingDown} color="#ef4444" bg="#fef2f2" sub={`${months[month - 1]} ${year}`} />
-        {byCategory.slice(0, 3).map(({ cat, total: t }) => (
-          <StatCard key={cat} title={cat.charAt(0).toUpperCase() + cat.slice(1)} value={`₹${t.toLocaleString('en-IN')}`} icon={DollarSign} color="#f59e0b" bg="#fffbeb" />
-        ))}
+      <div style={{ marginBottom: 24, display: 'flex', gap: 16, alignItems: 'stretch' }}>
+        <div style={{ minWidth: 260 }}>
+          <StatCard title="Total This Month" value={`₹${total.toLocaleString('en-IN')}`} icon={TrendingDown} color="#ef4444" bg="#fef2f2" sub={`${months[month - 1]} ${year}`} />
+        </div>
       </div>
 
       {isLoading ? <PageLoader /> : (
@@ -96,6 +121,7 @@ export default function Expenses() {
             <table>
               <thead>
                 <tr>
+                  <th><input type="checkbox" checked={allSelected} onChange={e => toggleAll(e.target.checked)} /></th>
                   <th>Title</th>
                   {col('category') && <th>Category</th>}
                   {col('vendor')   && <th>Vendor</th>}
@@ -107,23 +133,29 @@ export default function Expenses() {
               </thead>
               <tbody>
                 {expenses.length === 0 && (
-                  <tr><td colSpan={2 + EXPENSE_COLS.filter(c => visibleCols.has(c.key)).length}><EmptyState icon={DollarSign} message="No expenses recorded this month." /></td></tr>
+                  <tr><td colSpan={3 + visibleColCount}><EmptyState icon={DollarSign} message="No expenses recorded this month." /></td></tr>
                 )}
                 {expenses.map(exp => (
-                  <tr key={exp._id}>
+                  <tr key={exp._id} style={{ cursor: 'pointer' }} onClick={() => setViewExpense(exp)}>
+                    <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={selected.includes(exp._id)} onChange={e => toggleOne(exp._id, e.target.checked)} /></td>
                     <td className="text-14-medium">{exp.title}</td>
                     {col('category') && <td><span className="badge badge-secondary" style={{ textTransform: 'capitalize' }}>{exp.category}</span></td>}
                     {col('vendor')   && <td className="text-14-regular" style={{ color: 'var(--text-secondary)' }}>{exp.vendor || '—'}</td>}
                     {col('date')     && <td className="text-14-regular" style={{ color: 'var(--text-secondary)' }}>{format(new Date(exp.date), 'dd MMM yyyy')}</td>}
                     {col('amount')   && <td className="text-14-bold" style={{ color: '#ef4444' }}>₹{exp.amount.toLocaleString('en-IN')}</td>}
                     {col('method')   && <td className="text-14-regular" style={{ textTransform: 'capitalize' }}>{exp.paymentMethod?.replace('_', ' ') || '—'}</td>}
-                    <td>
-                      <button className="btn btn-danger btn-sm btn-icon" onClick={() => setDeleteId(exp._id)}><Trash2 size={14} /></button>
+                    <td onClick={e => e.stopPropagation()}>
+                      {!exp.billNumber && (
+                        <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setEditExpense(exp)} title="Edit expense">
+                          <Edit2 size={14} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
                 {expenses.length > 0 && (
                   <tr className="text-14-bold" style={{ background: '#f8fafc' }}>
+                    <td></td>
                     <td colSpan={1 + [col('category'), col('vendor'), col('date')].filter(Boolean).length} style={{ padding: '12px 16px' }}>Total</td>
                     <td style={{ color: '#ef4444' }}>₹{total.toLocaleString('en-IN')}</td>
                     <td colSpan={[col('method')].filter(Boolean).length + 1}></td>
@@ -135,11 +167,12 @@ export default function Expenses() {
         </div>
       )}
 
+      {/* Add Expense Modal */}
       <Modal open={showModal} onClose={() => setShowModal(false)} title="Add Expense"
         footer={<>
           <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
           <button className="btn btn-primary" onClick={handleSubmit(d => createMutation.mutate(d))}>
-            {createMutation.isLoading ? 'Saving...' : 'Add Expense'}
+            {createMutation.isPending ? 'Saving...' : 'Add Expense'}
           </button>
         </>}>
         <form>
@@ -195,9 +228,263 @@ export default function Expenses() {
         </form>
       </Modal>
 
-      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)}
-        onConfirm={() => deleteMutation.mutate(deleteId)}
-        title="Delete Expense" message="This will permanently delete this expense record." danger />
+      {/* Edit Expense Modal */}
+      {editExpense && (
+        <EditExpenseModal
+          expense={editExpense}
+          categories={categories}
+          onClose={() => setEditExpense(null)}
+          onSuccess={() => { qc.invalidateQueries(['expenses']); setEditExpense(null); }}
+        />
+      )}
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={() => deleteMutation.mutate()}
+        title="Delete Expenses"
+        message={`This will permanently delete ${selected.length} expense record${selected.length > 1 ? 's' : ''}. This cannot be undone.`}
+        danger
+      />
+
+      {viewExpense && (
+        <ExpenseDetailModal expense={viewExpense} onClose={() => setViewExpense(null)} onEdit={() => { setEditExpense(viewExpense); setViewExpense(null); }} />
+      )}
+
+      {showReport && (
+        <ExpenseReportModal categories={categories} onClose={() => setShowReport(false)} />
+      )}
     </div>
+  );
+}
+
+function ExpenseDetailModal({ expense: exp, onClose, onEdit }) {
+  const fields = [
+    { label: 'Title',          value: exp.title },
+    { label: 'Category',       value: exp.category ? exp.category.charAt(0).toUpperCase() + exp.category.slice(1) : '—' },
+    { label: 'Amount',         value: `₹${exp.amount?.toLocaleString('en-IN')}`, highlight: true },
+    { label: 'Date',           value: exp.date ? format(new Date(exp.date), 'dd MMM yyyy') : '—' },
+    { label: 'Vendor / Supplier', value: exp.vendor || '—' },
+    { label: 'Payment Method', value: exp.paymentMethod ? exp.paymentMethod.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '—' },
+    { label: 'Bill / Invoice No.', value: exp.billNumber || '—' },
+    { label: 'Description',    value: exp.description || '—', full: true },
+  ];
+
+  return (
+    <Modal open onClose={onClose} title="Expense Details"
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Close</button>
+        {!exp.billNumber && (
+          <button className="btn btn-primary" onClick={onEdit}>Edit</button>
+        )}
+      </>}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}>
+        {fields.map(({ label, value, highlight, full }) => (
+          <div key={label} style={full ? { gridColumn: '1 / -1' } : {}}>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 2, fontWeight: 500 }}>{label}</p>
+            <p style={{ fontSize: 14, fontWeight: highlight ? 700 : 500, color: highlight ? '#ef4444' : 'var(--text-primary)', margin: 0, wordBreak: 'break-word' }}>{value}</p>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
+function ExpenseReportModal({ categories, onClose }) {
+  const now = new Date();
+  const fmt = (d) => d.toISOString().slice(0, 10);
+
+  const presets = [
+    { label: 'Today',        start: fmt(now),                                          end: fmt(now) },
+    { label: 'Last 7 Days',  start: fmt(new Date(now - 6 * 86400000)),                end: fmt(now) },
+    { label: 'Last 10 Days', start: fmt(new Date(now - 9 * 86400000)),                end: fmt(now) },
+    { label: 'This Month',   start: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), end: fmt(now) },
+    { label: 'Last Month',   start: fmt(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+                             end: fmt(new Date(now.getFullYear(), now.getMonth(), 0)) },
+  ];
+
+  const [activePreset, setActivePreset] = useState(presets[3].label);
+  const [startDate, setStartDate] = useState(presets[3].start);
+  const [endDate, setEndDate]     = useState(presets[3].end);
+  const [category, setCategory]   = useState('');
+  const [loading, setLoading]     = useState(false);
+
+  const applyPreset = (p) => {
+    setActivePreset(p.label);
+    setStartDate(p.start);
+    setEndDate(p.end);
+  };
+
+  const handleStartChange = (v) => { setStartDate(v); setActivePreset('Custom'); };
+  const handleEndChange   = (v) => { setEndDate(v);   setActivePreset('Custom'); };
+
+  const download = async () => {
+    if (!startDate || !endDate) { toast.error('Select a date range'); return; }
+    if (new Date(startDate) > new Date(endDate)) { toast.error('Start date must be before end date'); return; }
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ startDate, endDate });
+      if (category) params.set('category', category);
+      const res = await api.get(`/expenses/report?${params}`, { responseType: 'blob' });
+      const blob = new Blob([res], { type: 'application/pdf' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `expenses_report_${startDate}_to_${endDate}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Report downloaded!');
+      onClose();
+    } catch {
+      toast.error('Failed to generate report');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Download Expense Report"
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={download} disabled={loading}>
+          {loading ? 'Generating...' : 'Download PDF'}
+        </button>
+      </>}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+        {presets.map(p => (
+          <button key={p.label}
+            onClick={() => applyPreset(p)}
+            style={{
+              padding: '6px 14px', borderRadius: 20, fontSize: 13, cursor: 'pointer', border: '1.5px solid',
+              borderColor: activePreset === p.label ? 'var(--primary)' : '#e2e8f0',
+              background:  activePreset === p.label ? 'var(--primary)' : '#fff',
+              color:       activePreset === p.label ? '#fff' : 'var(--text-primary)',
+              fontWeight: activePreset === p.label ? 600 : 400,
+            }}>
+            {p.label}
+          </button>
+        ))}
+        <button
+          onClick={() => setActivePreset('Custom')}
+          style={{
+            padding: '6px 14px', borderRadius: 20, fontSize: 13, cursor: 'pointer', border: '1.5px solid',
+            borderColor: activePreset === 'Custom' ? 'var(--primary)' : '#e2e8f0',
+            background:  activePreset === 'Custom' ? 'var(--primary)' : '#fff',
+            color:       activePreset === 'Custom' ? '#fff' : 'var(--text-primary)',
+            fontWeight: activePreset === 'Custom' ? 600 : 400,
+          }}>
+          Custom
+        </button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+        <div className="form-group" style={{ margin: 0 }}>
+          <label className="form-label">From</label>
+          <input className="form-control" type="date" value={startDate} onChange={e => handleStartChange(e.target.value)} />
+        </div>
+        <div className="form-group" style={{ margin: 0 }}>
+          <label className="form-label">To</label>
+          <input className="form-control" type="date" value={endDate} onChange={e => handleEndChange(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Category (optional)</label>
+        <select className="form-control" value={category} onChange={e => setCategory(e.target.value)}>
+          <option value="">All Categories</option>
+          {categories.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+        </select>
+      </div>
+
+      {startDate && endDate && (
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, marginBottom: 0 }}>
+          Report will include{category ? ` "${category}"` : ''} expenses from{' '}
+          <strong>{format(new Date(startDate + 'T00:00:00'), 'dd MMM yyyy')}</strong> to{' '}
+          <strong>{format(new Date(endDate + 'T00:00:00'), 'dd MMM yyyy')}</strong>.
+        </p>
+      )}
+    </Modal>
+  );
+}
+
+function EditExpenseModal({ expense, categories, onClose, onSuccess }) {
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    defaultValues: {
+      title: expense.title || '',
+      category: expense.category || '',
+      amount: expense.amount || '',
+      date: expense.date ? format(new Date(expense.date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+      vendor: expense.vendor || '',
+      paymentMethod: expense.paymentMethod || 'cash',
+      description: expense.description || '',
+    }
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (d) => api.put(`/expenses/${expense._id}`, d),
+    onSuccess: () => { toast.success('Expense updated!'); onSuccess(); },
+    onError: (err) => toast.error(err.message || 'Failed')
+  });
+
+  return (
+    <Modal open onClose={onClose} title="Edit Expense"
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={handleSubmit(d => updateMutation.mutate(d))} disabled={updateMutation.isPending}>
+          {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+        </button>
+      </>}>
+      <form>
+        <div className="form-group">
+          <label className="form-label">Title *</label>
+          <input className="form-control" {...register('title', { required: 'Required' })} />
+          {errors.title && <p className="text-12-regular" style={{ color: '#ef4444', marginTop: 4 }}>{errors.title.message}</p>}
+        </div>
+        <FormRow>
+          <div className="form-group">
+            <label className="form-label">Category *</label>
+            <select className="form-control" {...register('category', { required: 'Required' })}>
+              <option value="">Select category</option>
+              {categories.map(c => <option key={c} value={c} style={{ textTransform: 'capitalize' }}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+            </select>
+            {errors.category && <p className="text-12-regular" style={{ color: '#ef4444', marginTop: 4 }}>{errors.category.message}</p>}
+          </div>
+          <div className="form-group">
+            <label className="form-label">Amount (₹) *</label>
+            <input className="form-control" type="number" {...register('amount', { required: 'Required', min: 1 })} />
+            {errors.amount && <p className="text-12-regular" style={{ color: '#ef4444', marginTop: 4 }}>{errors.amount.message}</p>}
+          </div>
+        </FormRow>
+        <FormRow>
+          <div className="form-group">
+            <label className="form-label">Date *</label>
+            <input className="form-control" type="date" {...register('date', { required: 'Required' })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Vendor / Supplier</label>
+            <input className="form-control" {...register('vendor')} placeholder="e.g. ABC Traders" />
+          </div>
+        </FormRow>
+        <FormRow>
+          <div className="form-group">
+            <label className="form-label">Payment Method</label>
+            <select className="form-control" {...register('paymentMethod')}>
+              <option value="cash">Cash</option>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="cheque">Cheque</option>
+              <option value="online">Online</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Bill Number</label>
+            <input className="form-control" {...register('billNumber')} placeholder="Invoice / Bill No." />
+          </div>
+        </FormRow>
+        <div className="form-group">
+          <label className="form-label">Description</label>
+          <textarea className="form-control" {...register('description')} rows={2} placeholder="Additional notes..." />
+        </div>
+      </form>
+    </Modal>
   );
 }
