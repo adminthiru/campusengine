@@ -1,5 +1,106 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle, Info, SlidersHorizontal } from 'lucide-react';
+import ReactSelect from 'react-select';
+import ReactDatePicker from 'react-datepicker';
+
+const rsStyles = {
+  control: (base, state) => ({
+    ...base, minHeight: 38, borderRadius: 8,
+    border: `1px solid ${state.isFocused ? 'var(--primary)' : 'var(--border)'}`,
+    boxShadow: state.isFocused ? '0 0 0 3px rgba(26,86,232,0.12)' : 'none',
+    fontFamily: 'Inter, sans-serif', fontSize: 14,
+    '&:hover': { borderColor: 'var(--primary)' },
+  }),
+  option: (base, state) => ({
+    ...base, fontSize: 14, cursor: 'pointer',
+    background: state.isSelected ? 'var(--primary)' : state.isFocused ? '#f1f5ff' : 'white',
+    color: state.isSelected ? 'white' : 'var(--text-primary)',
+  }),
+  placeholder: (base) => ({ ...base, color: 'var(--text-muted)', fontSize: 14 }),
+  singleValue: (base) => ({ ...base, color: 'var(--text-primary)', fontSize: 14 }),
+  multiValue: (base) => ({ ...base, background: '#eff6ff', borderRadius: 6 }),
+  multiValueLabel: (base) => ({ ...base, color: 'var(--primary)', fontSize: 13, fontWeight: 500 }),
+  multiValueRemove: (base) => ({ ...base, color: 'var(--primary)', '&:hover': { background: '#dbeafe', color: '#1e40af' } }),
+  menu: (base) => ({ ...base, borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.12)', zIndex: 9999 }),
+  menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+};
+
+export function Select({ options, value, onChange, placeholder, isClearable, isDisabled, isLoading, formatOptionLabel }) {
+  return (
+    <ReactSelect
+      options={options}
+      value={options?.find(o => o.value === value) || null}
+      onChange={opt => onChange(opt ? opt.value : '')}
+      placeholder={placeholder || 'Select...'}
+      isClearable={isClearable}
+      isDisabled={isDisabled}
+      isLoading={isLoading}
+      formatOptionLabel={formatOptionLabel}
+      styles={rsStyles}
+      menuPortalTarget={document.body}
+      menuPosition="fixed"
+    />
+  );
+}
+
+export function MultiSelect({ options, value = [], onChange, placeholder, isDisabled }) {
+  return (
+    <ReactSelect
+      isMulti
+      options={options}
+      value={options?.filter(o => value.includes(o.value)) || []}
+      onChange={opts => onChange((opts || []).map(o => o.value))}
+      placeholder={placeholder || 'Select...'}
+      isDisabled={isDisabled}
+      styles={rsStyles}
+      menuPortalTarget={document.body}
+      menuPosition="fixed"
+    />
+  );
+}
+
+export function DateInput({ value, onChange, placeholder, minDate, maxDate, disabled }) {
+  const parsed = value ? new Date(value) : null;
+  return (
+    <ReactDatePicker
+      selected={parsed}
+      onChange={d => onChange(d ? d.toISOString().split('T')[0] : '')}
+      placeholderText={placeholder || 'Select date'}
+      dateFormat="dd MMM yyyy"
+      minDate={minDate ? new Date(minDate) : undefined}
+      maxDate={maxDate ? new Date(maxDate) : undefined}
+      disabled={disabled}
+      className="form-control"
+      wrapperClassName="datepicker-wrapper"
+      popperProps={{ strategy: 'fixed' }}
+      autoComplete="off"
+    />
+  );
+}
+
+export function TimeInput({ value, onChange, placeholder, disabled }) {
+  const parsed = (() => {
+    if (!value) return null;
+    const [h, m] = value.split(':').map(Number);
+    const d = new Date(); d.setHours(h, m, 0, 0); return d;
+  })();
+  return (
+    <ReactDatePicker
+      selected={parsed}
+      onChange={d => { if (d) { const hh = String(d.getHours()).padStart(2, '0'); const mm = String(d.getMinutes()).padStart(2, '0'); onChange(`${hh}:${mm}`); } }}
+      showTimeSelect showTimeSelectOnly
+      timeIntervals={15}
+      timeCaption="Time"
+      dateFormat="hh:mm aa"
+      placeholderText={placeholder || 'Select time'}
+      disabled={disabled}
+      className="form-control"
+      wrapperClassName="datepicker-wrapper"
+      popperProps={{ strategy: 'fixed' }}
+      autoComplete="off"
+    />
+  );
+}
 
 // Modal
 export function Modal({ open, onClose, title, children, size = '', footer }) {

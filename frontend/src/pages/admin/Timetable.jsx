@@ -23,7 +23,16 @@ export default function Timetable() {
   const workingDays = school?.workingDays || user?.school?.workingDays;
 
   const { data: classData } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes') });
-  const classes = classData?.classes || [];
+  const classes = (() => {
+    const raw = classData?.classes || [];
+    const saved = JSON.parse(localStorage.getItem('sklproj_class_order') || '[]');
+    if (!saved.length) return raw;
+    return [...raw].sort((a, b) => {
+      const ai = saved.indexOf(a._id);
+      const bi = saved.indexOf(b._id);
+      return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
+    });
+  })();
 
   const { data: empData } = useQuery({ queryKey: ['teachers'], queryFn: () => api.get('/employees?role=teacher&limit=100') });
   const teachers = empData?.employees || [];
@@ -62,7 +71,7 @@ export default function Timetable() {
 // ─── Class View ────────────────────────────────────────────────────────────────
 function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay }) {
   const qc = useQueryClient();
-  const [classId, setClassId] = useState('');
+  const [classId, setClassId] = useState(classes[0]?._id || '');
   const [editMode, setEditMode] = useState(false);
   const [schedule, setSchedule] = useState([]);
   const [editCell, setEditCell] = useState(null);
@@ -73,7 +82,12 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
     queryKey: ['subjects'],
     queryFn: () => api.get('/subjects')
   });
-  const subjects = subjectData?.subjects || [];
+  const allSubjects = subjectData?.subjects || [];
+
+  const selectedClass = classes.find(c => c._id === classId);
+  const subjects = selectedClass?.subjects?.length
+    ? allSubjects.filter(s => selectedClass.subjects.some(cs => (cs._id || cs) === s._id))
+    : allSubjects;
 
   const { data: ttData, isLoading } = useQuery({
     queryKey: ['timetable', classId, academicYear],
@@ -136,7 +150,6 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
     <div>
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
         <select className="form-control" style={{ maxWidth: 220 }} value={classId} onChange={e => { setClassId(e.target.value); setEditMode(false); setConflict(null); }}>
-          <option value="">Select Class</option>
           {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
         </select>
         <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{academicYear}</span>
@@ -179,10 +192,11 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
                     const brk = breakInfoByPeriod[p];
                     const timeLabel = brk?.startTime && brk?.endTime ? `${fmtTime(brk.startTime)} – ${fmtTime(brk.endTime)}` : getPeriodTimeLabel(p);
                     return brk ? (
-                      <th key={p} style={{ padding: '8px 4px', textAlign: 'center', background: '#78350f', width: 64 }}>
-                        <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 10, fontWeight: 700, color: '#fde68a', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 auto' }}>
+                      <th key={p} style={{ padding: '12px 8px', textAlign: 'center', background: '#78350f', width: 80 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#fde68a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                           {brk.breakName || 'Break'}
                         </div>
+                        {timeLabel && <div style={{ fontSize: 10, color: 'rgba(253,230,138,0.6)', fontWeight: 400, marginTop: 2 }}>{timeLabel}</div>}
                       </th>
                     ) : (
                       <th key={p} style={{ padding: '12px 8px', color: 'white', textAlign: 'center', fontSize: 13, fontWeight: 700, minWidth: 110 }}>
@@ -226,11 +240,6 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
                               <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 11, fontWeight: 800, color: '#78350f', letterSpacing: '0.08em', textTransform: 'uppercase', lineHeight: 1.2 }}>
                                 {brk.breakName || 'Break'}
                               </div>
-                              {timeLabel && (
-                                <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 9, color: '#b45309', fontWeight: 600, lineHeight: 1.3 }}>
-                                  {timeLabel}
-                                </div>
-                              )}
                               {editMode && (
                                 <button
                                   onClick={() => setEditCell({ day: activeDays[0], period: p })}
@@ -401,44 +410,63 @@ function TeacherScheduleGrid({ teacherId, teacher, academicYear, periodsPerDay }
 
       {isLoading ? <div style={{ padding: 40 }}><PageLoader /></div> : timetables.length === 0 ? (
         <div style={{ padding: 32 }}><EmptyState icon={Clock} message="No timetable assigned to this teacher yet" /></div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ minWidth: 560 }}>
-            <thead>
-              <tr style={{ background: '#0f172a' }}>
-                <th style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', width: 70 }}>P#</th>
-                {activeDays.map(day => (
-                  <th key={day} style={{ padding: '10px 16px', color: 'white', textAlign: 'center', fontSize: 13, fontWeight: 700 }}>{DAY_LABELS[day]}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from({ length: periodsPerDay }, (_, i) => i + 1).map(p => (
-                <tr key={p} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={{ padding: '6px 16px', background: '#f8fafc', textAlign: 'center', borderRight: '1px solid var(--border)', fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)' }}>P{p}</td>
-                  {activeDays.map(day => {
-                    const cell = getCell(day, p);
-                    return (
-                      <td key={day} style={{ padding: 5, textAlign: 'center', minWidth: 100 }}>
-                        {cell ? (
-                          <div style={{ borderRadius: 8, padding: '7px 8px', background: `${cell.subject?.color || '#1a56e8'}14`, border: `1px solid ${cell.subject?.color || '#1a56e8'}35`, minHeight: 50 }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: cell.subject?.color || 'var(--primary)' }}>{cell.subject?.name || '—'}</div>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{cell.cls?.name} {cell.cls?.section}</div>
-                          </div>
-                        ) : (
-                          <div style={{ minHeight: 50, borderRadius: 8, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <span style={{ fontSize: 13, color: '#d1d5db' }}>—</span>
-                          </div>
-                        )}
-                      </td>
-                    );
-                  })}
+      ) : (() => {
+        const fmtTime = t => { if (!t) return ''; const [h, m] = t.split(':'); const hr = parseInt(h); return `${hr % 12 || 12}:${m} ${hr >= 12 ? 'PM' : 'AM'}`; };
+        const getPeriodTime = (periodNum) => {
+          for (const tt of timetables) {
+            for (const ds of tt.schedule) {
+              const p = ds.periods?.find(per => per.periodNumber === periodNum && !per.isBreak);
+              if (p?.startTime && p?.endTime) return `${fmtTime(p.startTime)} – ${fmtTime(p.endTime)}`;
+            }
+          }
+          return null;
+        };
+        const periods = Array.from({ length: periodsPerDay }, (_, i) => i + 1);
+        return (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ minWidth: 560 }}>
+              <thead>
+                <tr style={{ background: '#0f172a' }}>
+                  <th style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', width: 100 }}>Day</th>
+                  {periods.map(p => (
+                    <th key={p} style={{ padding: '12px 8px', color: 'white', textAlign: 'center', fontSize: 13, fontWeight: 700, minWidth: 110 }}>
+                      <div>P{p}</div>
+                      {getPeriodTime(p) && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', fontWeight: 400, marginTop: 2 }}>{getPeriodTime(p)}</div>}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {activeDays.map(day => (
+                  <tr key={day} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '8px 16px', background: '#f8fafc', borderRight: '1px solid var(--border)', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>{DAY_FULL[day]}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{DAY_LABELS[day]}</div>
+                    </td>
+                    {periods.map(p => {
+                      const cell = getCell(day, p);
+                      return (
+                        <td key={p} style={{ padding: 5, textAlign: 'center', minWidth: 110 }}>
+                          {cell ? (
+                            <div style={{ borderRadius: 8, padding: '7px 8px', background: `${cell.subject?.color || '#1a56e8'}14`, border: `1px solid ${cell.subject?.color || '#1a56e8'}35`, minHeight: 50 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: cell.subject?.color || 'var(--primary)' }}>{cell.subject?.name || '—'}</div>
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{cell.cls?.name} {cell.cls?.section}</div>
+                            </div>
+                          ) : (
+                            <div style={{ minHeight: 50, borderRadius: 8, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <span style={{ fontSize: 13, color: '#d1d5db' }}>—</span>
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -507,7 +535,7 @@ function SubstitutionPanel({ teacherId, teacher, academicYear }) {
   })() : [];
 
   return (
-    <div className="card" style={{ overflow: 'hidden' }}>
+    <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
       <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
         <UserX size={18} color="#ef4444" />
         <div>

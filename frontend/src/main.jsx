@@ -7,6 +7,7 @@ import { AuthProvider } from './store/AuthContext';
 import App from './App';
 import './i18n/index';
 import './styles/global.css';
+import 'react-datepicker/dist/react-datepicker.css';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000 } }

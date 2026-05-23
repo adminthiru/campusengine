@@ -21,6 +21,7 @@ const emptyItem = () => ({ type: '', amount: '' });
 export default function Fees() {
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [classFilter, setClassFilter] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -42,8 +43,8 @@ export default function Fees() {
   const feeTerms = schoolData?.school?.feeTerms || [];
 
   const { data, isLoading } = useQuery({
-    queryKey: ['fees', page, statusFilter, classFilter],
-    queryFn: () => api.get(`/fees?page=${page}&limit=20&status=${statusFilter}&classId=${classFilter}`)
+    queryKey: ['fees', page, statusFilter, classFilter, search],
+    queryFn: () => api.get(`/fees?page=${page}&limit=20&status=${statusFilter}&classId=${classFilter}&search=${encodeURIComponent(search)}`)
   });
   const fees = data?.fees || [];
   const total = data?.total || 0;
@@ -192,7 +193,10 @@ export default function Fees() {
       </div>
 
       <div className="filter-bar">
-        <select className="form-control" style={{ width: 'auto' }} value={classFilter} onChange={e => setClassFilter(e.target.value)}>
+        <div style={{ minWidth: 260 }}>
+          <SearchInput value={search} onChange={v => { setSearch(v); setPage(1); }} placeholder="Search by student name or admission no..." />
+        </div>
+        <select className="form-control" style={{ width: 'auto' }} value={classFilter} onChange={e => { setClassFilter(e.target.value); setPage(1); }}>
           <option value="">All Classes</option>
           {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
         </select>

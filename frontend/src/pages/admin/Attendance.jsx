@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { UserCheck, Save, ChevronLeft, ChevronRight, Edit2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
-import { PageLoader, Avatar } from '../../components/ui';
+import { PageLoader, Avatar, SearchInput } from '../../components/ui';
 
 const BASE_STATUS_CONFIG = [
   { key: 'present',  label: 'P',  fullLabel: 'Present',  color: '#10b981', bg: '#f0fdf4' },
@@ -27,6 +27,7 @@ export default function Attendance() {
   const [classId, setClassId] = useState('');
   const [empRole, setEmpRole] = useState('');
   const [tab, setTab] = useState('student');
+  const [search, setSearch] = useState('');
   const [attendance, setAttendance] = useState({}); // { [personId]: { status, remarks } }
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -49,7 +50,16 @@ export default function Attendance() {
     queryKey: ['classes'],
     queryFn: () => api.get('/classes')
   });
-  const classes = classData?.classes || [];
+  const classes = (() => {
+    const raw = classData?.classes || [];
+    const saved = JSON.parse(localStorage.getItem('sklproj_class_order') || '[]');
+    if (!saved.length) return raw;
+    return [...raw].sort((a, b) => {
+      const ai = saved.indexOf(a._id);
+      const bi = saved.indexOf(b._id);
+      return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
+    });
+  })();
 
   const { data: studentData, isLoading: loadingStudents } = useQuery({
     queryKey: ['students-attendance', classId],
@@ -114,7 +124,14 @@ export default function Attendance() {
     setEditMode(false);
   }, [existingData]);
 
-  const people = tab === 'student' ? students : employees;
+  const allPeople = tab === 'student' ? students : employees;
+  const people = search.trim()
+    ? allPeople.filter(p => {
+        const q = search.trim().toLowerCase();
+        return p.name?.toLowerCase().includes(q) ||
+          (tab === 'student' ? p.admissionNumber : p.employeeId)?.toLowerCase().includes(q);
+      })
+    : allPeople;
   const statusConfig = tab === 'student' ? BASE_STATUS_CONFIG : empStatusConfig;
 
   const setStatus = (id, status) => {
@@ -203,7 +220,7 @@ export default function Attendance() {
         <div style={{ display: 'flex', overflowX: 'auto', marginBottom: -2 }}>
           {['student', 'employee'].map(t => (
             <button key={t}
-              onClick={() => { setTab(t); if (t === 'employee') setClassId(''); if (t === 'student') setEmpRole(''); window.scrollTo({ top: 0, behavior: 'instant' }); }}
+              onClick={() => { setTab(t); setSearch(''); if (t === 'employee') setClassId(''); if (t === 'student') setEmpRole(''); window.scrollTo({ top: 0, behavior: 'instant' }); }}
               style={{
                 padding: '10px 20px', border: 'none', background: 'none', cursor: 'pointer',
                 fontSize: 14, fontWeight: tab === t ? 700 : 500,
@@ -220,9 +237,16 @@ export default function Attendance() {
 
       {/* Filter bar */}
       <div className="filter-bar">
+        <div style={{ minWidth: 240 }}>
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder={tab === 'student' ? 'Search by name or admission no...' : 'Search by name or employee ID...'}
+          />
+        </div>
         {tab === 'student' && (
           <select className="form-control" style={{ width: 'auto' }} value={classId}
-            onChange={e => setClassId(e.target.value)}>
+            onChange={e => { setClassId(e.target.value); setSearch(''); }}>
             <option value="">Select Class</option>
             {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
           </select>

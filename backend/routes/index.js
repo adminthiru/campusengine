@@ -566,6 +566,194 @@ router.post('/sms/send', protect, authorize('admin', 'correspondent', 'principal
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+// ============== HOMEWORK ==============
+router.get('/homework', protect, checkSubscription, async (req, res) => {
+  try {
+    const Homework = require('../models/Homework');
+    const { classId, date, status } = req.query;
+    const query = { school: req.user.school };
+    if (classId) query.class = classId;
+    if (status) query.status = status;
+    if (date) {
+      const d = new Date(date);
+      const next = new Date(date); next.setDate(next.getDate() + 1);
+      query.assignedDate = { $gte: d, $lt: next };
+    }
+    const homework = await Homework.find(query)
+      .populate('class', 'name section')
+      .populate('subject', 'name color')
+      .populate('students', 'name admissionNumber')
+      .populate('createdBy', 'name')
+      .sort({ createdAt: -1 });
+    res.json({ success: true, homework });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.post('/homework', protect, checkSubscription, authorize('admin', 'correspondent', 'principal', 'teacher'), async (req, res) => {
+  try {
+    const Homework = require('../models/Homework');
+    const hw = await Homework.create({ ...req.body, school: req.user.school, createdBy: req.user._id });
+    await hw.populate([{ path: 'class', select: 'name section' }, { path: 'subject', select: 'name color' }, { path: 'students', select: 'name admissionNumber' }, { path: 'createdBy', select: 'name' }]);
+    res.status(201).json({ success: true, homework: hw });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.get('/homework/:id/submissions', protect, checkSubscription, async (req, res) => {
+  try {
+    const HomeworkSubmission = require('../models/HomeworkSubmission');
+    const submissions = await HomeworkSubmission.find({ homework: req.params.id, school: req.user.school })
+      .populate('student', 'name admissionNumber rollNumber photo');
+    res.json({ success: true, submissions });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.put('/homework/:id/submissions/:studentId', protect, checkSubscription, authorize('admin', 'correspondent', 'principal', 'teacher'), async (req, res) => {
+  try {
+    const HomeworkSubmission = require('../models/HomeworkSubmission');
+    const Homework = require('../models/Homework');
+    const { status, note } = req.body;
+    const sub = await HomeworkSubmission.findOneAndUpdate(
+      { homework: req.params.id, student: req.params.studentId, school: req.user.school },
+      { $set: { status, note: note || '', submittedAt: status === 'completed' ? new Date() : undefined, school: req.user.school, homework: req.params.id, student: req.params.studentId } },
+      { upsert: true, new: true }
+    ).populate('student', 'name admissionNumber');
+
+    // Auto-complete or auto-revert homework based on all student statuses
+    const hw = await Homework.findOne({ _id: req.params.id, school: req.user.school });
+    if (hw && hw.status !== 'cancelled') {
+      let totalStudents;
+      if (hw.assignedTo === 'all') {
+        totalStudents = await Student.countDocuments({ class: hw.class, school: hw.school });
+      } else {
+        totalStudents = hw.students.length;
+      }
+      if (totalStudents > 0) {
+        const completedCount = await HomeworkSubmission.countDocuments({ homework: req.params.id, school: req.user.school, status: 'completed' });
+        if (completedCount >= totalStudents && hw.status !== 'completed') {
+          await Homework.findByIdAndUpdate(req.params.id, { status: 'completed' });
+        } else if (completedCount < totalStudents && hw.status === 'completed') {
+          await Homework.findByIdAndUpdate(req.params.id, { status: 'active' });
+        }
+      }
+    }
+
+    res.json({ success: true, submission: sub });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.post('/homework/:id/submissions/:studentId/attachment', protect, checkSubscription, upload.single('file'), async (req, res) => {
+  try {
+    const HomeworkSubmission = require('../models/HomeworkSubmission');
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+    const fileType = req.file.mimetype.startsWith('image/') ? 'image' : 'pdf';
+    const fileUrl = `/uploads/${req.file.filename}`;
+    const sub = await HomeworkSubmission.findOneAndUpdate(
+      { homework: req.params.id, student: req.params.studentId, school: req.user.school },
+      {
+        $set: { school: req.user.school, homework: req.params.id, student: req.params.studentId },
+        $push: { attachments: { url: fileUrl, name: req.file.originalname, fileType, uploadedAt: new Date() } },
+      },
+      { upsert: true, new: true }
+    ).populate('student', 'name admissionNumber');
+    res.json({ success: true, submission: sub });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.delete('/homework/:id/submissions/:studentId/attachment/:attachmentId', protect, checkSubscription, async (req, res) => {
+  try {
+    const HomeworkSubmission = require('../models/HomeworkSubmission');
+    const sub = await HomeworkSubmission.findOneAndUpdate(
+      { homework: req.params.id, student: req.params.studentId, school: req.user.school },
+      { $pull: { attachments: { _id: req.params.attachmentId } } },
+      { new: true }
+    ).populate('student', 'name admissionNumber');
+    if (!sub) return res.status(404).json({ success: false, message: 'Submission not found' });
+    res.json({ success: true, submission: sub });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.post('/homework/:id/submit', protect, async (req, res) => {
+  try {
+    const HomeworkSubmission = require('../models/HomeworkSubmission');
+    const Homework = require('../models/Homework');
+    const { studentId, status, note } = req.body;
+    const hw = await Homework.findOne({ _id: req.params.id, school: req.user.school });
+    if (!hw) return res.status(404).json({ success: false, message: 'Not found' });
+    const sub = await HomeworkSubmission.findOneAndUpdate(
+      { homework: req.params.id, student: studentId, school: req.user.school },
+      { $set: { status, note: note || '', submittedAt: status === 'completed' ? new Date() : undefined, school: req.user.school, homework: req.params.id, student: studentId } },
+      { upsert: true, new: true }
+    ).populate('student', 'name admissionNumber');
+    res.json({ success: true, submission: sub });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.get('/homework/:id', protect, checkSubscription, async (req, res) => {
+  try {
+    const Homework = require('../models/Homework');
+    const hw = await Homework.findOne({ _id: req.params.id, school: req.user.school })
+      .populate('class', 'name section')
+      .populate('subject', 'name color')
+      .populate('students', 'name admissionNumber rollNumber')
+      .populate('createdBy', 'name');
+    if (!hw) return res.status(404).json({ success: false, message: 'Not found' });
+    res.json({ success: true, homework: hw });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.put('/homework/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'principal', 'teacher'), async (req, res) => {
+  try {
+    const Homework = require('../models/Homework');
+    const hw = await Homework.findOneAndUpdate(
+      { _id: req.params.id, school: req.user.school }, req.body, { new: true }
+    ).populate('class', 'name section').populate('subject', 'name color').populate('students', 'name admissionNumber').populate('createdBy', 'name');
+    if (!hw) return res.status(404).json({ success: false, message: 'Not found' });
+    res.json({ success: true, homework: hw });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.delete('/homework/:id', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const Homework = require('../models/Homework');
+    await Homework.findOneAndDelete({ _id: req.params.id, school: req.user.school });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.post('/homework/:id/notify', protect, checkSubscription, authorize('admin', 'correspondent', 'principal', 'teacher'), async (req, res) => {
+  try {
+    const Homework = require('../models/Homework');
+    const hw = await Homework.findOne({ _id: req.params.id, school: req.user.school })
+      .populate('class', 'name section').populate('subject', 'name')
+      .populate('students', 'name guardians');
+    if (!hw) return res.status(404).json({ success: false, message: 'Not found' });
+    const school = await School.findById(req.user.school);
+    const { sendSMS } = require('../utils/sms');
+    let studentsToNotify;
+    if (hw.assignedTo === 'selected' && hw.students.length > 0) {
+      studentsToNotify = hw.students;
+    } else {
+      studentsToNotify = await Student.find({
+        school: req.user.school, currentClass: hw.class._id, status: { $ne: 'dropped' }
+      }).select('name guardians');
+    }
+    const dueStr = hw.dueDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    let sent = 0;
+    for (const student of studentsToNotify) {
+      for (const guardian of (student.guardians || [])) {
+        if (guardian.phone) {
+          const msg = school.language === 'ta'
+            ? `${hw.class.name} ${hw.class.section} வகுப்பிற்கு வீட்டுப்பாடம்: ${hw.title}. கடைசி தேதி: ${dueStr}.`
+            : `Homework for ${hw.class.name} ${hw.class.section}: ${hw.title}. Due: ${dueStr}.`;
+          try { await sendSMS(guardian.phone, msg, 'homework', req.user.school); sent++; } catch {}
+        }
+      }
+    }
+    await Homework.findByIdAndUpdate(hw._id, { notifiedAt: new Date() });
+    res.json({ success: true, sent, message: `Notification sent to ${sent} guardian(s)` });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // ============== SUPER ADMIN ==============
 router.get('/super-admin/stats', protect, authorize('super_admin'), async (req, res) => {
   try {

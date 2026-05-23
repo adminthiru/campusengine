@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { Plus, Trash2, BookOpen, Users, Edit } from 'lucide-react';
+import { Plus, Trash2, BookOpen, Users, Edit, GripVertical } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
-import { Modal, ConfirmDialog, EmptyState, PageLoader, FormRow, StatusBadge } from '../../components/ui';
+import { Modal, ConfirmDialog, EmptyState, PageLoader, FormRow, StatusBadge, Select } from '../../components/ui';
+
+const CLASS_ORDER_KEY = 'sklproj_class_order';
 
 export function Classes() {
   const qc = useQueryClient();
@@ -12,6 +14,10 @@ export function Classes() {
   const [editClass, setEditClass] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
   const [selectedSubjects, setSelectedSubjects] = useState([]);
+  const [orderedClasses, setOrderedClasses] = useState([]);
+  const [draggingIdx, setDraggingIdx] = useState(null);
+  const dragItem = useRef(null);
+  const dragOverItem = useRef(null);
   const defaultClassValues = { name: '', section: '', capacity: 40, classTeacher: '', room: '', 'fees.feeType': 'yearly', 'fees.yearly': '', 'fees.lateFee': 0 };
   const { register, handleSubmit, reset, formState: { errors } } = useForm({ defaultValues: defaultClassValues });
 
@@ -25,7 +31,6 @@ export function Classes() {
     queryKey: ['classes'],
     queryFn: () => api.get('/classes')
   });
-  const classes = data?.classes || [];
 
   const createMutation = useMutation({
     mutationFn: (d) => editClass ? api.put(`/classes/${editClass._id}`, d) : api.post('/classes', d),
@@ -37,6 +42,40 @@ export function Classes() {
     mutationFn: (id) => api.delete(`/classes/${id}`),
     onSuccess: () => { qc.invalidateQueries(['classes']); toast.success('Class removed'); }
   });
+
+  const classes = data?.classes || [];
+
+  useEffect(() => {
+    if (!classes.length) return;
+    const saved = JSON.parse(localStorage.getItem(CLASS_ORDER_KEY) || '[]');
+    if (saved.length) {
+      const sorted = [...classes].sort((a, b) => {
+        const ai = saved.indexOf(a._id);
+        const bi = saved.indexOf(b._id);
+        return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
+      });
+      setOrderedClasses(sorted);
+    } else {
+      setOrderedClasses(classes);
+    }
+  }, [classes]);
+
+  const handleDragStart = (idx) => { dragItem.current = idx; setDraggingIdx(idx); };
+  const handleDragEnter = (idx) => {
+    dragOverItem.current = idx;
+    if (dragItem.current === idx) return;
+    const next = [...orderedClasses];
+    const [moved] = next.splice(dragItem.current, 1);
+    next.splice(idx, 0, moved);
+    dragItem.current = idx;
+    setOrderedClasses(next);
+  };
+  const handleDragEnd = () => {
+    setDraggingIdx(null);
+    dragItem.current = null;
+    dragOverItem.current = null;
+    localStorage.setItem(CLASS_ORDER_KEY, JSON.stringify(orderedClasses.map(c => c._id)));
+  };
 
   const openEdit = (cls) => {
     setEditClass(cls);
@@ -58,7 +97,7 @@ export function Classes() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Classes</h1>
-          <p className="page-subtitle">{classes.length} classes configured</p>
+          <p className="page-subtitle">{orderedClasses.length} classes configured</p>
         </div>
         <button className="btn btn-primary" onClick={() => { setEditClass(null); reset(); setSelectedSubjects([]); setShowModal(true); }}>
           <Plus size={16} /> Add Class
@@ -67,7 +106,7 @@ export function Classes() {
 
       {isLoading ? <PageLoader /> : (
         <div className="grid-3">
-          {classes.length === 0 && (
+          {orderedClasses.length === 0 && (
             <div style={{ gridColumn: '1/-1' }}>
               <div className="card">
                 <EmptyState icon={BookOpen} message="No classes yet. Create your first class!"
@@ -75,19 +114,28 @@ export function Classes() {
               </div>
             </div>
           )}
-          {classes.map(cls => (
-            <div key={cls._id} className="card" style={{ padding: 20 }}>
+          {orderedClasses.map((cls, idx) => (
+            <div key={cls._id} className="card"
+              draggable
+              onDragStart={() => handleDragStart(idx)}
+              onDragEnter={() => handleDragEnter(idx)}
+              onDragEnd={handleDragEnd}
+              onDragOver={e => e.preventDefault()}
+              style={{ padding: 20, cursor: 'grab', opacity: draggingIdx === idx ? 0.5 : 1, transition: 'opacity 0.15s', userSelect: 'none' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                <div>
-                  <div className="text-20-bold" style={{ color: 'var(--primary)' }}>
-                    {cls.name}
-                    <span style={{ fontSize: 14, background: '#eff6ff', padding: '2px 8px', borderRadius: 6, marginLeft: 6 }}>{cls.section}</span>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                  <GripVertical size={16} style={{ color: 'var(--text-muted)', marginTop: 4, flexShrink: 0 }} />
+                  <div>
+                    <div className="text-20-bold" style={{ color: 'var(--primary)' }}>
+                      {cls.name}
+                      <span style={{ fontSize: 14, background: '#eff6ff', padding: '2px 8px', borderRadius: 6, marginLeft: 6 }}>{cls.section}</span>
+                    </div>
+                    {cls.classTeacher && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Teacher: {cls.classTeacher.name}</div>}
                   </div>
-                  {cls.classTeacher && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Teacher: {cls.classTeacher.name}</div>}
                 </div>
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openEdit(cls)}><Edit size={14} /></button>
-                  <button className="btn btn-danger btn-sm btn-icon" onClick={() => setDeleteId(cls._id)}><Trash2 size={14} /></button>
+                  <button className="btn btn-secondary btn-sm btn-icon" onClick={e => { e.stopPropagation(); openEdit(cls); }}><Edit size={14} /></button>
+                  <button className="btn btn-danger btn-sm btn-icon" onClick={e => { e.stopPropagation(); setDeleteId(cls._id); }}><Trash2 size={14} /></button>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 16, fontSize: 13, marginBottom: cls.subjects?.length ? 10 : 0 }}>
@@ -376,10 +424,21 @@ export function Subjects() {
             </div>
             <div className="form-group">
               <label className="form-label">Assign to Teacher</label>
-              <select className="form-control" {...register('teacher')}>
-                <option value="">Select teacher</option>
-                {teachers.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
-              </select>
+              <Select
+                options={teachers.map(t => ({ value: t._id, label: t.name, designation: t.designation }))}
+                value={watch('teacher') || ''}
+                onChange={val => setValue('teacher', val)}
+                placeholder="Select teacher"
+                isClearable
+                formatOptionLabel={opt => (
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>{opt.label}</div>
+                    {opt.designation && (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>{opt.designation}</div>
+                    )}
+                  </div>
+                )}
+              />
             </div>
           </FormRow>
           <FormRow>

@@ -228,7 +228,7 @@ const verifyRazorpayPayment = async (req, res) => {
 // Get fee records
 const getFees = async (req, res) => {
   try {
-    const { studentId, classId, status, academicYear, page = 1, limit = 20 } = req.query;
+    const { studentId, classId, status, academicYear, page = 1, limit = 20, search } = req.query;
     const query = { school: req.user.school };
     if (studentId) query.student = studentId;
     if (status) query.status = status;
@@ -237,6 +237,20 @@ const getFees = async (req, res) => {
     if (classId) {
       const students = await Student.find({ school: req.user.school, currentClass: classId }).select('_id');
       query.student = { $in: students.map(s => s._id) };
+    }
+
+    if (search && search.trim()) {
+      const regex = new RegExp(search.trim(), 'i');
+      const matchedStudents = await Student.find({
+        school: req.user.school,
+        $or: [{ name: regex }, { admissionNumber: regex }]
+      }).select('_id');
+      const searchIds = matchedStudents.map(s => String(s._id));
+      if (query.student?.$in) {
+        query.student.$in = query.student.$in.filter(id => searchIds.includes(String(id)));
+      } else {
+        query.student = { $in: matchedStudents.map(s => s._id) };
+      }
     }
 
     const total = await FeeCollection.countDocuments(query);

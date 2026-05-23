@@ -15,6 +15,7 @@ import Salary from './pages/admin/Salary';
 import Exams from './pages/admin/Exams';
 import ExamDetail from './pages/admin/ExamDetail';
 import Expenses from './pages/admin/Expenses';
+import Homework from './pages/admin/Homework';
 import Transport from './pages/admin/Transport';
 import IDCards from './pages/admin/IDCards';
 import Settings from './pages/admin/Settings';
@@ -102,6 +103,7 @@ export default function App() {
       <Route path="/salary" element={<ProtectedRoute roles={ADMIN}><Salary /></ProtectedRoute>} />
       <Route path="/exams" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Exams /></ProtectedRoute>} />
       <Route path="/exams/:id" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><ExamDetail /></ProtectedRoute>} />
+      <Route path="/homework" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Homework /></ProtectedRoute>} />
       <Route path="/expenses" element={<ProtectedRoute roles={ADMIN}><Expenses /></ProtectedRoute>} />
       <Route path="/transport" element={<ProtectedRoute roles={ADMIN}><Transport /></ProtectedRoute>} />
       <Route path="/id-cards" element={<ProtectedRoute roles={ADMIN}><IDCards /></ProtectedRoute>} />

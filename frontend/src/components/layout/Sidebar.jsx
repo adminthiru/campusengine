@@ -6,7 +6,7 @@ import {
   DollarSign, CreditCard, Calendar, FileText, Truck,
   MessageSquare, CreditCard as IdCard, Settings, LogOut,
   GraduationCap, Building2, ChevronRight, Bell, BarChart3,
-  ClipboardList, Banknote, School
+  ClipboardList, Banknote, School, BookMarked
 } from 'lucide-react';
 
 const navConfig = {
@@ -27,6 +27,7 @@ const navConfig = {
     { section: 'Attendance & Exams' },
     { label: 'Attendance', icon: UserCheck, path: '/attendance' },
     { label: 'Exams', icon: FileText, path: '/exams' },
+    { label: 'Homework', icon: BookMarked, path: '/homework' },
     { section: 'Finance' },
     { label: 'Fees', icon: CreditCard, path: '/fees' },
     { label: 'Salary', icon: Banknote, path: '/salary' },
@@ -49,6 +50,7 @@ const navConfig = {
     { section: 'Attendance & Exams' },
     { label: 'Attendance', icon: UserCheck, path: '/attendance' },
     { label: 'Exams', icon: FileText, path: '/exams' },
+    { label: 'Homework', icon: BookMarked, path: '/homework' },
     { section: 'Finance' },
     { label: 'Fees', icon: CreditCard, path: '/fees' },
     { label: 'Salary', icon: Banknote, path: '/salary' },
@@ -69,6 +71,7 @@ const navConfig = {
     { label: 'Timetable', icon: Clock, path: '/timetable' },
     { label: 'Attendance', icon: UserCheck, path: '/attendance' },
     { label: 'Exams', icon: FileText, path: '/exams' },
+    { label: 'Homework', icon: BookMarked, path: '/homework' },
     { section: 'Finance' },
     { label: 'Fees', icon: CreditCard, path: '/fees' },
     { label: 'Salary', icon: Banknote, path: '/salary' },
@@ -81,6 +84,7 @@ const navConfig = {
     { label: 'My Classes', icon: BookOpen, path: '/my-classes' },
     { label: 'Attendance', icon: UserCheck, path: '/attendance' },
     { label: 'Exams', icon: FileText, path: '/exams' },
+    { label: 'Homework', icon: BookMarked, path: '/homework' },
     { label: 'Timetable', icon: Clock, path: '/timetable' },
     { section: 'Account' },
     { label: 'My Salary', icon: Banknote, path: '/my-salary' },

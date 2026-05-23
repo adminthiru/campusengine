@@ -5,7 +5,7 @@ import { ArrowLeft, Upload, Save, Send, CheckCircle, Edit2, EyeOff, FileDown, Se
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
-import { PageLoader, StatusBadge, Modal, FormRow } from '../../components/ui';
+import { PageLoader, StatusBadge, Modal, FormRow, SearchInput } from '../../components/ui';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 const MEDAL_BORDER = ['#fbbf24', '#94a3b8', '#fb923c'];
@@ -24,6 +24,7 @@ export default function ExamDetail() {
   const [reportClassId, setReportClassId] = useState('');
   const [reportSearch, setReportSearch] = useState('');
   const [reportDownloading, setReportDownloading] = useState(null);
+  const [studentSearch, setStudentSearch] = useState('');
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleState, setScheduleState] = useState({});
   const [hallTicketDownloading, setHallTicketDownloading] = useState(null);
@@ -415,7 +416,7 @@ export default function ExamDetail() {
         <div style={{ display: 'flex', overflowX: 'auto', marginBottom: -2 }}>
           {exam.classes?.map(cls => (
             <button key={cls._id}
-              onClick={() => { setActiveClassId(cls._id); setActiveSubjectId(null); setEditMode(false); }}
+              onClick={() => { setActiveClassId(cls._id); setActiveSubjectId(null); setEditMode(false); setStudentSearch(''); }}
               style={{
                 padding: '10px 20px', border: 'none', background: 'none', cursor: 'pointer',
                 fontSize: 14, fontWeight: activeClassId === cls._id ? 700 : 500,
@@ -456,7 +457,14 @@ export default function ExamDetail() {
 
           {/* Subject selector + Save */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-            <div style={{ minWidth: 240 }}>
+            <div style={{ minWidth: 220 }}>
+              <SearchInput
+                value={studentSearch}
+                onChange={setStudentSearch}
+                placeholder="Search student..."
+              />
+            </div>
+            <div style={{ minWidth: 220 }}>
               <select className="form-control" value={activeSubjectId || ''}
                 onChange={e => { setActiveSubjectId(e.target.value); setEditMode(false); }}>
                 {examSubjects.map(s => (
@@ -530,7 +538,12 @@ export default function ExamDetail() {
                   {students.length === 0 && (
                     <tr><td colSpan={10} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>No active students in this class</td></tr>
                   )}
-                  {students.map((student, idx) => {
+                  {(() => {
+                    const q = studentSearch.trim().toLowerCase();
+                    return q
+                      ? students.filter(s => s.name?.toLowerCase().includes(q) || s.admissionNumber?.toLowerCase().includes(q))
+                      : students;
+                  })().map((student, idx) => {
                     const isAbsent = getMark(student._id, 'isAbsent');
                     const theory = parseFloat(getMark(student._id, 'theoryMarks')) || 0;
                     const practical = parseFloat(getMark(student._id, 'practicalMarks')) || 0;
