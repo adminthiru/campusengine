@@ -74,6 +74,28 @@ const schoolSchema = new mongoose.Schema({
     daysPerMonth:{ type: Number, default: 0 }
   }],
   feeTerms: [{ name: { type: String } }],
+  leaveConfig: {
+    casualLeave: { type: Number, default: 12 },
+    sickLeave:   { type: Number, default: 10 }
+  },
+  teacherPermissions: {
+    classTeacher: {
+      markStudentAttendance: { type: Boolean, default: true },
+      markOwnAttendance:     { type: Boolean, default: true },
+      viewStudents:          { type: Boolean, default: true },
+      viewFeeStatus:         { type: Boolean, default: true },
+      assignHomework:        { type: Boolean, default: true },
+      viewAndEnterExamMarks: { type: Boolean, default: true },
+      viewTimetable:         { type: Boolean, default: true },
+    },
+    subjectTeacher: {
+      markOwnAttendance:     { type: Boolean, default: true },
+      assignHomework:        { type: Boolean, default: true },
+      viewSubjectStudents:   { type: Boolean, default: true },
+      enterExamMarks:        { type: Boolean, default: true },
+      viewTimetable:         { type: Boolean, default: true },
+    }
+  },
   profileCompleted: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });

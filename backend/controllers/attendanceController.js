@@ -36,7 +36,7 @@ const markStudentAttendance = async (req, res) => {
             if (guardian.phone && !rec.smsSent) {
               const lang = guardian.language || 'en';
               await sendSMS(schoolId, guardian.phone, 'absent',
-                [student.name, dateStr, period], lang,
+                [student.name, dateStr], lang,
                 { student: student._id, parent: guardian._id }
               );
             }

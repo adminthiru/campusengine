@@ -2,20 +2,21 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Settings as SettingsIcon, School, Key, CreditCard, Bell, Plus, Trash2, Check, Upload, CalendarCheck, ListOrdered } from 'lucide-react';
+import { Settings as SettingsIcon, School, Key, CreditCard, Bell, Plus, Trash2, Check, Upload, CalendarCheck, ListOrdered, ShieldCheck, GraduationCap, BookOpen } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useAuth } from '../../store/AuthContext';
 import { PageLoader, FormRow, StatCard } from '../../components/ui';
 
 const TABS = [
-  { id: 'school',      label: 'School Profile',  icon: School },
-  { id: 'grades',      label: 'Grade Config',    icon: Bell },
-  { id: 'leaves',      label: 'Leave Config',    icon: CalendarCheck },
-  { id: 'feeterms',    label: 'Fee Terms',       icon: ListOrdered },
-  { id: 'subscription',label: 'Subscription',    icon: CreditCard },
-  { id: 'password',    label: 'Change Password', icon: Key },
-  { id: 'profile',     label: 'My Profile',      icon: SettingsIcon },
+  { id: 'school',       label: 'School Profile',   icon: School },
+  { id: 'grades',       label: 'Grade Config',     icon: Bell },
+  { id: 'leaves',       label: 'Leave Config',     icon: CalendarCheck },
+  { id: 'feeterms',     label: 'Fee Terms',        icon: ListOrdered },
+  { id: 'teacherroles', label: 'Teacher Roles',    icon: ShieldCheck },
+  { id: 'subscription', label: 'Subscription',     icon: CreditCard },
+  { id: 'password',     label: 'Change Password',  icon: Key },
+  { id: 'profile',      label: 'My Profile',       icon: SettingsIcon },
 ];
 
 export default function Settings() {
@@ -62,6 +63,7 @@ export default function Settings() {
           {activeTab === 'grades'       && isAdmin && <GradeSettings />}
           {activeTab === 'leaves'       && isAdmin && <LeaveSettings />}
           {activeTab === 'feeterms'     && isAdmin && <FeeTermsSettings />}
+          {activeTab === 'teacherroles' && isAdmin && <TeacherRolesSettings />}
           {activeTab === 'subscription' && isAdmin && <SubscriptionSettings />}
           {activeTab === 'password' && <PasswordSettings />}
           {activeTab === 'profile'  && <ProfileSettings />}
@@ -701,6 +703,237 @@ function ProfileSettings() {
           {saving ? 'Saving...' : 'Update Profile'}
         </button>
       </form>
+    </div>
+  );
+}
+
+// ─── Teacher Roles & Permissions ────────────────────────────────────────────
+
+const CLASS_TEACHER_PERMS = [
+  {
+    key: 'markStudentAttendance',
+    label: 'Mark Class Student Attendance',
+    desc: 'Can mark daily attendance for students in their assigned class'
+  },
+  {
+    key: 'markOwnAttendance',
+    label: 'Mark Own Attendance',
+    desc: 'Can mark their own daily attendance as an employee'
+  },
+  {
+    key: 'viewStudents',
+    label: 'View Students',
+    desc: 'Can view students of their own class + students in classes they go to as subject teacher'
+  },
+  {
+    key: 'viewFeeStatus',
+    label: 'View Fee Status',
+    desc: 'Can see the exam fee payment status of students in their assigned class'
+  },
+  {
+    key: 'assignHomework',
+    label: 'Assign Homework',
+    desc: 'Can assign homework for their class students and also for subject teacher classes they are assigned to'
+  },
+  {
+    key: 'viewAndEnterExamMarks',
+    label: 'View & Enter Exam Marks',
+    desc: 'Can view exam results of all subjects for their class, and enter marks for their own subject across class and subject teacher classes'
+  },
+  {
+    key: 'viewTimetable',
+    label: 'View Timetable',
+    desc: 'Can view their own timetable and the class-wise overall school timetable'
+  },
+];
+
+const SUBJECT_TEACHER_PERMS = [
+  {
+    key: 'markOwnAttendance',
+    label: 'Mark Own Attendance',
+    desc: 'Can mark their own daily attendance only — cannot mark student attendance'
+  },
+  {
+    key: 'assignHomework',
+    label: 'Assign Homework',
+    desc: 'Can assign homework for the classes they are assigned to as a subject teacher'
+  },
+  {
+    key: 'viewSubjectStudents',
+    label: 'View Subject Class Students',
+    desc: 'Can view students of the classes they go to as a subject teacher (assigned in Classes module)'
+  },
+  {
+    key: 'enterExamMarks',
+    label: 'Enter Subject Exam Marks',
+    desc: 'Can enter marks for their subject across all classes assigned to them as subject teacher — can select class and enter marks'
+  },
+  {
+    key: 'viewTimetable',
+    label: 'View Timetable',
+    desc: 'Can view their own timetable and the class-wise overall school timetable'
+  },
+];
+
+function PermToggle({ checked, onChange }) {
+  return (
+    <div onClick={onChange} style={{
+      width: 44, height: 24, borderRadius: 12, cursor: 'pointer', flexShrink: 0,
+      background: checked ? 'var(--primary)' : '#cbd5e1',
+      position: 'relative', transition: 'background 0.2s'
+    }}>
+      <div style={{
+        position: 'absolute', top: 3, left: checked ? 23 : 3,
+        width: 18, height: 18, borderRadius: '50%', background: 'white',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s'
+      }} />
+    </div>
+  );
+}
+
+function PermissionCard({ icon: Icon, title, subtitle, color, bg, perms, permDefs, onChange }) {
+  const enabledCount = perms ? Object.values(perms).filter(Boolean).length : 0;
+  const total = permDefs.length;
+  return (
+    <div className="card" style={{ padding: 0, overflow: 'hidden', flex: '1 1 0', minWidth: 320 }}>
+      {/* Header */}
+      <div style={{ padding: '18px 20px', background: bg, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ width: 40, height: 40, borderRadius: 10, background: color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Icon size={20} color={color} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{title}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{subtitle}</div>
+        </div>
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color }}>{enabledCount}/{total}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>enabled</div>
+        </div>
+      </div>
+
+      {/* Permission rows */}
+      <div style={{ padding: '8px 0' }}>
+        {permDefs.map((p, i) => {
+          const isOn = perms?.[p.key] ?? true;
+          return (
+            <div key={p.key} style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '12px 20px',
+              borderBottom: i < permDefs.length - 1 ? '1px solid #f1f5f9' : 'none',
+              background: isOn ? 'white' : '#f8fafc',
+              transition: 'background 0.15s'
+            }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: isOn ? 'var(--text-primary)' : 'var(--text-muted)' }}>{p.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{p.desc}</div>
+              </div>
+              <PermToggle checked={isOn} onChange={() => onChange(p.key, !isOn)} />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Enable all / Disable all footer */}
+      <div style={{ padding: '10px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, background: '#f8fafc' }}>
+        <button type="button" className="btn btn-secondary btn-sm"
+          onClick={() => permDefs.forEach(p => onChange(p.key, true))}>
+          Enable All
+        </button>
+        <button type="button" className="btn btn-secondary btn-sm"
+          onClick={() => permDefs.forEach(p => onChange(p.key, false))}>
+          Disable All
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TeacherRolesSettings() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
+  const school = data?.school;
+
+  const defaultPerms = (defs, saved) => {
+    const out = {};
+    defs.forEach(p => { out[p.key] = saved?.[p.key] ?? true; });
+    return out;
+  };
+
+  const [classTeacherPerms, setClassTeacherPerms] = useState(null);
+  const [subjectTeacherPerms, setSubjectTeacherPerms] = useState(null);
+
+  // Populate once school loads
+  useState(() => {}, []); // avoid stale closure — use effect-like pattern below
+
+  const savedCT = school?.teacherPermissions?.classTeacher;
+  const savedST = school?.teacherPermissions?.subjectTeacher;
+
+  const ctPerms = classTeacherPerms ?? defaultPerms(CLASS_TEACHER_PERMS, savedCT);
+  const stPerms = subjectTeacherPerms ?? defaultPerms(SUBJECT_TEACHER_PERMS, savedST);
+
+  const updateCT = (key, val) => setClassTeacherPerms(prev => ({ ...(prev ?? defaultPerms(CLASS_TEACHER_PERMS, savedCT)), [key]: val }));
+  const updateST = (key, val) => setSubjectTeacherPerms(prev => ({ ...(prev ?? defaultPerms(SUBJECT_TEACHER_PERMS, savedST)), [key]: val }));
+
+  const saveMutation = useMutation({
+    mutationFn: () => api.put('/school', {
+      teacherPermissions: { classTeacher: ctPerms, subjectTeacher: stPerms }
+    }),
+    onSuccess: () => { qc.invalidateQueries(['school']); toast.success('Teacher permissions saved!'); },
+    onError: () => toast.error('Failed to save')
+  });
+
+  if (isLoading) return <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>;
+
+  return (
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Teacher Roles & Permissions</h2>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+          Control what class teachers and subject teachers can access in their portal.
+          Changes apply school-wide immediately after saving.
+        </p>
+      </div>
+
+      {/* Info banner */}
+      <div style={{
+        display: 'flex', gap: 12, padding: '12px 16px', borderRadius: 10,
+        background: '#eff6ff', border: '1px solid #bfdbfe', marginBottom: 20, alignItems: 'flex-start'
+      }}>
+        <ShieldCheck size={18} color="#1a56e8" style={{ flexShrink: 0, marginTop: 1 }} />
+        <div style={{ fontSize: 13, color: '#1e40af' }}>
+            <strong>Class Teacher</strong> is assigned per class in the Classes module (Class Teacher field).{' '}
+          <strong>Subject Teacher</strong> is assigned via Subject Teachers mapping per class (also in Classes module).{' '}
+          An employee can be both — they get class teacher access for their class and subject teacher access for other classes they visit.
+          Login credentials are automatically emailed when a new employee is added.
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
+        <PermissionCard
+          icon={GraduationCap}
+          title="Class Teacher"
+          subtitle="Manages their assigned class + teaches subjects in other classes"
+          color="#1a56e8"
+          bg="#f0f7ff"
+          perms={ctPerms}
+          permDefs={CLASS_TEACHER_PERMS}
+          onChange={updateCT}
+        />
+        <PermissionCard
+          icon={BookOpen}
+          title="Subject Teacher"
+          subtitle="Visits multiple classes to teach their subject — no class management access"
+          color="#7c3aed"
+          bg="#f5f3ff"
+          perms={stPerms}
+          permDefs={SUBJECT_TEACHER_PERMS}
+          onChange={updateST}
+        />
+      </div>
+
+      <button className="btn btn-primary" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+        {saveMutation.isPending ? 'Saving...' : 'Save Permissions'}
+      </button>
     </div>
   );
 }

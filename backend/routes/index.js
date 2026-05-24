@@ -27,6 +27,8 @@ const School = require('../models/School');
 const User = require('../models/User');
 const Student = require('../models/Student');
 const Employee = require('../models/Employee');
+const Attendance = require('../models/Attendance');
+const Leave = require('../models/Leave');
 const { v4: uuidv4 } = require('uuid');
 
 // Multer setup
@@ -231,7 +233,12 @@ router.get('/classes', protect, checkSubscription, async (req, res) => {
     const { academicYear } = req.query;
     const query = { school: req.user.school };
     if (academicYear) query.academicYear = academicYear;
-    const classes = await Class.find(query).populate('classTeacher', 'name').populate('subjects', 'name code color').sort({ name: 1, section: 1 });
+    const classes = await Class.find(query)
+      .populate('classTeacher', 'name')
+      .populate('subjects', 'name code color')
+      .populate('subjectTeachers.subject', 'name code color')
+      .populate('subjectTeachers.teacher', 'name designation')
+      .sort({ name: 1, section: 1 });
     // Add student count
     const Student = require('../models/Student');
     const classesWithCount = await Promise.all(classes.map(async (cls) => {
@@ -248,8 +255,8 @@ router.post('/classes', protect, checkSubscription, authorize('admin', 'correspo
     const y = now.getFullYear();
     const defaultYear = now.getMonth() >= 5 ? `${y}-${String(y + 1).slice(-2)}` : `${y - 1}-${String(y).slice(-2)}`;
     const academicYear = req.body.academicYear || school.academicYear?.current || defaultYear;
-    const { subjects, ...rest } = req.body;
-    const cls = await Class.create({ ...rest, subjects: subjects || [], school: req.user.school, academicYear });
+    const { subjects, subjectTeachers, ...rest } = req.body;
+    const cls = await Class.create({ ...rest, subjects: subjects || [], subjectTeachers: subjectTeachers || [], school: req.user.school, academicYear });
     if (subjects?.length) {
       await Subject.updateMany({ _id: { $in: subjects } }, { $addToSet: { classes: cls._id } });
     }
@@ -258,10 +265,11 @@ router.post('/classes', protect, checkSubscription, authorize('admin', 'correspo
 });
 router.put('/classes/:id', protect, checkSubscription, async (req, res) => {
   try {
-    const { name, section, capacity, room, classTeacher, academicYear, fees, subjects } = req.body;
+    const { name, section, capacity, room, classTeacher, academicYear, fees, subjects, subjectTeachers } = req.body;
     const $set = { name, section, capacity, room, academicYear };
     if (fees) $set.fees = fees;
     if (subjects !== undefined) $set.subjects = subjects;
+    if (subjectTeachers !== undefined) $set.subjectTeachers = subjectTeachers;
     const $unset = {};
     if (classTeacher) $set.classTeacher = classTeacher; else $unset.classTeacher = '';
     const update = Object.keys($unset).length ? { $set, $unset } : { $set };
@@ -791,6 +799,78 @@ router.put('/users/:id/toggle-status', protect, authorize('admin', 'corresponden
     user.isActive = !user.isActive;
     await user.save();
     res.json({ success: true, user });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ─── Teacher profile (class/subject assignments + permissions) ─────────────────
+const teacherCtrl = require('../controllers/teacherController');
+router.get('/teacher/my-profile', protect, authorize('teacher', 'principal'), teacherCtrl.getMyProfile);
+
+// ─── Leave Requests ────────────────────────────────────────────────────────────
+
+// Teacher: submit leave
+router.post('/leaves', protect, authorize('teacher', 'principal', 'admin', 'correspondent'), async (req, res) => {
+  try {
+    const emp = await Employee.findOne({ user: req.user._id, school: req.user.school });
+    if (!emp) return res.status(404).json({ success: false, message: 'Employee not found' });
+    const { leaveType, fromDate, toDate, days, reason } = req.body;
+    const leave = await Leave.create({
+      school: req.user.school, employee: emp._id, user: req.user._id,
+      leaveType, fromDate, toDate, days: Number(days), reason
+    });
+    res.status(201).json({ success: true, leave });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Teacher: my leave history
+router.get('/leaves/my-leaves', protect, async (req, res) => {
+  try {
+    const leaves = await Leave.find({ user: req.user._id, school: req.user.school })
+      .sort({ createdAt: -1 });
+    res.json({ success: true, leaves });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Admin: all leaves
+router.get('/leaves', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const { status } = req.query;
+    const query = { school: req.user.school };
+    if (status) query.status = status;
+    const leaves = await Leave.find(query)
+      .populate('employee', 'name employeeId')
+      .sort({ createdAt: -1 });
+    res.json({ success: true, leaves });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Admin: approve/reject leave
+router.put('/leaves/:id', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const { status, adminNote } = req.body;
+    const leave = await Leave.findOne({ _id: req.params.id, school: req.user.school })
+      .populate('employee');
+    if (!leave) return res.status(404).json({ success: false, message: 'Leave not found' });
+
+    leave.status = status;
+    if (adminNote) leave.adminNote = adminNote;
+    if (status === 'approved') {
+      leave.approvedBy = req.user._id;
+      leave.approvedAt = new Date();
+
+      // Auto-mark attendance as 'leave' for each date in range
+      const start = new Date(leave.fromDate);
+      const end = new Date(leave.toDate);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        await Attendance.findOneAndUpdate(
+          { school: req.user.school, employee: leave.employee._id, date: new Date(d) },
+          { status: 'leave', markedBy: req.user._id },
+          { upsert: true, new: true }
+        );
+      }
+    }
+    await leave.save();
+    res.json({ success: true, leave });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 

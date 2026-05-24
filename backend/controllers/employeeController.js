@@ -54,21 +54,25 @@ const createEmployee = async (req, res) => {
       employee.user = user._id;
       await employee.save();
 
-      // Send invitation
-      const portalUrl = `${process.env.CLIENT_URL}?school=${school.code}`;
-      if (req.body.email) {
-        await sendEmail(invitationEmail(req.body.name, req.body.email, tempPassword, portalUrl, userRole));
+      // Send invitation email with login credentials (only if sendInvite !== false)
+      const portalUrl = `${process.env.CLIENT_URL}`;
+      let emailSent = false;
+      if (req.body.sendInvite !== false && req.body.email) {
+        const emailResult = await sendEmail(invitationEmail(req.body.name, req.body.email, tempPassword, portalUrl, userRole, school.name));
+        emailSent = emailResult.success;
+        if (!emailResult.success) console.warn('Invitation email failed:', emailResult.error);
       }
       if (req.body.phone) {
         await sendSMS(schoolId, req.body.phone, 'invitation',
           [req.body.name, portalUrl, req.body.email, tempPassword],
           school.language, { employee: employee._id }
-        );
+        ).catch(e => console.warn('SMS failed:', e.message));
       }
+      employee._emailSent = emailSent; // pass to response
     }
 
     const populated = await Employee.findById(employee._id).populate('subjects', 'name');
-    res.status(201).json({ success: true, employee: populated });
+    res.status(201).json({ success: true, employee: populated, emailSent: employee._emailSent ?? null });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -115,12 +119,31 @@ const getEmployee = async (req, res) => {
 // Update employee
 const updateEmployee = async (req, res) => {
   try {
+    const { sendInvite, ...updateData } = req.body;
+
     const employee = await Employee.findOneAndUpdate(
       { _id: req.params.id, school: req.user.school },
-      req.body, { new: true }
+      updateData, { new: true }
     ).populate('subjects', 'name code');
     if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
-    res.json({ success: true, employee });
+
+    let emailSent = null;
+    if (sendInvite === true && employee.user) {
+      // Generate new temp password and reset user account
+      const school = await School.findById(req.user.school);
+      const tempPassword = `Temp@${uuidv4().slice(0, 6)}`;
+      const userDoc = await User.findById(employee.user);
+      if (userDoc) {
+        userDoc.password = tempPassword;
+        await userDoc.save();
+        const portalUrl = `${process.env.CLIENT_URL}`;
+        const emailResult = await sendEmail(invitationEmail(employee.name, userDoc.email, tempPassword, portalUrl, userDoc.role, school.name));
+        emailSent = emailResult.success;
+        if (!emailResult.success) console.warn('Resend invite email failed:', emailResult.error);
+      }
+    }
+
+    res.json({ success: true, employee, emailSent });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

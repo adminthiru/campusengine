@@ -66,6 +66,7 @@ export default function Employees() {
   // Form states
   const [formTab, setFormTab] = useState('personal');
   const [employeeStatus, setEmployeeStatus] = useState('active');
+  const [sendInvite, setSendInvite] = useState(true);
   const [profilePreview, setProfilePreview] = useState(null);
   const imgInputRef = useRef(null);
 
@@ -88,13 +89,26 @@ export default function Employees() {
 
   const createMutation = useMutation({
     mutationFn: (d) => api.post('/employees', d),
-    onSuccess: () => { qc.invalidateQueries(['employees']); toast.success('Employee added! Login credentials sent.'); closeModal(); },
+    onSuccess: (res) => {
+      qc.invalidateQueries(['employees']);
+      if (res.emailSent === true) toast.success('Employee added! Login credentials emailed successfully.');
+      else if (res.emailSent === false && sendInvite) { toast.success('Employee added!'); toast.error('Invitation email failed — check Gmail App Password in server .env', { duration: 7000 }); }
+      else toast.success('Employee added!');
+      closeModal();
+    },
     onError: (err) => toast.error(err.message || 'Failed')
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => api.put(`/employees/${id}`, data),
-    onSuccess: (res) => { qc.invalidateQueries(['employees']); toast.success('Employee updated!'); setViewEmployee(res.employee || res); closeModal(); },
+    onSuccess: (res) => {
+      qc.invalidateQueries(['employees']);
+      if (res.emailSent === true) toast.success('Employee updated! Login credentials resent successfully.');
+      else if (res.emailSent === false && sendInvite) { toast.success('Employee updated!'); toast.error('Invite email failed — check Gmail App Password in server .env', { duration: 7000 }); }
+      else toast.success('Employee updated!');
+      setViewEmployee(res.employee || res);
+      closeModal();
+    },
     onError: (err) => toast.error(err.message || 'Failed to update employee')
   });
 
@@ -116,6 +130,7 @@ export default function Employees() {
     setFormTab('personal');
     setEmployeeStatus(emp.status || 'active');
     setProfilePreview(emp.photo || null);
+    setSendInvite(false);
 
     const nameParts = (emp.name || '').split(' ');
     reset({
@@ -173,6 +188,7 @@ export default function Employees() {
     setFormTab('personal');
     setEmployeeStatus('active');
     setProfilePreview(null);
+    setSendInvite(true);
     setAcademics([]);
     setExperience([]);
     setEmergency([]);
@@ -199,8 +215,8 @@ export default function Employees() {
       experience,
       emergencyContacts: emergency,
       documents,
-      // Mapping fields if needed for backward compatibility
       phone: data.phone || data.mobile,
+      sendInvite,
     };
 
     if (editEmployee) {
@@ -238,7 +254,7 @@ export default function Employees() {
           profilePreview={profilePreview} setProfilePreview={setProfilePreview} imgInputRef={imgInputRef}
           academics={academics} setAcademics={setAcademics} experience={experience} setExperience={setExperience}
           emergency={emergency} setEmergency={setEmergency} documents={documents} setDocuments={setDocuments}
-          roles={roles}
+          roles={roles} sendInvite={sendInvite} setSendInvite={setSendInvite}
         />
       </>
     );
@@ -378,7 +394,7 @@ export default function Employees() {
         experience={experience} setExperience={setExperience}
         emergency={emergency} setEmergency={setEmergency}
         documents={documents} setDocuments={setDocuments}
-        roles={roles}
+        roles={roles} sendInvite={sendInvite} setSendInvite={setSendInvite}
       />
 
 
@@ -406,7 +422,8 @@ function AddEditEmployeeModal({
   control, employeeStatus, setEmployeeStatus,
   profilePreview, setProfilePreview, imgInputRef,
   academics, setAcademics, experience, setExperience,
-  emergency, setEmergency, documents, setDocuments, roles
+  emergency, setEmergency, documents, setDocuments, roles,
+  sendInvite, setSendInvite
 }) {
   const watched = useWatch({
     control,
@@ -570,6 +587,15 @@ function AddEditEmployeeModal({
                 <label className="form-label">Email <span style={{ color: '#ef4444' }}>*</span></label>
                 <input className="form-control" type="email" {...register('email', { required: 'Required' })} placeholder="email@example.com" />
                 {errors.email && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.email.message}</p>}
+                <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8, cursor: 'pointer', userSelect: 'none' }}>
+                  <input
+                    type="checkbox"
+                    checked={sendInvite}
+                    onChange={e => setSendInvite(e.target.checked)}
+                    style={{ width: 15, height: 15, accentColor: 'var(--primary)', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Send login credentials to this email</span>
+                </label>
               </div>
               <div className="form-group">
                 <label className="form-label">Phone Number <span style={{ color: '#ef4444' }}>*</span></label>

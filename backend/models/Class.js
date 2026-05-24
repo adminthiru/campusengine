@@ -21,6 +21,10 @@ const classSchema = new mongoose.Schema({
     lateFeePerDay: { type: Number, default: 0 }
   },
   subjects: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Subject' }],
+  subjectTeachers: [{
+    subject: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject' },
+    teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }
+  }],
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 

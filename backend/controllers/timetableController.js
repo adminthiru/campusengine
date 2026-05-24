@@ -130,7 +130,9 @@ const getTimetable = async (req, res) => {
 
     if (teacherId) {
       // Get all classes where this teacher is assigned
-      const allTT = await Timetable.find({ school: req.user.school, academicYear, isActive: true })
+      const ttQuery = { school: req.user.school, isActive: true };
+      if (academicYear) ttQuery.academicYear = academicYear;
+      const allTT = await Timetable.find(ttQuery)
         .populate('class', 'name section')
         .populate('schedule.periods.subject', 'name color')
         .populate('schedule.periods.teacher', 'name');

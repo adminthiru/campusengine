@@ -14,6 +14,7 @@ export function Classes() {
   const [editClass, setEditClass] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
   const [selectedSubjects, setSelectedSubjects] = useState([]);
+  const [subjectTeacherMap, setSubjectTeacherMap] = useState({});
   const [orderedClasses, setOrderedClasses] = useState([]);
   const [draggingIdx, setDraggingIdx] = useState(null);
   const dragItem = useRef(null);
@@ -86,6 +87,13 @@ export function Classes() {
       'fees.feeType': cls.fees?.feeType || 'yearly', 'fees.lateFee': cls.fees?.lateFee
     });
     setSelectedSubjects(cls.subjects?.map(s => s._id || s) || []);
+    const map = {};
+    (cls.subjectTeachers || []).forEach(st => {
+      const subId = st.subject?._id || st.subject;
+      const teachId = st.teacher?._id || st.teacher;
+      if (subId && teachId) map[subId] = teachId;
+    });
+    setSubjectTeacherMap(map);
     setShowModal(true);
   };
 
@@ -99,7 +107,7 @@ export function Classes() {
           <h1 className="page-title">Classes</h1>
           <p className="page-subtitle">{orderedClasses.length} classes configured</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setEditClass(null); reset(); setSelectedSubjects([]); setShowModal(true); }}>
+        <button className="btn btn-primary" onClick={() => { setEditClass(null); reset(); setSelectedSubjects([]); setSubjectTeacherMap({}); setShowModal(true); }}>
           <Plus size={16} /> Add Class
         </button>
       </div>
@@ -180,7 +188,10 @@ export function Classes() {
           <button className="btn btn-secondary" onClick={() => { setShowModal(false); setEditClass(null); }}>Cancel</button>
           <button className="btn btn-primary" onClick={handleSubmit(d => {
             if (!d.classTeacher) delete d.classTeacher;
-            createMutation.mutate({ ...d, subjects: selectedSubjects });
+            const subjectTeachers = Object.entries(subjectTeacherMap)
+              .filter(([, teachId]) => teachId)
+              .map(([subId, teachId]) => ({ subject: subId, teacher: teachId }));
+            createMutation.mutate({ ...d, subjects: selectedSubjects, subjectTeachers });
           })}>
             {createMutation.isLoading ? 'Saving...' : editClass ? 'Update Class' : 'Add Class'}
           </button>
@@ -244,6 +255,7 @@ export function Classes() {
                 </span>
               )}
             </label>
+
             <div style={{
               display: 'flex', flexWrap: 'wrap', gap: 8, padding: '10px 12px',
               border: '1px solid var(--border)', borderRadius: 8, background: 'white',
@@ -271,6 +283,40 @@ export function Classes() {
               })}
             </div>
           </div>
+
+          {selectedSubjects.length > 0 && (
+            <div className="form-group">
+              <label className="form-label">Subject Teachers</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {allSubjects.filter(s => selectedSubjects.includes(s._id)).map(sub => (
+                  <div key={sub._id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{
+                      minWidth: 150, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
+                      borderLeft: `3px solid ${sub.color || 'var(--primary)'}`, paddingLeft: 8,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0
+                    }}>
+                      {sub.name}{sub.code ? ` · ${sub.code}` : ''}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <Select
+                        options={teachers.map(t => ({ value: t._id, label: t.name, designation: t.designation }))}
+                        value={subjectTeacherMap[sub._id] || ''}
+                        onChange={val => setSubjectTeacherMap(prev => ({ ...prev, [sub._id]: val }))}
+                        placeholder="Assign teacher..."
+                        isClearable
+                        formatOptionLabel={opt => (
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 500 }}>{opt.label}</div>
+                            {opt.designation && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{opt.designation}</div>}
+                          </div>
+                        )}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </form>
       </Modal>
 
