@@ -554,25 +554,25 @@ router.delete('/transport/:id', protect, authorize('admin', 'correspondent'), as
 });
 
 // ============== SMS ==============
-router.get('/sms/logs', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
-  try {
-    const logs = await SmsLog.find({ school: req.user.school }).sort({ createdAt: -1 }).limit(100);
-    res.json({ success: true, logs });
-  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
-});
-router.post('/sms/send', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
-  try {
-    const { to, message, type } = req.body;
-    const { sendSMS } = require('../utils/sms');
-    const school = await School.findById(req.user.school);
-    // Custom message send
-    const twilio = require('twilio');
-    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-    await client.messages.create({ body: message, from: process.env.TWILIO_PHONE_NUMBER, to: to.startsWith('+') ? to : `+91${to}` });
-    await SmsLog.create({ school: req.user.school, to, message, type: type || 'general', status: 'sent', sentAt: new Date() });
-    res.json({ success: true });
-  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
-});
+const smsCtrl = require('../controllers/smsController');
+router.get('/sms/settings', protect, authorize('admin', 'correspondent'), smsCtrl.getSettings);
+router.put('/sms/settings', protect, authorize('admin', 'correspondent'), smsCtrl.updateSettings);
+router.post('/sms/test', protect, authorize('admin', 'correspondent'), smsCtrl.testSms);
+router.get('/sms/templates', protect, authorize('admin', 'correspondent', 'principal'), smsCtrl.getTemplates);
+router.post('/sms/templates', protect, authorize('admin', 'correspondent'), smsCtrl.createTemplate);
+router.put('/sms/templates/:id', protect, authorize('admin', 'correspondent'), smsCtrl.updateTemplate);
+router.delete('/sms/templates/:id', protect, authorize('admin', 'correspondent'), smsCtrl.deleteTemplate);
+router.post('/sms/send', protect, authorize('admin', 'correspondent', 'principal'), smsCtrl.sendBulk);
+router.get('/sms/batches', protect, authorize('admin', 'correspondent', 'principal'), smsCtrl.getBatches);
+router.get('/sms/batches/:id/logs', protect, authorize('admin', 'correspondent', 'principal'), smsCtrl.getBatchLogs);
+router.get('/sms/scheduled', protect, authorize('admin', 'correspondent', 'principal'), smsCtrl.getScheduled);
+router.delete('/sms/scheduled/:id', protect, authorize('admin', 'correspondent'), smsCtrl.cancelScheduled);
+router.get('/sms/logs', protect, authorize('admin', 'correspondent', 'principal'), smsCtrl.getLogs);
+router.get('/sms/stats', protect, authorize('admin', 'correspondent', 'principal'), smsCtrl.getStats);
+router.post('/sms/logs/:id/retry', protect, authorize('admin', 'correspondent'), smsCtrl.retryMessage);
+router.post('/sms/otp/send', smsCtrl.sendOTPCtrl);
+router.post('/sms/otp/verify', smsCtrl.verifyOTPCtrl);
+router.post('/sms/webhook', smsCtrl.twilioWebhook);
 
 // ============== HOMEWORK ==============
 router.get('/homework', protect, checkSubscription, async (req, res) => {
@@ -753,7 +753,7 @@ router.post('/homework/:id/notify', protect, checkSubscription, authorize('admin
           const msg = school.language === 'ta'
             ? `${hw.class.name} ${hw.class.section} வகுப்பிற்கு வீட்டுப்பாடம்: ${hw.title}. கடைசி தேதி: ${dueStr}.`
             : `Homework for ${hw.class.name} ${hw.class.section}: ${hw.title}. Due: ${dueStr}.`;
-          try { await sendSMS(guardian.phone, msg, 'homework', req.user.school); sent++; } catch {}
+          try { await sendSMS(req.user.school, guardian.phone, 'homework', [hw.title], school.language || 'en'); sent++; } catch {}
         }
       }
     }

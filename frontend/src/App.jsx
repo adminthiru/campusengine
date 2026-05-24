@@ -19,42 +19,9 @@ import Homework from './pages/admin/Homework';
 import Transport from './pages/admin/Transport';
 import IDCards from './pages/admin/IDCards';
 import Settings from './pages/admin/Settings';
+import SMS from './pages/admin/SMS';
 import { SuperAdminDashboard } from './pages/superadmin/Dashboard';
 import { TeacherDashboard, MySalary, MyTasks, StudentDashboard, ParentDashboard } from './pages/portals/index';
-import { useQuery } from '@tanstack/react-query';
-import api from './utils/api';
-import { PageLoader, StatusBadge } from './components/ui';
-import { format } from 'date-fns';
-
-function SMSLogs() {
-  const { data, isLoading } = useQuery({ queryKey: ['sms-logs'], queryFn: () => api.get('/sms/logs') });
-  const logs = data?.logs || [];
-  if (isLoading) return <PageLoader />;
-  return (
-    <div>
-      <div className="page-header"><h1 className="page-title">SMS Logs</h1><p className="page-subtitle">{logs.length} messages</p></div>
-      <div className="card" style={{ padding: 0 }}>
-        <div className="table-container">
-          <table>
-            <thead><tr><th>To</th><th>Type</th><th>Message</th><th>Status</th><th>Sent At</th></tr></thead>
-            <tbody>
-              {logs.map(log => (
-                <tr key={log._id}>
-                  <td style={{ fontSize: 13 }}>{log.to}</td>
-                  <td><span className="badge badge-info" style={{ textTransform: 'capitalize' }}>{log.type}</span></td>
-                  <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.message}</td>
-                  <td><StatusBadge status={log.status} /></td>
-                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{log.sentAt ? format(new Date(log.sentAt), 'dd MMM HH:mm') : '—'}</td>
-                </tr>
-              ))}
-              {logs.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>No SMS logs</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 
 function ProtectedRoute({ children, roles }) {
@@ -107,7 +74,7 @@ export default function App() {
       <Route path="/expenses" element={<ProtectedRoute roles={ADMIN}><Expenses /></ProtectedRoute>} />
       <Route path="/transport" element={<ProtectedRoute roles={ADMIN}><Transport /></ProtectedRoute>} />
       <Route path="/id-cards" element={<ProtectedRoute roles={ADMIN}><IDCards /></ProtectedRoute>} />
-      <Route path="/sms" element={<ProtectedRoute roles={['admin','correspondent','principal']}><SMSLogs /></ProtectedRoute>} />
+      <Route path="/sms" element={<ProtectedRoute roles={['admin','correspondent','principal']}><SMS /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute roles={ALL}><Settings /></ProtectedRoute>} />
       <Route path="/settings/:tab" element={<ProtectedRoute roles={ALL}><Settings /></ProtectedRoute>} />
 

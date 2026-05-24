@@ -62,10 +62,20 @@ const schoolSchema = new mongoose.Schema({
     }]
   },
   smsConfig: {
-    enabled: { type: Boolean, default: true },
+    enabled:          { type: Boolean, default: false },
+    smsEnabled:       { type: Boolean, default: false },
+    whatsappEnabled:  { type: Boolean, default: false },
     twilioSid: String,
     twilioToken: String,
-    twilioPhone: String
+    twilioPhone: String,
+    messagingServiceSid: String,
+    whatsappNumber: String,
+    senderId: String,
+    dltEntityId: String,
+    defaultLanguage: { type: String, default: 'en' },
+    supportedLanguages: { type: [String], default: ['en'] },
+    countryCode: { type: String, default: '+91' },
+    notifications: { type: Object, default: {} }
   },
   leaveTypes: [{
     code:       { type: String },
