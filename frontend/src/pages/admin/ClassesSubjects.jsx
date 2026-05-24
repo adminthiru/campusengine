@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { Plus, Trash2, BookOpen, Users, Edit, GripVertical } from 'lucide-react';
+import { Plus, Trash2, BookOpen, Users, Edit, GripVertical, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, EmptyState, PageLoader, FormRow, StatusBadge, Select } from '../../components/ui';
@@ -12,6 +12,7 @@ export function Classes() {
   const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editClass, setEditClass] = useState(null);
+  const [viewClass, setViewClass] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
   const [selectedSubjects, setSelectedSubjects] = useState([]);
   const [subjectTeacherMap, setSubjectTeacherMap] = useState({});
@@ -142,8 +143,9 @@ export function Classes() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <button className="btn btn-secondary btn-sm btn-icon" onClick={e => { e.stopPropagation(); openEdit(cls); }}><Edit size={14} /></button>
-                  <button className="btn btn-danger btn-sm btn-icon" onClick={e => { e.stopPropagation(); setDeleteId(cls._id); }}><Trash2 size={14} /></button>
+                  <button className="btn btn-secondary btn-sm btn-icon" onClick={e => { e.stopPropagation(); setViewClass(cls); }} title="View details"><Eye size={14} /></button>
+                  <button className="btn btn-secondary btn-sm btn-icon" onClick={e => { e.stopPropagation(); openEdit(cls); }} title="Edit"><Edit size={14} /></button>
+                  <button className="btn btn-danger btn-sm btn-icon" onClick={e => { e.stopPropagation(); setDeleteId(cls._id); }} title="Delete"><Trash2 size={14} /></button>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 16, fontSize: 13, marginBottom: cls.subjects?.length ? 10 : 0 }}>
@@ -181,6 +183,80 @@ export function Classes() {
           ))}
         </div>
       )}
+
+      {/* Class Detail Modal */}
+      <Modal open={!!viewClass} onClose={() => setViewClass(null)} title="Class Details" size="lg"
+        footer={<>
+          <button className="btn btn-secondary" onClick={() => setViewClass(null)}>Close</button>
+          <button className="btn btn-primary" onClick={() => { const c = viewClass; setViewClass(null); openEdit(c); }}>
+            <Edit size={14} /> Edit Class
+          </button>
+        </>}>
+        {viewClass && (
+          <div>
+            {/* Class name header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--primary)' }}>{viewClass.name}</div>
+              {viewClass.section && (
+                <span style={{ fontSize: 14, background: '#eff6ff', color: 'var(--primary)', padding: '3px 10px', borderRadius: 6, fontWeight: 600 }}>
+                  {viewClass.section}
+                </span>
+              )}
+            </div>
+
+            {/* Info grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+              {[
+                { label: 'Class Teacher', value: viewClass.classTeacher?.name || '—' },
+                { label: 'Students', value: `${viewClass.studentCount || 0} / ${viewClass.capacity}` },
+                { label: 'Room', value: viewClass.room || '—' },
+                { label: 'Fee Type', value: viewClass.fees?.feeType ? viewClass.fees.feeType.charAt(0).toUpperCase() + viewClass.fees.feeType.slice(1) : '—' },
+                { label: 'Fee Amount', value: `₹${(viewClass.fees?.yearly || viewClass.fees?.monthly || 0).toLocaleString('en-IN')}` },
+                { label: 'Late Fee / Day', value: viewClass.fees?.lateFee ? `₹${viewClass.fees.lateFee}` : '—' },
+              ].map(item => (
+                <div key={item.label} style={{ background: '#f8fafc', borderRadius: 8, padding: '10px 14px', border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>{item.label}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Subjects & Teachers */}
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+              Subjects & Assigned Teachers ({viewClass.subjects?.length || 0})
+            </div>
+            {viewClass.subjects?.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {viewClass.subjects.map(sub => {
+                  const subId = sub._id || sub;
+                  const assignment = (viewClass.subjectTeachers || []).find(st => String(st.subject?._id || st.subject) === String(subId));
+                  const teacherName = assignment?.teacher?.name || null;
+                  return (
+                    <div key={subId} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '10px 14px', borderRadius: 8, background: '#f8fafc',
+                      border: '1px solid var(--border)', borderLeft: `3px solid ${sub.color || 'var(--primary)'}`
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{sub.name || sub}</span>
+                        {sub.code && <span className="badge badge-secondary" style={{ fontSize: 11 }}>{sub.code}</span>}
+                      </div>
+                      <div style={{ fontSize: 13, color: teacherName ? 'var(--text-secondary)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <Users size={13} />
+                        {teacherName || 'No teacher assigned'}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)', fontSize: 13, background: '#f8fafc', borderRadius: 8, border: '1px solid var(--border)' }}>
+                No subjects assigned to this class
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
 
       <Modal open={showModal} onClose={() => { setShowModal(false); setEditClass(null); reset(); }}
         title={editClass ? 'Edit Class' : 'Add Class'}

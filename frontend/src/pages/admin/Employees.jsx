@@ -112,6 +112,15 @@ export default function Employees() {
     onError: (err) => toast.error(err.message || 'Failed to update employee')
   });
 
+  const resendMutation = useMutation({
+    mutationFn: (id) => api.put(`/employees/${id}`, { sendInvite: true }),
+    onSuccess: (res) => {
+      if (res.emailSent) toast.success('Login credentials resent successfully!');
+      else toast.error('Email failed — check Gmail App Password in server .env', { duration: 6000 });
+    },
+    onError: () => toast.error('Failed to resend credentials'),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id) => api.delete(`/employees/${id}`),
     onSuccess: () => { qc.invalidateQueries(['employees']); toast.success('Employee deleted'); setDeleteId(null); }
@@ -255,6 +264,8 @@ export default function Employees() {
           academics={academics} setAcademics={setAcademics} experience={experience} setExperience={setExperience}
           emergency={emergency} setEmergency={setEmergency} documents={documents} setDocuments={setDocuments}
           roles={roles} sendInvite={sendInvite} setSendInvite={setSendInvite}
+          onResend={() => resendMutation.mutate(editEmployee._id)}
+          isResending={resendMutation.isPending}
         />
       </>
     );
@@ -423,7 +434,7 @@ function AddEditEmployeeModal({
   profilePreview, setProfilePreview, imgInputRef,
   academics, setAcademics, experience, setExperience,
   emergency, setEmergency, documents, setDocuments, roles,
-  sendInvite, setSendInvite
+  sendInvite, setSendInvite, onResend, isResending
 }) {
   const watched = useWatch({
     control,
@@ -481,9 +492,17 @@ function AddEditEmployeeModal({
     <Modal open={open} onClose={onClose} title={editEmployee ? 'Edit Employee' : 'Add New Employee'} size="lg"
       footer={
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', gap: 8 }}>
-          <button className="btn btn-secondary" onClick={() => tabIdx > 0 ? setFormTab(FORM_TABS[tabIdx - 1].key) : onClose()}>
-            {tabIdx > 0 ? <><ChevronLeft size={15} /> Previous</> : 'Cancel'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={() => tabIdx > 0 ? setFormTab(FORM_TABS[tabIdx - 1].key) : onClose()}>
+              {tabIdx > 0 ? <><ChevronLeft size={15} /> Previous</> : 'Cancel'}
+            </button>
+            {editEmployee && (
+              <button type="button" className="btn btn-secondary" onClick={onResend} disabled={isResending}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {isResending ? 'Sending...' : '↺ Resend Credentials'}
+              </button>
+            )}
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {tabIdx < FORM_TABS.length - 1 && (
               <button type="button" className="btn btn-secondary" onClick={() => handleTabSwitch(FORM_TABS[tabIdx + 1].key)}>
@@ -587,13 +606,19 @@ function AddEditEmployeeModal({
                 <label className="form-label">Email <span style={{ color: '#ef4444' }}>*</span></label>
                 <input className="form-control" type="email" {...register('email', { required: 'Required' })} placeholder="email@example.com" />
                 {errors.email && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.email.message}</p>}
-                <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8, cursor: 'pointer', userSelect: 'none' }}>
-                  <input
-                    type="checkbox"
-                    checked={sendInvite}
-                    onChange={e => setSendInvite(e.target.checked)}
-                    style={{ width: 15, height: 15, accentColor: 'var(--primary)', cursor: 'pointer' }}
-                  />
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => setSendInvite(v => !v)}>
+                  <div style={{
+                    width: 40, height: 22, borderRadius: 11, flexShrink: 0,
+                    background: sendInvite ? 'var(--primary)' : '#cbd5e1',
+                    position: 'relative', transition: 'background 0.2s',
+                  }}>
+                    <div style={{
+                      position: 'absolute', top: 2, left: sendInvite ? 20 : 2,
+                      width: 18, height: 18, borderRadius: '50%', background: 'white',
+                      transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    }} />
+                  </div>
                   <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Send login credentials to this email</span>
                 </label>
               </div>
