@@ -123,7 +123,7 @@ const updateEmployee = async (req, res) => {
 
     const employee = await Employee.findOneAndUpdate(
       { _id: req.params.id, school: req.user.school },
-      updateData, { new: true }
+      { $set: updateData }, { new: true }
     ).populate('subjects', 'name code');
     if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
 

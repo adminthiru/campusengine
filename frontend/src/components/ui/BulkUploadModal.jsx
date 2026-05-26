@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { Download, Upload, FileSpreadsheet, CheckCircle, XCircle } from 'lucide-react';
 import { Modal } from './index';
 import api from '../../utils/api';
@@ -42,13 +42,21 @@ export function BulkUploadModal({ open, onClose, type, onSuccess }) {
   const cfg = CONFIG[type] || CONFIG.student;
   const label = type === 'student' ? 'Students' : 'Employees';
 
-  const downloadTemplate = () => {
-    const wb = XLSX.utils.book_new();
-    const wsData = [cfg.headers, cfg.notes, cfg.sample];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws['!cols'] = cfg.headers.map(() => ({ wch: 24 }));
-    XLSX.utils.book_append_sheet(wb, ws, cfg.sheetName);
-    XLSX.writeFile(wb, cfg.filename);
+  const downloadTemplate = async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet(cfg.sheetName);
+    ws.addRow(cfg.headers);
+    ws.addRow(cfg.notes);
+    ws.addRow(cfg.sample);
+    ws.columns = cfg.headers.map(() => ({ width: 24 }));
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = cfg.filename;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleFile = (e) => {
@@ -61,9 +69,20 @@ export function BulkUploadModal({ open, onClose, type, onSuccess }) {
     setUploading(true);
     try {
       const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buf);
+      const ws = wb.worksheets[0];
+
+      const raw = [];
+      ws.eachRow({ includeEmpty: true }, (row) => {
+        // row.values is 1-indexed; slice(1) converts to 0-indexed
+        raw.push(row.values.slice(1).map(v => {
+          if (v === null || v === undefined) return '';
+          if (typeof v === 'object' && v.text) return String(v.text);   // rich text
+          if (typeof v === 'object' && v.result !== undefined) return String(v.result); // formula
+          return String(v);
+        }));
+      });
 
       if (raw.length < 3) {
         toast.error('No data rows found. Please use the downloaded template.');

@@ -332,6 +332,80 @@ router.post('/attendance/employee', protect, checkSubscription, authorize('admin
 router.get('/attendance', protect, checkSubscription, attCtrl.getAttendance);
 router.get('/attendance/summary', protect, checkSubscription, attCtrl.getStudentAttendanceSummary);
 
+// Student day-by-day attendance records for detail view
+router.get('/attendance/student-records', protect, checkSubscription, async (req, res) => {
+  try {
+    const { studentId, month, year } = req.query;
+    if (!studentId) return res.status(400).json({ success: false, message: 'studentId required' });
+    const query = { school: req.user.school, type: 'student', 'records.student': studentId };
+    if (month && year) {
+      query.date = { $gte: new Date(year, month - 1, 1), $lt: new Date(year, month, 1) };
+    }
+    const docs = await Attendance.find(query)
+      .populate('class', 'name section')
+      .populate('subject', 'name')
+      .populate('markedBy', 'name')
+      .sort({ date: 1, period: 1 });
+    const records = docs.map(doc => {
+      const rec = doc.records.find(r => r.student?.toString() === studentId);
+      if (!rec) return null;
+      return {
+        _id: doc._id,
+        date: doc.date,
+        period: doc.period,
+        class: doc.class,
+        subject: doc.subject,
+        markedBy: doc.markedBy,
+        status: rec.status,
+        remarks: rec.remarks || null,
+      };
+    }).filter(Boolean);
+    res.json({ success: true, records });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Employee day-by-day attendance records for detail view
+router.get('/attendance/employee-records', protect, checkSubscription, async (req, res) => {
+  try {
+    const { employeeId, month, year } = req.query;
+    if (!employeeId) return res.status(400).json({ success: false, message: 'employeeId required' });
+    const query = { school: req.user.school, type: 'employee', 'records.employee': employeeId };
+    if (month && year) {
+      query.date = { $gte: new Date(year, month - 1, 1), $lt: new Date(year, month, 1) };
+    }
+    const docs = await Attendance.find(query).populate('markedBy', 'name').sort({ date: 1 });
+    const records = docs.map(doc => {
+      const rec = doc.records.find(r => r.employee?.toString() === employeeId);
+      if (!rec) return null;
+      return { _id: doc._id, date: doc.date, markedBy: doc.markedBy, status: rec.status, remarks: rec.remarks || null };
+    }).filter(Boolean);
+    res.json({ success: true, records });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Employee attendance summary (all-time stats)
+router.get('/attendance/employee-summary', protect, checkSubscription, async (req, res) => {
+  try {
+    const { employeeId } = req.query;
+    if (!employeeId) return res.status(400).json({ success: false, message: 'employeeId required' });
+    const docs = await Attendance.find({ school: req.user.school, type: 'employee', 'records.employee': employeeId });
+    let present = 0, absent = 0, late = 0, halfDay = 0, od = 0, cl = 0, sl = 0;
+    docs.forEach(doc => {
+      const rec = doc.records.find(r => r.employee?.toString() === employeeId);
+      if (!rec) return;
+      if (rec.status === 'present')  present++;
+      else if (rec.status === 'absent')   absent++;
+      else if (rec.status === 'late')     late++;
+      else if (rec.status === 'half_day') halfDay++;
+      else if (rec.status === 'od')  od++;
+      else if (rec.status === 'cl')  cl++;
+      else if (rec.status === 'sl')  sl++;
+    });
+    const total = present + absent + late + halfDay + od + cl + sl;
+    res.json({ success: true, summary: { present, absent, late, halfDay, od, cl, sl, total, percentage: total ? Math.round((present / total) * 100) : 0 } });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // Employee leave balance for a given month (counts CL/SL usage per employee)
 router.get('/attendance/leave-balance', protect, checkSubscription, async (req, res) => {
   try {
@@ -693,6 +767,48 @@ router.post('/homework/:id/submit', protect, async (req, res) => {
       { upsert: true, new: true }
     ).populate('student', 'name admissionNumber');
     res.json({ success: true, submission: sub });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Get all homework + submission status for a specific student
+router.get('/homework/student-summary', protect, checkSubscription, async (req, res) => {
+  try {
+    const Homework = require('../models/Homework');
+    const HomeworkSubmission = require('../models/HomeworkSubmission');
+    const Student = require('../models/Student');
+    const { studentId } = req.query;
+    if (!studentId) return res.status(400).json({ success: false, message: 'studentId required' });
+
+    const student = await Student.findOne({ _id: studentId, school: req.user.school });
+    if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+
+    const homework = await Homework.find({
+      school: req.user.school,
+      $or: [
+        { class: student.currentClass, assignedTo: 'all' },
+        { students: studentId }
+      ]
+    })
+      .populate('class', 'name section')
+      .populate('subject', 'name color')
+      .populate('createdBy', 'name')
+      .sort({ dueDate: -1 });
+
+    const submissions = await HomeworkSubmission.find({
+      school: req.user.school,
+      student: studentId,
+      homework: { $in: homework.map(h => h._id) }
+    });
+
+    const subMap = {};
+    submissions.forEach(s => { subMap[s.homework.toString()] = s; });
+
+    const result = homework.map(hw => ({
+      ...hw.toObject(),
+      submission: subMap[hw._id.toString()] || null
+    }));
+
+    res.json({ success: true, homework: result });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 

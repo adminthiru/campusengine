@@ -24,11 +24,6 @@ const EMPLOYEE_COLS = [
   { key: 'city', label: 'City', default: false },
   { key: 'state', label: 'State', default: false },
   { key: 'country', label: 'Country', default: false },
-  { key: 'salaryType', label: 'Salary Type', default: false },
-  { key: 'basicSalary', label: 'Basic Salary', default: false },
-  { key: 'paymentMode', label: 'Payment Mode', default: false },
-  { key: 'bankName', label: 'Bank Name', default: false },
-  { key: 'accountNumber', label: 'Account Number', default: false },
   { key: 'status', label: 'Status', required: true },
 ];
 
@@ -43,11 +38,25 @@ const FORM_TABS = [
 ];
 
 const DETAIL_TABS = [
-  { key: 'personal', label: 'Personal & Contact' },
-  { key: 'work', label: 'Work & Experience' },
-  { key: 'financial', label: 'Salary & Bank' },
-  { key: 'documents', label: 'Documents' },
+  { key: 'personal',   label: 'Personal & Work' },
+  { key: 'academic',   label: 'Academics, Experience & Docs' },
+  { key: 'emergency',  label: 'Emergency & Bank' },
+  { key: 'attendance', label: 'Attendance' },
 ];
+
+const EMP_STATUS_META = {
+  present:  { label: 'Present',  bg: '#d1fae5', color: '#065f46' },
+  absent:   { label: 'Absent',   bg: '#fee2e2', color: '#991b1b' },
+  late:     { label: 'Late',     bg: '#fef3c7', color: '#92400e' },
+  half_day: { label: 'Half Day', bg: '#dbeafe', color: '#1e40af' },
+  od:       { label: 'OD',       bg: '#f3e8ff', color: '#6b21a8' },
+  cl:       { label: 'CL',       bg: '#e0f2fe', color: '#075985' },
+  sl:       { label: 'SL',       bg: '#fce7f3', color: '#831843' },
+  excused:  { label: 'Excused',  bg: '#f0fdf4', color: '#166534' },
+};
+
+const ATT_MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const ATT_DAY_LABELS  = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
 export default function Employees() {
   const qc = useQueryClient();
@@ -66,7 +75,7 @@ export default function Employees() {
   // Form states
   const [formTab, setFormTab] = useState('personal');
   const [employeeStatus, setEmployeeStatus] = useState('active');
-  const [sendInvite, setSendInvite] = useState(true);
+  const [savedEmployee, setSavedEmployee] = useState(null);
   const [profilePreview, setProfilePreview] = useState(null);
   const imgInputRef = useRef(null);
 
@@ -91,10 +100,8 @@ export default function Employees() {
     mutationFn: (d) => api.post('/employees', d),
     onSuccess: (res) => {
       qc.invalidateQueries(['employees']);
-      if (res.emailSent === true) toast.success('Employee added! Login credentials emailed successfully.');
-      else if (res.emailSent === false && sendInvite) { toast.success('Employee added!'); toast.error('Invitation email failed — check Gmail App Password in server .env', { duration: 7000 }); }
-      else toast.success('Employee added!');
-      closeModal();
+      toast.success('Employee added!');
+      setSavedEmployee(res.employee || res);
     },
     onError: (err) => toast.error(err.message || 'Failed')
   });
@@ -103,9 +110,7 @@ export default function Employees() {
     mutationFn: ({ id, data }) => api.put(`/employees/${id}`, data),
     onSuccess: (res) => {
       qc.invalidateQueries(['employees']);
-      if (res.emailSent === true) toast.success('Employee updated! Login credentials resent successfully.');
-      else if (res.emailSent === false && sendInvite) { toast.success('Employee updated!'); toast.error('Invite email failed — check Gmail App Password in server .env', { duration: 7000 }); }
-      else toast.success('Employee updated!');
+      toast.success('Employee updated!');
       setViewEmployee(res.employee || res);
       closeModal();
     },
@@ -120,6 +125,17 @@ export default function Employees() {
     },
     onError: () => toast.error('Failed to resend credentials'),
   });
+
+  const handleSendInviteToNew = () => {
+    resendMutation.mutate(savedEmployee._id, {
+      onSuccess: (res) => {
+        if (res.emailSent) toast.success('Login credentials sent successfully!');
+        else toast.error('Email failed — check Gmail App Password in server .env', { duration: 6000 });
+        closeModal();
+      },
+      onError: () => { toast.error('Failed to send credentials'); closeModal(); },
+    });
+  };
 
   const deleteMutation = useMutation({
     mutationFn: (id) => api.delete(`/employees/${id}`),
@@ -139,7 +155,6 @@ export default function Employees() {
     setFormTab('personal');
     setEmployeeStatus(emp.status || 'active');
     setProfilePreview(emp.photo || null);
-    setSendInvite(false);
 
     const nameParts = (emp.name || '').split(' ');
     reset({
@@ -197,7 +212,7 @@ export default function Employees() {
     setFormTab('personal');
     setEmployeeStatus('active');
     setProfilePreview(null);
-    setSendInvite(true);
+    setSavedEmployee(null);
     setAcademics([]);
     setExperience([]);
     setEmergency([]);
@@ -225,7 +240,6 @@ export default function Employees() {
       emergencyContacts: emergency,
       documents,
       phone: data.phone || data.mobile,
-      sendInvite,
     };
 
     if (editEmployee) {
@@ -263,7 +277,8 @@ export default function Employees() {
           profilePreview={profilePreview} setProfilePreview={setProfilePreview} imgInputRef={imgInputRef}
           academics={academics} setAcademics={setAcademics} experience={experience} setExperience={setExperience}
           emergency={emergency} setEmergency={setEmergency} documents={documents} setDocuments={setDocuments}
-          roles={roles} sendInvite={sendInvite} setSendInvite={setSendInvite}
+          roles={roles} savedEmployee={savedEmployee}
+          onSendInviteToNew={handleSendInviteToNew}
           onResend={() => resendMutation.mutate(editEmployee._id)}
           isResending={resendMutation.isPending}
         />
@@ -328,11 +343,6 @@ export default function Employees() {
                   {col('city') && <th style={{ whiteSpace: 'nowrap', minWidth: 120 }}>City</th>}
                   {col('state') && <th style={{ whiteSpace: 'nowrap', minWidth: 120 }}>State</th>}
                   {col('country') && <th style={{ whiteSpace: 'nowrap', minWidth: 120 }}>Country</th>}
-                  {col('salaryType') && <th style={{ whiteSpace: 'nowrap', minWidth: 120 }}>Salary Type</th>}
-                  {col('basicSalary') && <th style={{ whiteSpace: 'nowrap', minWidth: 120 }}>Basic Salary</th>}
-                  {col('paymentMode') && <th style={{ whiteSpace: 'nowrap', minWidth: 120 }}>Payment Mode</th>}
-                  {col('bankName') && <th style={{ whiteSpace: 'nowrap', minWidth: 150 }}>Bank Name</th>}
-                  {col('accountNumber') && <th style={{ whiteSpace: 'nowrap', minWidth: 150 }}>Account Number</th>}
                   {col('status') && <th style={{ whiteSpace: 'nowrap', minWidth: 100 }}>Status</th>}
                   <th style={{ position: 'sticky', right: 0, zIndex: 3, background: '#f8fafc', boxShadow: '-2px 0 5px rgba(0,0,0,0.08)', minWidth: 52 }}></th>
                 </tr>
@@ -373,11 +383,6 @@ export default function Employees() {
                     {col('city') && <td style={{ fontSize: 13 }}>{emp.city || '—'}</td>}
                     {col('state') && <td style={{ fontSize: 13 }}>{emp.state || '—'}</td>}
                     {col('country') && <td style={{ fontSize: 13 }}>{emp.country || '—'}</td>}
-                    {col('salaryType') && <td style={{ fontSize: 13 }}>{emp.salary?.salaryType || '—'}</td>}
-                    {col('basicSalary') && <td style={{ fontSize: 13 }}>{emp.salary?.basic ? `₹${emp.salary.basic.toLocaleString('en-IN')}` : '—'}</td>}
-                    {col('paymentMode') && <td style={{ fontSize: 13 }}>{emp.salary?.paymentMode || '—'}</td>}
-                    {col('bankName') && <td style={{ fontSize: 13 }}>{emp.bank?.bankName || '—'}</td>}
-                    {col('accountNumber') && <td style={{ fontSize: 13 }}>{emp.bank?.accountNumber || '—'}</td>}
                     {col('status') && <td><StatusBadge status={emp.status} /></td>}
                     <td style={{ position: 'sticky', right: 0, zIndex: 2, background: 'white', boxShadow: '-2px 0 5px rgba(0,0,0,0.08)' }} onClick={e => e.stopPropagation()}>
                       <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openEdit(emp)}>
@@ -405,7 +410,10 @@ export default function Employees() {
         experience={experience} setExperience={setExperience}
         emergency={emergency} setEmergency={setEmergency}
         documents={documents} setDocuments={setDocuments}
-        roles={roles} sendInvite={sendInvite} setSendInvite={setSendInvite}
+        roles={roles} savedEmployee={savedEmployee}
+        onSendInviteToNew={handleSendInviteToNew}
+        onResend={() => resendMutation.mutate(editEmployee?._id)}
+        isResending={resendMutation.isPending}
       />
 
 
@@ -434,7 +442,7 @@ function AddEditEmployeeModal({
   profilePreview, setProfilePreview, imgInputRef,
   academics, setAcademics, experience, setExperience,
   emergency, setEmergency, documents, setDocuments, roles,
-  sendInvite, setSendInvite, onResend, isResending
+  savedEmployee, onSendInviteToNew, onResend, isResending
 }) {
   const watched = useWatch({
     control,
@@ -448,13 +456,26 @@ function AddEditEmployeeModal({
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = ev => setProfilePreview(ev.target.result);
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 400;
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        setProfilePreview(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.src = ev.target.result;
+    };
     reader.readAsDataURL(file);
   };
 
   const handleDocumentChange = (idx, e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { toast.error('Document must be under 2 MB'); e.target.value = ''; return; }
     const reader = new FileReader();
     reader.onload = ev => {
       setDocuments(docs => docs.map((d, i) => i === idx ? { ...d, fileData: ev.target.result, fileName: file.name } : d));
@@ -490,7 +511,7 @@ function AddEditEmployeeModal({
 
   return (
     <Modal open={open} onClose={onClose} title={editEmployee ? 'Edit Employee' : 'Add New Employee'} size="lg"
-      footer={
+      footer={savedEmployee ? null :
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button className="btn btn-secondary" onClick={() => tabIdx > 0 ? setFormTab(FORM_TABS[tabIdx - 1].key) : onClose()}>
@@ -499,7 +520,12 @@ function AddEditEmployeeModal({
             {editEmployee && (
               <button type="button" className="btn btn-secondary" onClick={onResend} disabled={isResending}
                 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                {isResending ? 'Sending...' : '↺ Resend Credentials'}
+                {isResending ? (
+                  <>
+                    <span style={{ width: 14, height: 14, border: '2px solid #cbd5e1', borderTopColor: 'var(--text-secondary)', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />
+                    Sending...
+                  </>
+                ) : '↺ Resend Credentials'}
               </button>
             )}
           </div>
@@ -521,6 +547,37 @@ function AddEditEmployeeModal({
         </div>
       }
     >
+      {savedEmployee ? (
+        <div style={{ textAlign: 'center', padding: '40px 24px' }}>
+          <div style={{
+            width: 60, height: 60, borderRadius: '50%', background: '#d1fae5',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
+          }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </div>
+          <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>Employee Added!</h3>
+          <p style={{ color: 'var(--text-muted)', margin: '0 0 28px', fontSize: 14 }}>
+            Send login credentials to <strong style={{ color: 'var(--text-primary)' }}>{savedEmployee.email}</strong>?
+          </p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <button className="btn btn-primary" onClick={onSendInviteToNew} disabled={isResending}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {isResending ? (
+                <>
+                  <span style={{ width: 15, height: 15, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />
+                  Sending...
+                </>
+              ) : (
+                <><Mail size={15} /> Send Invite</>
+              )}
+            </button>
+            <button className="btn btn-secondary" onClick={onClose}>Close</button>
+          </div>
+        </div>
+      ) : (
+      <>
       <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', marginBottom: 20, overflowX: 'auto' }}>
         {FORM_TABS.map((tab, i) => {
           const active = formTab === tab.key;
@@ -606,21 +663,6 @@ function AddEditEmployeeModal({
                 <label className="form-label">Email <span style={{ color: '#ef4444' }}>*</span></label>
                 <input className="form-control" type="email" {...register('email', { required: 'Required' })} placeholder="email@example.com" />
                 {errors.email && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.email.message}</p>}
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, cursor: 'pointer', userSelect: 'none' }}
-                  onClick={() => setSendInvite(v => !v)}>
-                  <div style={{
-                    width: 40, height: 22, borderRadius: 11, flexShrink: 0,
-                    background: sendInvite ? 'var(--primary)' : '#cbd5e1',
-                    position: 'relative', transition: 'background 0.2s',
-                  }}>
-                    <div style={{
-                      position: 'absolute', top: 2, left: sendInvite ? 20 : 2,
-                      width: 18, height: 18, borderRadius: '50%', background: 'white',
-                      transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                    }} />
-                  </div>
-                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Send login credentials to this email</span>
-                </label>
               </div>
               <div className="form-group">
                 <label className="form-label">Phone Number <span style={{ color: '#ef4444' }}>*</span></label>
@@ -937,6 +979,8 @@ function AddEditEmployeeModal({
           </>
         )}
       </form>
+      </>
+      )}
     </Modal>
   );
 }
@@ -946,60 +990,81 @@ function EmployeeDetail({ employee, onBack, onDelete, onDownload, onEdit, onTask
   const [activeTab, setActiveTab] = useState('personal');
   const [zoomImage, setZoomImage] = useState(false);
 
+  const phone = employee.phone || employee.mobile;
+  const addressParts = [employee.address, employee.city, employee.state, employee.country].filter(Boolean);
+
   return (
     <div>
-      <div className="page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button className="btn btn-secondary btn-sm" onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <ArrowLeft size={16} /> Back
-          </button>
-          <div>
-            <h1 className="page-title">Employee Details</h1>
-          </div>
-        </div>
+      {/* Page nav */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <button className="btn btn-secondary btn-sm" onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <ArrowLeft size={16} /> Back
+        </button>
         <div style={{ display: 'flex', gap: 8 }}>
           {employee.role === 'maintenance' && (
-            <button className="btn btn-secondary" onClick={() => onTasks(employee)}><ClipboardList size={15} /> Tasks</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => onTasks(employee)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <ClipboardList size={14} /> Tasks
+            </button>
           )}
-          <button className="btn btn-secondary" onClick={() => onEdit(employee)}><Edit size={15} /> Edit</button>
-          <button className="btn btn-secondary" onClick={() => onDownload(employee._id)}><Download size={15} /> Job Offer</button>
-          <button className="btn btn-danger" onClick={() => onDelete(employee._id)}><Trash2 size={15} /> Delete</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => onEdit(employee)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Edit size={14} /> Edit
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={() => onDownload(employee._id)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Download size={14} /> Job Offer
+          </button>
+          <button className="btn btn-danger btn-sm" onClick={() => onDelete(employee._id)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Trash2 size={14} /> Delete
+          </button>
         </div>
       </div>
 
-      {/* Profile card */}
-      <div className="card" style={{ padding: 24, marginBottom: 20 }}>
+      {/* ── Profile header card ── */}
+      <div className="card" style={{ padding: '14px 28px', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
-          <div onClick={() => employee.photo && setZoomImage(true)} style={{ cursor: employee.photo ? 'zoom-in' : 'default' }}>
-            <Avatar src={employee.photo} name={employee.name} size={80} />
+          <div onClick={() => employee.photo && setZoomImage(true)} style={{ cursor: employee.photo ? 'zoom-in' : 'default', flexShrink: 0 }}>
+            <Avatar src={employee.photo} name={employee.name} size={76} />
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
-              <h2 className="text-24-bold">{employee.name}</h2>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
+              <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{employee.name}</h2>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: employee.status === 'active' ? '#10b981' : '#94a3b8', flexShrink: 0 }} title={employee.status} />
               {employee.employeeId && <span className="badge badge-info">{employee.employeeId}</span>}
-              <StatusBadge status={employee.status} />
             </div>
-            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-              {employee.role && <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 14, color: 'var(--text-secondary)', textTransform: 'capitalize' }}><Briefcase size={14} /> {employee.role}</span>}
-              {employee.department && <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Dept: {employee.department}</span>}
-              {employee.phone && <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 14, color: 'var(--text-secondary)' }}><Phone size={14} /> {employee.phone || employee.mobile}</span>}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              {employee.role && (
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5, textTransform: 'capitalize' }}>
+                  <Briefcase size={13} /> {employee.role}
+                </span>
+              )}
+              {employee.department && (
+                <><span style={{ color: '#94a3b8', fontSize: 18, lineHeight: 1, fontWeight: 700 }}>·</span>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Dept: {employee.department}</span></>
+              )}
+              {employee.designation && (
+                <><span style={{ color: '#94a3b8', fontSize: 18, lineHeight: 1, fontWeight: 700 }}>·</span>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{employee.designation}</span></>
+              )}
+              {phone && (
+                <><span style={{ color: '#94a3b8', fontSize: 18, lineHeight: 1, fontWeight: 700 }}>·</span>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><Phone size={12} />{phone}</span></>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Tab bar */}
+      {/* ── Tabs + content card ── */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 28px' }}>
           {DETAIL_TABS.map(tab => {
             const active = activeTab === tab.key;
             return (
               <button key={tab.key} onClick={() => setActiveTab(tab.key)}
                 style={{
-                  padding: '14px 20px', border: 'none', background: 'none', cursor: 'pointer',
+                  padding: '14px 0', marginRight: 32, border: 'none', background: 'none', cursor: 'pointer',
                   borderBottom: active ? '2px solid var(--primary)' : '2px solid transparent',
                   color: active ? 'var(--primary)' : 'var(--text-secondary)',
-                  fontWeight: active ? 600 : 400, fontSize: 14, transition: 'all 0.15s',
+                  fontWeight: active ? 600 : 400, fontSize: 14, transition: 'all 0.15s', whiteSpace: 'nowrap',
                 }}>
                 {tab.label}
               </button>
@@ -1007,146 +1072,352 @@ function EmployeeDetail({ employee, onBack, onDelete, onDownload, onEdit, onTask
           })}
         </div>
 
-        <div style={{ padding: 24 }}>
-          {/* Personal tab */}
+        <div style={{ padding: 28 }}>
+
+          {/* ── Tab 1: Personal & Work ── */}
           {activeTab === 'personal' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24 }}>
-              <div>
-                <SectionTitle>Basic Information</SectionTitle>
-                <DetailRow label="Date of Birth" value={employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString('en-GB') : null} />
-                <DetailRow label="Gender" value={employee.gender} capitalize />
-                <DetailRow label="Blood Group" value={employee.bloodGroup} />
-              </div>
-              <div>
-                <SectionTitle>Contact & Address</SectionTitle>
-                {employee.email && <ContactItem icon={Mail} value={employee.email} />}
-                {(employee.phone || employee.mobile) && <ContactItem icon={Phone} value={employee.phone || employee.mobile} />}
-                {employee.address && <ContactItem icon={MapPin} value={employee.address} />}
-                {employee.city && <DetailRow label="City" value={employee.city} />}
-                {employee.state && <DetailRow label="State" value={employee.state} />}
-                {employee.country && <DetailRow label="Country" value={employee.country} />}
-              </div>
-              <div>
-                <SectionTitle>Emergency Contacts</SectionTitle>
-                {employee.emergencyContacts?.length > 0 ? employee.emergencyContacts.map((contact, i) => (
-                  <div key={i} style={{ marginBottom: 12, padding: 12, background: '#f8fafc', borderRadius: 8 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{contact.name} ({contact.relationship})</div>
-                    <ContactItem icon={Phone} value={contact.contactNumber} />
-                    {contact.alternateContactNumber && <ContactItem icon={Phone} value={contact.alternateContactNumber + ' (Alt)'} />}
-                  </div>
-                )) : <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No emergency contacts added.</p>}
-              </div>
-            </div>
-          )}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1px 260px', gap: 0, alignItems: 'start' }}>
 
-          {/* Work tab */}
-          {activeTab === 'work' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24 }}>
-              <div>
-                <SectionTitle>Employment Details</SectionTitle>
-                <DetailRow label="Employee ID" value={employee.employeeId} />
-                <DetailRow label="Designation" value={employee.designation} />
-                <DetailRow label="Department" value={employee.department} />
-                <DetailRow label="Employment Type" value={employee.employmentType} />
-                <DetailRow label="Date of Joining" value={employee.dateOfJoining ? new Date(employee.dateOfJoining).toLocaleDateString('en-GB') : null} />
-                <DetailRow label="Work Location" value={employee.workLocation} />
-              </div>
-              <div>
-                <SectionTitle>Academics</SectionTitle>
-                {employee.academics?.length > 0 ? employee.academics.map((acad, i) => (
-                  <div key={i} style={{ marginBottom: 12, padding: 12, background: '#f8fafc', borderRadius: 8 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{acad.qualification} in {acad.fieldOfStudy}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{acad.institutionName}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{acad.startYear} - {acad.endYear} • Grade: {acad.grade}</div>
-                  </div>
-                )) : <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No academics added.</p>}
-              </div>
-              <div>
-                <SectionTitle>Experience</SectionTitle>
-                {employee.experience?.length > 0 ? employee.experience.map((exp, i) => (
-                  <div key={i} style={{ marginBottom: 12, padding: 12, background: '#f8fafc', borderRadius: 8 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{exp.designation}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{exp.organizationName}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{exp.startDate ? new Date(exp.startDate).toLocaleDateString('en-GB') : ''} to {exp.endDate ? new Date(exp.endDate).toLocaleDateString('en-GB') : ''}</div>
-                  </div>
-                )) : <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No experience added.</p>}
-              </div>
-            </div>
-          )}
-
-          {/* Financial tab */}
-          {activeTab === 'financial' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24 }}>
-              <div>
-                <SectionTitle>Salary Details</SectionTitle>
-                <DetailRow label="Salary Type" value={employee.salary?.salaryType} />
-                <DetailRow label="Basic Salary" value={employee.salary?.basic ? '₹' + employee.salary.basic.toLocaleString('en-IN') : null} />
-                <DetailRow label="Allowances" value={employee.salary?.allowances ? '₹' + employee.salary.allowances.toLocaleString('en-IN') : null} />
-                <DetailRow label="Deductions" value={employee.salary?.deductions ? '₹' + employee.salary.deductions.toLocaleString('en-IN') : null} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', marginTop: 4, background: '#eff6ff', borderRadius: 8, paddingLeft: 12, paddingRight: 12 }}>
-                  <span className="text-14-bold">Net Salary</span>
-                  <span className="text-14-bold" style={{ color: 'var(--primary)' }}>
-                    ₹{((employee.salary?.basic || 0) + (employee.salary?.allowances || 0) - (employee.salary?.deductions || 0)).toLocaleString('en-IN')}
-                  </span>
+              {/* Left: personal + work details */}
+              <div style={{ paddingRight: 32 }}>
+                <div style={{ marginBottom: 32 }}>
+                  <SectionTitle>Personal Details</SectionTitle>
+                  <DetailRow label="Full Name"     value={employee.name} />
+                  <DetailRow label="Date of Birth" value={employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString('en-GB') : null} />
+                  <DetailRow label="Gender"        value={employee.gender} capitalize />
+                  <DetailRow label="Blood Group"   value={employee.bloodGroup} />
+                  <DetailRow label="Status"        value={employee.status} capitalize />
+                </div>
+                <div>
+                  <SectionTitle>Work Details</SectionTitle>
+                  <DetailRow label="Employee ID"     value={employee.employeeId} />
+                  <DetailRow label="Role"            value={employee.role} capitalize />
+                  <DetailRow label="Designation"     value={employee.designation} />
+                  <DetailRow label="Department"      value={employee.department} />
+                  <DetailRow label="Employment Type" value={employee.employmentType} />
+                  <DetailRow label="Date of Joining" value={employee.dateOfJoining ? new Date(employee.dateOfJoining).toLocaleDateString('en-GB') : null} />
+                  <DetailRow label="Work Location"   value={employee.workLocation} />
                 </div>
               </div>
-              <div>
-                <SectionTitle>Bank Information</SectionTitle>
-                <DetailRow label="Payment Mode" value={employee.salary?.paymentMode} />
-                <DetailRow label="Bank Name" value={employee.bank?.bankName} />
-                <DetailRow label="Account Holder" value={employee.bank?.accountHolderName} />
-                <DetailRow label="Account Number" value={employee.bank?.accountNumber} />
-                <DetailRow label="IFSC Code" value={employee.bank?.ifscCode} />
-                <DetailRow label="Branch Name" value={employee.bank?.branchName} />
-                <DetailRow label="UPI ID" value={employee.bank?.upiId} />
-              </div>
-            </div>
-          )}
 
-          {/* Documents tab */}
-          {activeTab === 'documents' && (
-            <div>
-              <SectionTitle>Uploaded Documents</SectionTitle>
-              {employee.documents?.length > 0 ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
-                  {employee.documents.map((doc, i) => (
-                    <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 8, background: '#eff6ff', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <FileText size={20} />
-                      </div>
-                      <div style={{ overflow: 'hidden' }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{doc.documentType}</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{doc.fileName || 'Uploaded file'}</div>
-                      </div>
+              {/* Vertical divider */}
+              <div style={{ background: 'var(--border)', width: 1, alignSelf: 'stretch' }} />
+
+              {/* Right sidebar: contact + address */}
+              <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 32 }}>
+                {(employee.email || phone) && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Contact</div>
+                    {employee.email && <SidebarItem icon={Mail} value={employee.email} />}
+                    {phone && <SidebarItem icon={Phone} value={phone} />}
+                  </div>
+                )}
+                {addressParts.length > 0 && (
+                  <>
+                    {(employee.email || phone) && <div style={{ borderTop: '1px solid var(--border)', marginBottom: 20 }} />}
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Address</div>
+                      {employee.address && <SidebarItem icon={MapPin} value={employee.address} />}
+                      {(employee.city || employee.state || employee.country) && (
+                        <SidebarRow label="City / State" value={[employee.city, employee.state, employee.country].filter(Boolean).join(', ')} />
+                      )}
                     </div>
-                  ))}
-                </div>
-              ) : <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>No documents uploaded.</p>}
+                  </>
+                )}
+                {!employee.email && !phone && addressParts.length === 0 && (
+                  <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No contact information.</p>
+                )}
+              </div>
             </div>
           )}
+
+          {/* ── Tab 2: Academics, Experience & Docs ── */}
+          {activeTab === 'academic' && (
+            <div>
+              {/* Academics */}
+              <div style={{ marginBottom: 32 }}>
+                <SectionTitle>Academics</SectionTitle>
+                {employee.academics?.length > 0 ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+                    {employee.academics.map((acad, i) => (
+                      <div key={i} style={{ background: '#f8fafc', padding: '14px 16px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
+                          {acad.qualification}{acad.fieldOfStudy ? ` — ${acad.fieldOfStudy}` : ''}
+                        </div>
+                        {acad.institutionName && <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 2 }}>{acad.institutionName}</div>}
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          {acad.startYear && acad.endYear ? `${acad.startYear} – ${acad.endYear}` : acad.startYear || acad.endYear || ''}
+                          {acad.grade ? ` · Grade: ${acad.grade}` : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No academics added.</p>}
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border)', marginBottom: 32 }} />
+
+              {/* Experience */}
+              <div style={{ marginBottom: 32 }}>
+                <SectionTitle>Experience</SectionTitle>
+                {employee.experience?.length > 0 ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+                    {employee.experience.map((exp, i) => (
+                      <div key={i} style={{ background: '#f8fafc', padding: '14px 16px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{exp.designation}</div>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 2 }}>{exp.organizationName}</div>
+                        {exp.employmentType && (
+                          <span style={{ fontSize: 11, background: '#eff6ff', color: 'var(--primary)', padding: '1px 8px', borderRadius: 20, display: 'inline-block', marginBottom: 4 }}>{exp.employmentType}</span>
+                        )}
+                        {exp.skillsUsed && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>Skills: {exp.skillsUsed}</div>}
+                        {(exp.startDate || exp.endDate) && (
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                            {exp.startDate ? new Date(exp.startDate).toLocaleDateString('en-GB') : '—'} → {exp.endDate ? new Date(exp.endDate).toLocaleDateString('en-GB') : 'Present'}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No experience added.</p>}
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border)', marginBottom: 32 }} />
+
+              {/* Documents */}
+              <div>
+                <SectionTitle>Documents</SectionTitle>
+                {employee.documents?.length > 0 ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+                    {employee.documents.map((doc, i) => (
+                      <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 8, background: '#eff6ff', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <FileText size={20} />
+                        </div>
+                        <div style={{ overflow: 'hidden' }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{doc.documentType}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{doc.fileName || 'Uploaded file'}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No documents uploaded.</p>}
+              </div>
+            </div>
+          )}
+
+          {/* ── Tab 4: Attendance ── */}
+          {activeTab === 'attendance' && <EmployeeAttendanceTab employee={employee} />}
+
+          {/* ── Tab 3: Emergency & Bank ── */}
+          {activeTab === 'emergency' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1px 1fr', gap: 0, alignItems: 'start' }}>
+
+              {/* Left: emergency contacts */}
+              <div style={{ paddingRight: 32 }}>
+                <SectionTitle>Emergency Contacts</SectionTitle>
+                {employee.emergencyContacts?.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {employee.emergencyContacts.map((c, i) => (
+                      <div key={i} style={{ background: '#f8fafc', padding: '14px 16px', borderRadius: 10, border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{
+                          width: 44, height: 44, borderRadius: '50%',
+                          background: i === 0 ? 'var(--primary)' : '#64748b',
+                          color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontWeight: 700, fontSize: 17, flexShrink: 0,
+                        }}>
+                          {(c.name || '?').charAt(0).toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{c.name}</span>
+                          </div>
+                          {c.relationship && (
+                            <span style={{ fontSize: 11, background: '#eff6ff', color: 'var(--primary)', padding: '1px 8px', borderRadius: 20, textTransform: 'capitalize' }}>{c.relationship}</span>
+                          )}
+                          {c.address && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{c.address}</div>}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                          {c.contactNumber && <span style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5 }}><Phone size={12} color="var(--text-muted)" /> {c.contactNumber}</span>}
+                          {c.alternateContactNumber && <span style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}><Phone size={11} color="var(--text-muted)" /> {c.alternateContactNumber} (Alt)</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No emergency contacts added.</p>}
+              </div>
+
+              {/* Vertical divider */}
+              <div style={{ background: 'var(--border)', width: 1, alignSelf: 'stretch' }} />
+
+              {/* Right: bank details */}
+              <div style={{ paddingLeft: 32 }}>
+                <SectionTitle>Bank Information</SectionTitle>
+                <DetailRow label="Account Holder" value={employee.bank?.accountHolderName} />
+                <DetailRow label="Bank Name"       value={employee.bank?.bankName} />
+                <DetailRow label="Account Number"  value={employee.bank?.accountNumber} />
+                <DetailRow label="IFSC Code"       value={employee.bank?.ifscCode} />
+                <DetailRow label="Branch"          value={employee.bank?.branchName} />
+                <DetailRow label="UPI ID"          value={employee.bank?.upiId} />
+                <DetailRow label="Payment Mode"    value={employee.salary?.paymentMode} />
+
+                {(employee.salary?.basic || employee.salary?.allowances || employee.salary?.deductions) && (
+                  <>
+                    <div style={{ borderTop: '1px solid var(--border)', margin: '16px 0' }} />
+                    <SectionTitle>Salary</SectionTitle>
+                    <DetailRow label="Salary Type"  value={employee.salary?.salaryType} />
+                    <DetailRow label="Basic"        value={employee.salary?.basic ? '₹' + employee.salary.basic.toLocaleString('en-IN') : null} />
+                    <DetailRow label="Allowances"   value={employee.salary?.allowances ? '₹' + employee.salary.allowances.toLocaleString('en-IN') : null} />
+                    <DetailRow label="Deductions"   value={employee.salary?.deductions ? '₹' + employee.salary.deductions.toLocaleString('en-IN') : null} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', marginTop: 8, background: '#eff6ff', borderRadius: 8 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>Net Salary</span>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--primary)' }}>
+                        ₹{((employee.salary?.basic || 0) + (employee.salary?.allowances || 0) - (employee.salary?.deductions || 0)).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
+
+      {/* Photo zoom overlay */}
       {zoomImage && employee.photo && (
-        <div 
-          onClick={() => setZoomImage(false)}
-          style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)', zIndex: 9999,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'zoom-out'
-          }}
-        >
-          <img 
-            src={employee.photo} 
-            alt={employee.name} 
-            onClick={(e) => e.stopPropagation()}
-            style={{ 
-              width: 320, height: 320, objectFit: 'cover', 
-              borderRadius: '50%', border: '4px solid white',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-              cursor: 'default'
-            }} 
-          />
+        <div onClick={() => setZoomImage(false)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}>
+          <img src={employee.photo} alt={employee.name} onClick={e => e.stopPropagation()} style={{ width: 320, height: 320, objectFit: 'cover', borderRadius: '50%', border: '4px solid white', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', cursor: 'default' }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmployeeAttendanceTab({ employee }) {
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
+
+  const { data: summaryData } = useQuery({
+    queryKey: ['emp-att-summary', employee._id],
+    queryFn: () => api.get(`/attendance/employee-summary?employeeId=${employee._id}`),
+  });
+
+  const { data: recordsData, isLoading } = useQuery({
+    queryKey: ['emp-att-records', employee._id, month, year],
+    queryFn: () => api.get(`/attendance/employee-records?employeeId=${employee._id}&month=${month}&year=${year}`),
+  });
+
+  const summary = summaryData?.summary || {};
+  const records = recordsData?.records || [];
+
+  const dateMap = {};
+  records.forEach(r => {
+    const d = new Date(r.date);
+    dateMap[`${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`] = r.status;
+  });
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstDay = new Date(year, month - 1, 1).getDay();
+  const cells = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  const prevMonth = () => { if (month === 1) { setMonth(12); setYear(y => y - 1); } else setMonth(m => m - 1); };
+  const nextMonth = () => { if (month === 12) { setMonth(1); setYear(y => y + 1); } else setMonth(m => m + 1); };
+
+  return (
+    <div>
+      {/* Summary strip */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+        {[
+          { label: 'Total Days',  value: summary.total ?? '—',      color: 'var(--primary)', bg: '#eff6ff' },
+          { label: 'Present',     value: summary.present ?? '—',    color: '#065f46',        bg: '#d1fae5' },
+          { label: 'Absent',      value: summary.absent ?? '—',     color: '#991b1b',        bg: '#fee2e2' },
+          { label: 'Late',        value: summary.late ?? '—',       color: '#92400e',        bg: '#fef3c7' },
+          { label: 'Attendance %',value: summary.percentage != null ? `${summary.percentage}%` : '—', color: 'var(--primary)', bg: '#eff6ff' },
+        ].map(s => (
+          <div key={s.label} style={{ flex: '1 1 100px', background: s.bg, borderRadius: 10, padding: '12px 16px', minWidth: 90 }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Month navigator */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <button className="btn btn-secondary btn-sm btn-icon" onClick={prevMonth}><ChevronLeft size={15} /></button>
+        <span style={{ fontSize: 15, fontWeight: 600, minWidth: 150, textAlign: 'center' }}>{ATT_MONTH_NAMES[month - 1]} {year}</span>
+        <button className="btn btn-secondary btn-sm btn-icon" onClick={nextMonth}><ChevronRight size={15} /></button>
+      </div>
+
+      {/* Calendar grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 16, maxWidth: 420 }}>
+        {ATT_DAY_LABELS.map(d => (
+          <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', padding: '4px 0', textTransform: 'uppercase' }}>{d}</div>
+        ))}
+        {cells.map((day, i) => {
+          if (!day) return <div key={`e${i}`} />;
+          const status = dateMap[`${year}-${month}-${day}`];
+          const meta = status ? EMP_STATUS_META[status] : null;
+          return (
+            <div key={day} style={{
+              aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: 6, fontSize: 13, fontWeight: meta ? 600 : 400,
+              background: meta ? meta.bg : 'transparent',
+              color: meta ? meta.color : 'var(--text-muted)',
+            }}>
+              {day}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
+        {Object.entries(EMP_STATUS_META).map(([k, v]) => (
+          <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ width: 10, height: 10, borderRadius: 3, background: v.bg, border: `1px solid ${v.color}44` }} />
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{v.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Records table */}
+      {isLoading ? (
+        <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading records…</p>
+      ) : records.length === 0 ? (
+        <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No attendance records for this month.</p>
+      ) : (
+        <div className="table-container">
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                {['Date','Status','Marked By','Remarks'].map(h => (
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {records.map((r, i) => {
+                const meta = EMP_STATUS_META[r.status] || { label: r.status, bg: '#f1f5f9', color: '#334155' };
+                return (
+                  <tr key={r._id || i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '10px 12px', fontWeight: 500 }}>
+                      {new Date(r.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </td>
+                    <td style={{ padding: '10px 12px' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: meta.bg, color: meta.color }}>
+                        {meta.label}
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>{r.markedBy?.name || '—'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>{r.remarks || '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -1171,6 +1442,24 @@ function ContactItem({ icon: Icon, value }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>
       <Icon size={13} style={{ flexShrink: 0 }} /> {value}
+    </div>
+  );
+}
+
+function SidebarItem({ icon: Icon, value }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>
+      <Icon size={13} style={{ flexShrink: 0, marginTop: 2, color: 'var(--text-muted)' }} />
+      <span>{value}</span>
+    </div>
+  );
+}
+
+function SidebarRow({ label, value }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 7 }}>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500, textAlign: 'right', marginLeft: 8 }}>{value}</span>
     </div>
   );
 }

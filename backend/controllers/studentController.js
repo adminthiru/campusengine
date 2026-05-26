@@ -120,6 +120,7 @@ const getStudents = async (req, res) => {
     const students = await Student.find(query)
       .populate('currentClass', 'name section')
       .populate('guardians', 'name relation phone')
+      .populate('transportRoute', 'routeName vehicleType vehicleNumber')
       .sort({ admissionNumber: 1 })
       .skip((page - 1) * limit)
       .limit(Number(limit));
@@ -135,7 +136,8 @@ const getStudent = async (req, res) => {
     const student = await Student.findOne({ _id: req.params.id, school: req.user.school })
       .populate('currentClass', 'name section fees')
       .populate('guardians')
-      .populate('primaryGuardian');
+      .populate('primaryGuardian')
+      .populate('transportRoute', 'routeName vehicleType vehicleNumber');
     if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
     res.json({ success: true, student });
   } catch (err) {
@@ -172,7 +174,9 @@ const updateStudent = async (req, res) => {
 
     const student = await Student.findOneAndUpdate(
       { _id: req.params.id, school: schoolId }, updateData, { new: true }
-    ).populate('currentClass', 'name section').populate('guardians', 'name relation phone');
+    ).populate('currentClass', 'name section')
+      .populate('guardians', 'name relation phone')
+      .populate('transportRoute', 'routeName vehicleType vehicleNumber');
     if (!student) return res.status(404).json({ success: false, message: 'Not found' });
     res.json({ success: true, student });
   } catch (err) {

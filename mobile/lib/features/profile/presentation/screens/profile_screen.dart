@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_dimensions.dart';
 import 'package:skl_teacher/core/theme/theme_provider.dart';
@@ -123,13 +122,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _buildInfoRow(Icons.phone_outlined, 'Mobile Number',
                         authProvider.user?.phone ?? '',
                         isPhone: true),
-                    if ('' != null && ''!.isNotEmpty)
+                    if (''.isNotEmpty)
                       _buildInfoRow(Icons.phone_callback_outlined,
-                          'Alternate Phone', ''!),
+                          'Alternate Phone', ''),
                     _buildInfoRow(
                       Icons.map_outlined,
                       'Address',
-                      [''].where((s) => s != null && s.isNotEmpty).join(', '),
+                      [''].where((s) => s.isNotEmpty).join(', '),
                     ),
                   ],
                 ),
@@ -151,18 +150,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _buildInfoRow(
                       Icons.calendar_today_outlined,
                       'Date of Joining',
-                      null != null
-                          ? DateFormat('dd MMM yyyy').format(null!)
-                          : '—',
+                      '—',
                     ),
                     _buildInfoRow(Icons.timelapse_outlined, 'Employment Type',
                         'Full-time'),
                     _buildInfoRow(
                       Icons.credit_card_outlined,
                       'Aadhar / Identity',
-                      null != null
-                          ? 'XXXX-XXXX-${null!.substring(null!.length - 4)}'
-                          : '—',
+                      '—',
                     ),
                   ],
                 ),

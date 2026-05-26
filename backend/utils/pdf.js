@@ -40,10 +40,10 @@ const generateFeeReceipt = (feeData, schoolData) => {
     doc.text('Amount (Rs.)', 450, tableTop + 7);
 
     let rowY = tableTop + 30;
-    feeData.breakdown.forEach((item, i) => {
+    (feeData.breakdown || []).forEach((item, i) => {
       if (i % 2 === 0) doc.fillColor('#f9f9f9').rect(50, rowY - 5, 495, 22).fill();
-      doc.fillColor('#333').text(item.type, 60, rowY);
-      doc.text(item.amount.toFixed(2), 450, rowY);
+      doc.fillColor('#333').text(String(item.type || ''), 60, rowY);
+      doc.text(Number(item.amount || 0).toFixed(2), 450, rowY);
       rowY += 22;
     });
 
@@ -62,14 +62,14 @@ const generateFeeReceipt = (feeData, schoolData) => {
     }
 
     doc.fillColor('#1e3a5f').font('Helvetica-Bold').text('Net Amount', 60, rowY + 10);
-    doc.text(`Rs. ${feeData.netAmount.toFixed(2)}`, 440, rowY + 10);
-    
+    doc.text(`Rs. ${Number(feeData.netAmount || 0).toFixed(2)}`, 440, rowY + 10);
+
     doc.fillColor('#27ae60').font('Helvetica-Bold').text('Amount Paid', 60, rowY + 30);
-    doc.text(`Rs. ${feeData.paidAmount.toFixed(2)}`, 440, rowY + 30);
+    doc.text(`Rs. ${Number(feeData.paidAmount || 0).toFixed(2)}`, 440, rowY + 30);
 
     if (feeData.pendingAmount > 0) {
       doc.fillColor('#e74c3c').font('Helvetica-Bold').text('Pending Amount', 60, rowY + 50);
-      doc.text(`Rs. ${feeData.pendingAmount.toFixed(2)}`, 440, rowY + 50);
+      doc.text(`Rs. ${Number(feeData.pendingAmount || 0).toFixed(2)}`, 440, rowY + 50);
     }
 
     // Footer

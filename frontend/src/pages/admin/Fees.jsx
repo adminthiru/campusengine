@@ -82,10 +82,15 @@ export default function Fees() {
       const res = await fetch(`/api/fees/${id}/receipt`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || `Server error ${res.status}`);
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = 'receipt.pdf'; a.click();
-    } catch { toast.error('Failed'); }
+      URL.revokeObjectURL(url);
+    } catch (err) { toast.error(err.message || 'Failed'); }
   };
 
   const [reportLoading, setReportLoading] = useState(false);

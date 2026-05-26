@@ -277,7 +277,7 @@ export default function ExamDetail() {
     formData.append('classId', activeClassId);
     formData.append('subjectId', activeSubjectId);
     try {
-      await api.post('/exams/answer-paper', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await api.post('/exams/answer-paper', formData, { headers: { 'Content-Type': undefined } });
       toast.success('Answer paper uploaded');
       refetchResults();
     } catch (err) {

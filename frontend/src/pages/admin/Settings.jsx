@@ -87,7 +87,7 @@ function SchoolSettings() {
       if (logoFile) {
         const form = new FormData();
         form.append('logo', logoFile);
-        await api.post('/school/upload-logo', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+        await api.post('/school/upload-logo', form, { headers: { 'Content-Type': undefined } });
       }
       await api.put('/school', d);
       qc.invalidateQueries(['school']);

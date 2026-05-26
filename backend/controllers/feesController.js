@@ -274,29 +274,34 @@ const getReceiptPDF = async (req, res) => {
     if (!fee) return res.status(404).json({ success: false, message: 'Not found' });
 
     const school = await School.findById(req.user.school);
-    const lastPayment = fee.payments[fee.payments.length - 1];
+    if (!school) return res.status(404).json({ success: false, message: 'School not found' });
+
+    const lastPayment = fee.payments?.length ? fee.payments[fee.payments.length - 1] : null;
 
     // Build combined breakdown from terms (new) or legacy feeBreakdown
     const breakdown = fee.terms?.length
-      ? fee.terms.flatMap(t => t.feeBreakdown.map(f => ({ ...f, type: `${t.name} - ${f.type}` })))
-      : fee.feeBreakdown || [];
+      ? fee.terms.flatMap(t => (t.feeBreakdown || []).map(f => ({
+          type: `${t.name}${f.type && f.type !== t.name ? ' - ' + f.type : ''}`,
+          amount: Number(f.amount) || 0,
+        })))
+      : (fee.feeBreakdown || []).map(f => ({ type: f.type || '', amount: Number(f.amount) || 0 }));
 
     const data = {
       receiptNumber: lastPayment?.receiptNumber || `RCP${fee._id}`,
       date: lastPayment?.date || new Date(),
-      studentName: fee.student.name,
-      admissionNumber: fee.student.admissionNumber,
-      className: fee.student.currentClass?.name,
-      section: fee.student.currentClass?.section,
-      academicYear: fee.academicYear,
+      studentName: fee.student?.name || 'N/A',
+      admissionNumber: fee.student?.admissionNumber || '',
+      className: fee.student?.currentClass?.name || '',
+      section: fee.student?.currentClass?.section || '',
+      academicYear: fee.academicYear || '',
       breakdown,
-      discount: fee.discount?.amount || 0,
-      discountReason: fee.discount?.reason,
-      lateFee: fee.lateFee || 0,
-      netAmount: fee.netAmount,
-      paidAmount: fee.paidAmount,
-      pendingAmount: fee.pendingAmount,
-      paymentMethod: lastPayment?.method || 'cash'
+      discount: Number(fee.discount?.amount) || 0,
+      discountReason: fee.discount?.reason || '',
+      lateFee: Number(fee.lateFee) || 0,
+      netAmount: Number(fee.netAmount) || 0,
+      paidAmount: Number(fee.paidAmount) || 0,
+      pendingAmount: Number(fee.pendingAmount) || 0,
+      paymentMethod: lastPayment?.method || 'cash',
     };
     const pdf = await generateFeeReceipt(data, school.toObject());
     res.setHeader('Content-Type', 'application/pdf');

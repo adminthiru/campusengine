@@ -330,7 +330,9 @@ function HomeworkDetail({ hwId, classes, canManage, onBack }) {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      await api.post(`/homework/${hwId}/submissions/${studentId}/attachment`, formData);
+      await api.post(`/homework/${hwId}/submissions/${studentId}/attachment`, formData, {
+        headers: { 'Content-Type': undefined },
+      });
       qc.invalidateQueries(['hw-submissions', hwId]);
       toast.success('File uploaded!');
     } catch { toast.error('Upload failed'); }
