@@ -35,7 +35,8 @@ class _TimetableScreenContent extends StatefulWidget {
   const _TimetableScreenContent();
 
   @override
-  State<_TimetableScreenContent> createState() => _TimetableScreenContentState();
+  State<_TimetableScreenContent> createState() =>
+      _TimetableScreenContentState();
 }
 
 class _TimetableScreenContentState extends State<_TimetableScreenContent> {
@@ -55,9 +56,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
     });
   }
 
-
-
-  Widget _header(BuildContext context, TimetableProvider provider, String teacherId, bool isDark) {
+  Widget _header(BuildContext context, TimetableProvider provider,
+      String teacherId, bool isDark) {
     return Container(
       color: isDark ? AppColors.cardDark : Colors.white,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
@@ -68,12 +68,15 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
             children: [
               Text(
                 DateFormat('MMMM yyyy').format(provider.selectedDate),
-                style: AppTypography.s20Bold(color: isDark ? Colors.white : AppColors.textPrimary),
+                style: AppTypography.s20Bold(
+                    color: isDark ? Colors.white : AppColors.textPrimary),
               ),
               const SizedBox(height: 2),
               Text(
                 'Weekly Schedule',
-                style: AppTypography.s12Regular(color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                style: AppTypography.s12Regular(
+                    color:
+                        isDark ? AppColors.textMuted : AppColors.textSecondary),
               ),
             ],
           ),
@@ -88,7 +91,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                 lastDate: DateTime.now().add(const Duration(days: 90)),
                 builder: (ctx, child) => Theme(
                   data: Theme.of(ctx).copyWith(
-                    colorScheme: const ColorScheme.light(primary: AppColors.primary),
+                    colorScheme:
+                        const ColorScheme.light(primary: AppColors.primary),
                   ),
                   child: child!,
                 ),
@@ -103,7 +107,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
     );
   }
 
-  Widget _calendarStrip(BuildContext context, TimetableProvider provider, String teacherId, bool isDark) {
+  Widget _calendarStrip(BuildContext context, TimetableProvider provider,
+      String teacherId, bool isDark) {
     final today = DateTime.now();
     final startOfWeek = today.subtract(Duration(days: today.weekday - 1));
     final dates = List.generate(7, (i) => startOfWeek.add(Duration(days: i)));
@@ -118,7 +123,7 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
           children: dates.map((date) {
             final isSelected = DateUtils.isSameDay(date, provider.selectedDate);
             final isToday = DateUtils.isSameDay(date, today);
-            
+
             final dayName = DateFormat('E').format(date);
             final dayNum = DateFormat('d').format(date);
 
@@ -127,7 +132,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 margin: const EdgeInsets.only(right: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
                   gradient: isSelected
                       ? const LinearGradient(
@@ -145,7 +151,11 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                   border: Border.all(
                     color: isSelected
                         ? Colors.transparent
-                        : (isToday ? AppColors.primary.withValues(alpha: 0.4) : (isDark ? AppColors.borderDark : AppColors.borderLight)),
+                        : (isToday
+                            ? AppColors.primary.withValues(alpha: 0.4)
+                            : (isDark
+                                ? AppColors.borderDark
+                                : AppColors.borderLight)),
                     width: 1.5,
                   ),
                 ),
@@ -156,7 +166,11 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                       style: AppTypography.s12Medium(
                         color: isSelected
                             ? Colors.white
-                            : (isToday ? AppColors.primary : (isDark ? AppColors.textMuted : AppColors.textSecondary)),
+                            : (isToday
+                                ? AppColors.primary
+                                : (isDark
+                                    ? AppColors.textMuted
+                                    : AppColors.textSecondary)),
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -165,7 +179,11 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                       style: AppTypography.s16Bold(
                         color: isSelected
                             ? Colors.white
-                            : (isToday ? AppColors.primary : (isDark ? Colors.white : AppColors.textPrimary)),
+                            : (isToday
+                                ? AppColors.primary
+                                : (isDark
+                                    ? Colors.white
+                                    : AppColors.textPrimary)),
                       ),
                     ),
                   ],
@@ -190,7 +208,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3)),
+        border:
+            Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3)),
         boxShadow: AppColors.shadowSm,
       ),
       child: Row(
@@ -201,7 +220,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
               color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.notification_important, color: Color(0xFFD97706), size: 20),
+            child: const Icon(Icons.notification_important,
+                color: Color(0xFFD97706), size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -215,7 +235,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                 const SizedBox(height: 2),
                 Text(
                   'You are assigned to substitute ${subs.length} class(es) today.',
-                  style: AppTypography.s12Regular(color: const Color(0xFF92400E)),
+                  style:
+                      AppTypography.s12Regular(color: const Color(0xFF92400E)),
                 ),
               ],
             ),
@@ -225,7 +246,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
     );
   }
 
-  Widget _buildPeriodCard(BuildContext context, TimetableItem item, bool isDark) {
+  Widget _buildPeriodCard(
+      BuildContext context, TimetableItem item, bool isDark) {
     if (item.substitution != null) {
       final sub = item.substitution!;
       return Container(
@@ -233,7 +255,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
         decoration: BoxDecoration(
           color: isDark ? AppColors.cardDark : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.warning.withValues(alpha: 0.5), width: 1.5),
+          border: Border.all(
+              color: AppColors.warning.withValues(alpha: 0.5), width: 1.5),
           boxShadow: isDark ? [] : AppColors.shadowSm,
         ),
         child: ClipRRect(
@@ -251,21 +274,26 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                         Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: AppColors.warning.withValues(alpha: 0.15),
+                                color:
+                                    AppColors.warning.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
                                 'SUBSTITUTION',
-                                style: AppTypography.s12Bold(color: AppColors.warning),
+                                style: AppTypography.s12Bold(
+                                    color: AppColors.warning),
                               ),
                             ),
                             const Spacer(),
                             Text(
                               'Period ${item.periodNumber}',
                               style: AppTypography.s14Bold(
-                                  color: isDark ? Colors.white : AppColors.textPrimary),
+                                  color: isDark
+                                      ? Colors.white
+                                      : AppColors.textPrimary),
                             ),
                           ],
                         ),
@@ -273,32 +301,50 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                         Text(
                           sub.subjectName,
                           style: AppTypography.s16Bold(
-                              color: isDark ? Colors.white : AppColors.textPrimary),
+                              color: isDark
+                                  ? Colors.white
+                                  : AppColors.textPrimary),
                         ),
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            Icon(Icons.school, size: 14, color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                            Icon(Icons.school,
+                                size: 14,
+                                color: isDark
+                                    ? AppColors.textMuted
+                                    : AppColors.textSecondary),
                             const SizedBox(width: 6),
                             Text(
                               'Class: ${sub.fullClassName}',
                               style: AppTypography.s12Medium(
-                                  color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                                  color: isDark
+                                      ? AppColors.textMuted
+                                      : AppColors.textSecondary),
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Divider(color: isDark ? AppColors.borderDark : AppColors.borderLight, height: 1),
+                        Divider(
+                            color: isDark
+                                ? AppColors.borderDark
+                                : AppColors.borderLight,
+                            height: 1),
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            Icon(Icons.person_outline, size: 14, color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                            Icon(Icons.person_outline,
+                                size: 14,
+                                color: isDark
+                                    ? AppColors.textMuted
+                                    : AppColors.textSecondary),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
                                 'Substituting for: ${sub.absentTeacherName}',
                                 style: AppTypography.s12Regular(
-                                    color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                                    color: isDark
+                                        ? AppColors.textMuted
+                                        : AppColors.textSecondary),
                               ),
                             ),
                           ],
@@ -308,7 +354,10 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                           Text(
                             'Note: ${sub.note}',
                             style: AppTypography.s12Regular(
-                                color: isDark ? AppColors.textMuted : AppColors.textSecondary).copyWith(fontStyle: FontStyle.italic),
+                                    color: isDark
+                                        ? AppColors.textMuted
+                                        : AppColors.textSecondary)
+                                .copyWith(fontStyle: FontStyle.italic),
                           ),
                         ],
                       ],
@@ -335,7 +384,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
         decoration: BoxDecoration(
           color: isDark ? AppColors.cardDark : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+          border: Border.all(
+              color: isDark ? AppColors.borderDark : AppColors.borderLight),
           boxShadow: isDark ? [] : AppColors.shadowSm,
         ),
         child: ClipRRect(
@@ -353,7 +403,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                         Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
                                 color: color.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(6),
@@ -367,7 +418,9 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                             Text(
                               'Period ${item.periodNumber}',
                               style: AppTypography.s14Bold(
-                                  color: isDark ? Colors.white : AppColors.textPrimary),
+                                  color: isDark
+                                      ? Colors.white
+                                      : AppColors.textPrimary),
                             ),
                           ],
                         ),
@@ -375,26 +428,40 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                         Text(
                           reg.subjectName,
                           style: AppTypography.s16Bold(
-                              color: isDark ? Colors.white : AppColors.textPrimary),
+                              color: isDark
+                                  ? Colors.white
+                                  : AppColors.textPrimary),
                         ),
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            Icon(Icons.school, size: 14, color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                            Icon(Icons.school,
+                                size: 14,
+                                color: isDark
+                                    ? AppColors.textMuted
+                                    : AppColors.textSecondary),
                             const SizedBox(width: 6),
                             Text(
                               'Class: ${reg.fullClassName}',
                               style: AppTypography.s12Medium(
-                                  color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                                  color: isDark
+                                      ? AppColors.textMuted
+                                      : AppColors.textSecondary),
                             ),
                             if (reg.room != null && reg.room!.isNotEmpty) ...[
                               const SizedBox(width: 12),
-                              Icon(Icons.room, size: 14, color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                              Icon(Icons.room,
+                                  size: 14,
+                                  color: isDark
+                                      ? AppColors.textMuted
+                                      : AppColors.textSecondary),
                               const SizedBox(width: 4),
                               Text(
                                 'Room: ${reg.room}',
                                 style: AppTypography.s12Medium(
-                                    color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                                    color: isDark
+                                        ? AppColors.textMuted
+                                        : AppColors.textSecondary),
                               ),
                             ],
                           ],
@@ -403,12 +470,18 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                           const SizedBox(height: 8),
                           Row(
                             children: [
-                              Icon(Icons.access_time, size: 14, color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                              Icon(Icons.access_time,
+                                  size: 14,
+                                  color: isDark
+                                      ? AppColors.textMuted
+                                      : AppColors.textSecondary),
                               const SizedBox(width: 6),
                               Text(
                                 '${reg.startTime ?? ""} - ${reg.endTime ?? ""}',
                                 style: AppTypography.s12Regular(
-                                    color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                                    color: isDark
+                                        ? AppColors.textMuted
+                                        : AppColors.textSecondary),
                               ),
                             ],
                           ),
@@ -427,10 +500,14 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.cardDark.withValues(alpha: 0.5) : AppColors.bgLight.withValues(alpha: 0.5),
+        color: isDark
+            ? AppColors.cardDark.withValues(alpha: 0.5)
+            : AppColors.bgLight.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? AppColors.borderDark.withValues(alpha: 0.5) : AppColors.borderLight.withValues(alpha: 0.5),
+          color: isDark
+              ? AppColors.borderDark.withValues(alpha: 0.5)
+              : AppColors.borderLight.withValues(alpha: 0.5),
           style: BorderStyle.solid,
         ),
       ),
@@ -448,7 +525,10 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
               child: Center(
                 child: Text(
                   item.periodNumber.toString(),
-                  style: AppTypography.s14Bold(color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                  style: AppTypography.s14Bold(
+                      color: isDark
+                          ? AppColors.textMuted
+                          : AppColors.textSecondary),
                 ),
               ),
             ),
@@ -458,28 +538,39 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
               children: [
                 Text(
                   'Free Period',
-                  style: AppTypography.s14Medium(color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                  style: AppTypography.s14Medium(
+                      color: isDark
+                          ? AppColors.textMuted
+                          : AppColors.textSecondary),
                 ),
                 Text(
                   'No class or assignment scheduled',
-                  style: AppTypography.s12Regular(color: isDark ? AppColors.textMuted.withValues(alpha: 0.7) : AppColors.textMuted),
+                  style: AppTypography.s12Regular(
+                      color: isDark
+                          ? AppColors.textMuted.withValues(alpha: 0.7)
+                          : AppColors.textMuted),
                 ),
               ],
             ),
             const Spacer(),
-            Icon(Icons.coffee_outlined, size: 18, color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+            Icon(Icons.coffee_outlined,
+                size: 18,
+                color: isDark ? AppColors.textMuted : AppColors.textSecondary),
           ],
         ),
       ),
     );
   }
 
-  Widget _viewToggle(bool isGridView, ValueChanged<bool> onChanged, bool isDark) {
+  Widget _viewToggle(
+      bool isGridView, ValueChanged<bool> onChanged, bool isDark) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.borderDark.withValues(alpha: 0.5) : const Color(0xFFF1F5F9),
+        color: isDark
+            ? AppColors.borderDark.withValues(alpha: 0.5)
+            : const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -511,7 +602,9 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                     style: AppTypography.s12SemiBold(
                       color: !isGridView
                           ? (isDark ? Colors.white : AppColors.textPrimary)
-                          : (isDark ? AppColors.textMuted : AppColors.textSecondary),
+                          : (isDark
+                              ? AppColors.textMuted
+                              : AppColors.textSecondary),
                     ),
                   ),
                 ),
@@ -545,7 +638,9 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                     style: AppTypography.s12SemiBold(
                       color: isGridView
                           ? (isDark ? Colors.white : AppColors.textPrimary)
-                          : (isDark ? AppColors.textMuted : AppColors.textSecondary),
+                          : (isDark
+                              ? AppColors.textMuted
+                              : AppColors.textSecondary),
                     ),
                   ),
                 ),
@@ -557,9 +652,17 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
     );
   }
 
-  Widget _weeklyGridView(BuildContext context, TimetableProvider provider, bool isDark) {
-    final days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    
+  Widget _weeklyGridView(
+      BuildContext context, TimetableProvider provider, bool isDark) {
+    final days = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday'
+    ];
+
     // Find the max period number dynamically
     int maxPeriod = 8;
     for (var day in days) {
@@ -596,7 +699,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                     0: FixedColumnWidth(80),
                   },
                   border: TableBorder.all(
-                    color: isDark ? AppColors.borderDark : AppColors.borderLight,
+                    color:
+                        isDark ? AppColors.borderDark : AppColors.borderLight,
                     width: 1,
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -604,7 +708,9 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                     // Header Row
                     TableRow(
                       decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E293B) : const Color(0xFF0F172A),
+                        color: isDark
+                            ? const Color(0xFF1E293B)
+                            : const Color(0xFF0F172A),
                         borderRadius: const BorderRadius.only(
                           topLeft: Radius.circular(12),
                           topRight: Radius.circular(12),
@@ -614,7 +720,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                         TableCell(
                           verticalAlignment: TableCellVerticalAlignment.middle,
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 12, horizontal: 8),
                             child: Text(
                               'Day',
                               textAlign: TextAlign.center,
@@ -624,13 +731,16 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                         ),
                         ...periodsList.map(
                           (p) => TableCell(
-                            verticalAlignment: TableCellVerticalAlignment.middle,
+                            verticalAlignment:
+                                TableCellVerticalAlignment.middle,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 12, horizontal: 8),
                               child: Text(
                                 'P$p',
                                 textAlign: TextAlign.center,
-                                style: AppTypography.s12Bold(color: Colors.white),
+                                style:
+                                    AppTypography.s12Bold(color: Colors.white),
                               ),
                             ),
                           ),
@@ -655,17 +765,23 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                         children: [
                           // Day name
                           TableCell(
-                            verticalAlignment: TableCellVerticalAlignment.middle,
+                            verticalAlignment:
+                                TableCellVerticalAlignment.middle,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-                              color: isDark ? AppColors.borderDark.withValues(alpha: 0.2) : const Color(0xFFF8FAFC),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 16, horizontal: 8),
+                              color: isDark
+                                  ? AppColors.borderDark.withValues(alpha: 0.2)
+                                  : const Color(0xFFF8FAFC),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
                                     day[0].toUpperCase() + day.substring(1, 3),
                                     style: AppTypography.s12Bold(
-                                      color: isDark ? Colors.white : AppColors.textPrimary,
+                                      color: isDark
+                                          ? Colors.white
+                                          : AppColors.textPrimary,
                                     ),
                                   ),
                                   const SizedBox(height: 2),
@@ -674,7 +790,9 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                                     style: AppTypography.inter(
                                       size: 10,
                                       weight: FontWeight.w400,
-                                      color: isDark ? AppColors.textMuted : AppColors.textSecondary,
+                                      color: isDark
+                                          ? AppColors.textMuted
+                                          : AppColors.textSecondary,
                                     ),
                                   ),
                                 ],
@@ -683,22 +801,27 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                           ),
                           // Periods cells
                           ...periodsList.map((pNum) {
-                            final periodList = dayPeriods.where((p) => p.periodNumber == pNum);
-                            final period = periodList.isNotEmpty ? periodList.first : null;
+                            final periodList =
+                                dayPeriods.where((p) => p.periodNumber == pNum);
+                            final period =
+                                periodList.isNotEmpty ? periodList.first : null;
 
                             if (period != null) {
                               Color color;
                               try {
-                                color = Color(int.parse(period.subjectColor.replaceFirst('#', '0xFF')));
+                                color = Color(int.parse(period.subjectColor
+                                    .replaceFirst('#', '0xFF')));
                               } catch (_) {
                                 color = AppColors.primary;
                               }
 
                               return TableCell(
-                                verticalAlignment: TableCellVerticalAlignment.middle,
+                                verticalAlignment:
+                                    TableCellVerticalAlignment.middle,
                                 child: Container(
                                   margin: const EdgeInsets.all(4),
-                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 8, horizontal: 6),
                                   decoration: BoxDecoration(
                                     color: color.withValues(alpha: 0.08),
                                     borderRadius: BorderRadius.circular(8),
@@ -709,7 +832,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                                   ),
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
                                     children: [
                                       Text(
                                         period.subjectName,
@@ -731,10 +855,13 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                                         style: AppTypography.inter(
                                           size: 10,
                                           weight: FontWeight.w500,
-                                          color: isDark ? AppColors.textMuted : AppColors.textSecondary,
+                                          color: isDark
+                                              ? AppColors.textMuted
+                                              : AppColors.textSecondary,
                                         ),
                                       ),
-                                      if (period.room != null && period.room!.isNotEmpty) ...[
+                                      if (period.room != null &&
+                                          period.room!.isNotEmpty) ...[
                                         const SizedBox(height: 2),
                                         Text(
                                           'Rm: ${period.room}',
@@ -744,7 +871,10 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                                           style: AppTypography.inter(
                                             size: 9,
                                             weight: FontWeight.w400,
-                                            color: isDark ? AppColors.textMuted.withValues(alpha: 0.7) : AppColors.textMuted,
+                                            color: isDark
+                                                ? AppColors.textMuted
+                                                    .withValues(alpha: 0.7)
+                                                : AppColors.textMuted,
                                           ),
                                         ),
                                       ],
@@ -754,14 +884,19 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                               );
                             } else {
                               return TableCell(
-                                verticalAlignment: TableCellVerticalAlignment.middle,
+                                verticalAlignment:
+                                    TableCellVerticalAlignment.middle,
                                 child: Container(
                                   alignment: Alignment.center,
-                                  padding: const EdgeInsets.symmetric(vertical: 20),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 20),
                                   child: Text(
                                     '—',
                                     style: AppTypography.s12Regular(
-                                      color: isDark ? AppColors.textMuted.withValues(alpha: 0.4) : const Color(0xFFCBD5E1),
+                                      color: isDark
+                                          ? AppColors.textMuted
+                                              .withValues(alpha: 0.4)
+                                          : const Color(0xFFCBD5E1),
                                     ),
                                   ),
                                 ),
@@ -797,7 +932,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
 
     if (provider.isLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        body:
+            Center(child: CircularProgressIndicator(color: AppColors.primary)),
       );
     }
 
@@ -811,7 +947,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
               const SizedBox(height: 16),
               Text(
                 provider.error!,
-                style: AppTypography.s16SemiBold(color: isDark ? Colors.white : AppColors.textPrimary),
+                style: AppTypography.s16SemiBold(
+                    color: isDark ? Colors.white : AppColors.textPrimary),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
@@ -828,7 +965,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
       );
     }
 
-    final dayName = DateFormat('EEEE').format(provider.selectedDate).toLowerCase();
+    final dayName =
+        DateFormat('EEEE').format(provider.selectedDate).toLowerCase();
     final regularPeriods = provider.timetable[dayName] ?? [];
     final subs = provider.substitutions;
 
@@ -844,10 +982,10 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
     for (int pNum = 1; pNum <= maxPeriod; pNum++) {
       final regList = regularPeriods.where((p) => p.periodNumber == pNum);
       final reg = regList.isNotEmpty ? regList.first : null;
-      
+
       final subList = subs.where((s) => s.periodNumber == pNum);
       final sub = subList.isNotEmpty ? subList.first : null;
-      
+
       if (reg != null || sub != null) {
         items.add(TimetableItem(
           periodNumber: pNum,
@@ -867,7 +1005,8 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
         child: Column(
           children: [
             _header(context, provider, teacherId, isDark),
-            _viewToggle(_isGridView, (val) => setState(() => _isGridView = val), isDark),
+            _viewToggle(_isGridView, (val) => setState(() => _isGridView = val),
+                isDark),
             if (_isGridView)
               _weeklyGridView(context, provider, isDark)
             else ...[
@@ -877,12 +1016,14 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                 child: RefreshIndicator(
                   onRefresh: () async {
                     await provider.fetchTimetable(teacherId);
-                    await provider.fetchSubstitutions(teacherId, provider.selectedDate);
+                    await provider.fetchSubstitutions(
+                        teacherId, provider.selectedDate);
                   },
                   child: ListView.builder(
                     padding: const EdgeInsets.only(top: 8, bottom: 80),
                     itemCount: items.length,
-                    itemBuilder: (ctx, i) => _buildPeriodCard(ctx, items[i], isDark),
+                    itemBuilder: (ctx, i) =>
+                        _buildPeriodCard(ctx, items[i], isDark),
                   ),
                 ),
               ),
