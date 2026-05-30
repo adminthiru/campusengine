@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
-import { Plus, Download, Eye, Trash2, Users, ClipboardList, ChevronLeft, ChevronRight, Camera, Edit, ArrowLeft, Mail, MapPin, Briefcase, Phone, BookOpen, User as UserIcon, FileText, Upload } from 'lucide-react';
+import { Plus, Download, Eye, Trash2, Users, ClipboardList, ChevronLeft, ChevronRight, Camera, Edit, ArrowLeft, Mail, MapPin, Briefcase, Phone, BookOpen, User as UserIcon, FileText, Upload, Banknote, ChevronDown, ChevronUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, StatusBadge, Pagination, SearchInput, Avatar, EmptyState, PageLoader, FormRow, ColumnSelector, useColumnSelector } from '../../components/ui';
@@ -42,21 +42,57 @@ const DETAIL_TABS = [
   { key: 'academic',   label: 'Academics, Experience & Docs' },
   { key: 'emergency',  label: 'Emergency & Bank' },
   { key: 'attendance', label: 'Attendance' },
+  { key: 'salary',     label: 'Salary' },
+  { key: 'timetable',  label: 'Timetable' },
 ];
 
+const TT_DAY_ORDER  = ['monday','tuesday','wednesday','thursday','friday','saturday'];
+const TT_DAY_LABELS = { monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday' };
+const TT_DAY_SHORT  = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat' };
+
+const SAL_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
 const EMP_STATUS_META = {
-  present:  { label: 'Present',  bg: '#d1fae5', color: '#065f46' },
-  absent:   { label: 'Absent',   bg: '#fee2e2', color: '#991b1b' },
-  late:     { label: 'Late',     bg: '#fef3c7', color: '#92400e' },
-  half_day: { label: 'Half Day', bg: '#dbeafe', color: '#1e40af' },
-  od:       { label: 'OD',       bg: '#f3e8ff', color: '#6b21a8' },
-  cl:       { label: 'CL',       bg: '#e0f2fe', color: '#075985' },
-  sl:       { label: 'SL',       bg: '#fce7f3', color: '#831843' },
-  excused:  { label: 'Excused',  bg: '#f0fdf4', color: '#166534' },
+  present:  { label: 'P',  full: 'Present',      color: '#10b981', bg: '#dcfce7' },
+  absent:   { label: 'A',  full: 'Absent',       color: '#ef4444', bg: '#fee2e2' },
+  late:     { label: 'L',  full: 'Late',          color: '#f59e0b', bg: '#fef3c7' },
+  excused:  { label: 'E',  full: 'Excused',      color: '#6366f1', bg: '#ede9fe' },
+  half_day: { label: 'H',  full: 'Half Day',     color: '#8b5cf6', bg: '#f3e8ff' },
+  od:       { label: 'OD', full: 'On Duty',      color: '#0891b2', bg: '#cffafe' },
+  cl:       { label: 'CL', full: 'Casual Leave', color: '#0284c7', bg: '#dbeafe' },
+  sl:       { label: 'SL', full: 'Sick Leave',   color: '#7c3aed', bg: '#ede9fe' },
 };
 
 const ATT_MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const ATT_DAY_LABELS  = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+const ATT_DAY_LABELS  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function AttendanceCircle({ percentage, present, total }) {
+  const size = 80, r = 32, cx = size / 2, cy = size / 2;
+  const circumference = 2 * Math.PI * r;
+  const filled = (percentage / 100) * circumference;
+  const color = percentage >= 75 ? '#10b981' : percentage >= 50 ? '#f59e0b' : '#ef4444';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0, marginLeft: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+        <span style={{ fontSize: 16, fontWeight: 700 }}>{present}/{total}</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>days</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+        <div style={{ position: 'relative', width: size, height: size }}>
+          <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', position: 'absolute', inset: 0 }}>
+            <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e2e8f0" strokeWidth={7} />
+            <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={7}
+              strokeDasharray={`${filled} ${circumference - filled}`} strokeLinecap="round" />
+          </svg>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color }}>{percentage}%</span>
+          </div>
+        </div>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>Attendance</span>
+      </div>
+    </div>
+  );
+}
 
 export default function Employees() {
   const qc = useQueryClient();
@@ -990,6 +1026,36 @@ function EmployeeDetail({ employee, onBack, onDelete, onDownload, onEdit, onTask
   const [activeTab, setActiveTab] = useState('personal');
   const [zoomImage, setZoomImage] = useState(false);
 
+  const { data: attSummaryRes } = useQuery({
+    queryKey: ['emp-att-summary-header', employee._id],
+    queryFn: () => api.get(`/attendance/employee-summary?employeeId=${employee._id}`),
+    enabled: !!employee._id,
+  });
+  const attSummary = attSummaryRes?.summary || null;
+
+  const { data: classesRes } = useQuery({
+    queryKey: ['classes-for-emp', employee._id],
+    queryFn: () => api.get('/classes'),
+    enabled: !!employee._id,
+  });
+  const allClasses = classesRes?.classes || [];
+  const classTeacherOf = allClasses.filter(cls => {
+    const ct = cls.classTeacher?._id?.toString() || cls.classTeacher?.toString();
+    return ct === employee._id.toString();
+  });
+  const subjectTeacherOf = [];
+  allClasses.forEach(cls => {
+    (cls.subjectTeachers || []).forEach(st => {
+      const tid = st.teacher?._id?.toString() || st.teacher?.toString();
+      if (tid === employee._id.toString()) {
+        subjectTeacherOf.push({
+          subject: st.subject?.name || '',
+          cls: `${cls.name}${cls.section ? ` - ${cls.section}` : ''}`,
+        });
+      }
+    });
+  });
+
   const phone = employee.phone || employee.mobile;
   const addressParts = [employee.address, employee.city, employee.state, employee.country].filter(Boolean);
 
@@ -1050,7 +1116,34 @@ function EmployeeDetail({ employee, onBack, onDelete, onDownload, onEdit, onTask
               )}
             </div>
           </div>
+          {attSummary && attSummary.total > 0 && (
+            <AttendanceCircle percentage={attSummary.percentage} present={attSummary.present} total={attSummary.total} />
+          )}
         </div>
+        {(classTeacherOf.length > 0 || subjectTeacherOf.length > 0) && (
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            {classTeacherOf.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>Class Teacher:</span>
+                {classTeacherOf.map(cls => (
+                  <span key={cls._id} style={{ fontSize: 12, background: '#eff6ff', color: '#1a56e8', padding: '3px 10px', borderRadius: 20, fontWeight: 500 }}>
+                    {cls.name}{cls.section ? ` - ${cls.section}` : ''}
+                  </span>
+                ))}
+              </div>
+            )}
+            {subjectTeacherOf.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>Subject Teacher:</span>
+                {subjectTeacherOf.map((item, i) => (
+                  <span key={i} style={{ fontSize: 12, background: '#f0fdf4', color: '#059669', padding: '3px 10px', borderRadius: 20, fontWeight: 500 }}>
+                    {item.subject}{item.subject && item.cls ? ' · ' : ''}{item.cls}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Tabs + content card ── */}
@@ -1208,6 +1301,12 @@ function EmployeeDetail({ employee, onBack, onDelete, onDownload, onEdit, onTask
           {/* ── Tab 4: Attendance ── */}
           {activeTab === 'attendance' && <EmployeeAttendanceTab employee={employee} />}
 
+          {/* ── Tab 5: Salary ── */}
+          {activeTab === 'salary' && <EmployeeSalaryTab employee={employee} />}
+
+          {/* ── Tab 6: Timetable ── */}
+          {activeTab === 'timetable' && <EmployeeTimetableTab employee={employee} />}
+
           {/* ── Tab 3: Emergency & Bank ── */}
           {activeTab === 'emergency' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1px 1fr', gap: 0, alignItems: 'start' }}>
@@ -1293,131 +1392,594 @@ function EmployeeDetail({ employee, onBack, onDelete, onDownload, onEdit, onTask
   );
 }
 
-function EmployeeAttendanceTab({ employee }) {
-  const now = new Date();
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear] = useState(now.getFullYear());
+function EmployeeTimetableTab({ employee }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['emp-timetable', employee._id],
+    queryFn:  () => api.get(`/timetable?teacherId=${employee._id}`),
+    enabled:  !!employee._id,
+  });
+  const timetables = data?.timetables || [];
 
-  const { data: summaryData } = useQuery({
-    queryKey: ['emp-att-summary', employee._id],
-    queryFn: () => api.get(`/attendance/employee-summary?employeeId=${employee._id}`),
+  // Build cellMap: "day_period" → { class, subject, time, room }
+  const cellMap = {};
+  let maxPeriod = 0;
+  const activeDaysSet = new Set();
+
+  timetables.forEach(tt => {
+    tt.schedule.forEach(ds => {
+      activeDaysSet.add(ds.day);
+      ds.periods.forEach(p => {
+        if (p.periodNumber > maxPeriod) maxPeriod = p.periodNumber;
+        cellMap[`${ds.day}_${p.periodNumber}`] = {
+          class:   tt.class,
+          subject: p.subject,
+          room:    p.room,
+          time:    (p.startTime && p.endTime) ? `${p.startTime}–${p.endTime}` : null,
+        };
+      });
+    });
   });
 
-  const { data: recordsData, isLoading } = useQuery({
-    queryKey: ['emp-att-records', employee._id, month, year],
-    queryFn: () => api.get(`/attendance/employee-records?employeeId=${employee._id}&month=${month}&year=${year}`),
+  const activeDays = TT_DAY_ORDER.filter(d => activeDaysSet.has(d));
+  const periods    = maxPeriod > 0 ? Array.from({ length: maxPeriod }, (_, i) => i + 1) : [];
+
+  // Build period → time map from first occurrence found
+  const periodTimeMap = {};
+  periods.forEach(p => {
+    for (const d of activeDays) {
+      const cell = cellMap[`${d}_${p}`];
+      if (cell?.time) { periodTimeMap[p] = cell.time; break; }
+    }
   });
 
-  const summary = summaryData?.summary || {};
-  const records = recordsData?.records || [];
+  // Summary counts
+  const totalPeriods = Object.keys(cellMap).length;
+  const uniqueClasses = new Set(Object.values(cellMap).map(c => c.class?._id)).size;
+  const uniqueSubjects = new Set(Object.values(cellMap).map(c => c.subject?._id)).size;
 
-  const dateMap = {};
-  records.forEach(r => {
-    const d = new Date(r.date);
-    dateMap[`${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`] = r.status;
-  });
+  if (isLoading) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>;
 
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const firstDay = new Date(year, month - 1, 1).getDay();
-  const cells = [];
-  for (let i = 0; i < firstDay; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-
-  const prevMonth = () => { if (month === 1) { setMonth(12); setYear(y => y - 1); } else setMonth(m => m - 1); };
-  const nextMonth = () => { if (month === 12) { setMonth(1); setYear(y => y + 1); } else setMonth(m => m + 1); };
+  if (timetables.length === 0) return (
+    <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+      <BookOpen size={36} style={{ marginBottom: 8, opacity: 0.3 }} />
+      <p style={{ fontSize: 14 }}>No timetable assigned to this teacher yet.</p>
+    </div>
+  );
 
   return (
     <div>
       {/* Summary strip */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
         {[
-          { label: 'Total Days',  value: summary.total ?? '—',      color: 'var(--primary)', bg: '#eff6ff' },
-          { label: 'Present',     value: summary.present ?? '—',    color: '#065f46',        bg: '#d1fae5' },
-          { label: 'Absent',      value: summary.absent ?? '—',     color: '#991b1b',        bg: '#fee2e2' },
-          { label: 'Late',        value: summary.late ?? '—',       color: '#92400e',        bg: '#fef3c7' },
-          { label: 'Attendance %',value: summary.percentage != null ? `${summary.percentage}%` : '—', color: 'var(--primary)', bg: '#eff6ff' },
-        ].map(s => (
-          <div key={s.label} style={{ flex: '1 1 100px', background: s.bg, borderRadius: 10, padding: '12px 16px', minWidth: 90 }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{s.label}</div>
+          { label: 'Periods / Week', value: totalPeriods,   color: 'var(--primary)', bg: '#eff6ff' },
+          { label: 'Classes',        value: uniqueClasses,  color: '#10b981',        bg: '#f0fdf4' },
+          { label: 'Subjects',       value: uniqueSubjects, color: '#f59e0b',        bg: '#fffbeb' },
+        ].map(item => (
+          <div key={item.label} style={{ background: item.bg, borderRadius: 10, padding: '12px 16px', border: '1px solid var(--border)', textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</div>
+            <div style={{ fontSize: 26, fontWeight: 700, color: item.color }}>{item.value}</div>
           </div>
         ))}
       </div>
 
-      {/* Month navigator */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        <button className="btn btn-secondary btn-sm btn-icon" onClick={prevMonth}><ChevronLeft size={15} /></button>
-        <span style={{ fontSize: 15, fontWeight: 600, minWidth: 150, textAlign: 'center' }}>{ATT_MONTH_NAMES[month - 1]} {year}</span>
-        <button className="btn btn-secondary btn-sm btn-icon" onClick={nextMonth}><ChevronRight size={15} /></button>
+      {/* Week grid — days as rows, periods as columns */}
+      <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+        {/* Header row — period numbers */}
+        <div style={{ display: 'grid', gridTemplateColumns: `100px repeat(${periods.length}, 1fr)`, background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ padding: '10px 12px' }} />
+          {periods.map(p => (
+            <div key={p} style={{ padding: '8px 8px', textAlign: 'center', borderLeft: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>P{p}</div>
+              {periodTimeMap[p] && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{periodTimeMap[p]}</div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Day rows */}
+        {activeDays.map((d, di) => (
+          <div key={d} style={{ display: 'grid', gridTemplateColumns: `100px repeat(${periods.length}, 1fr)`, borderBottom: di < activeDays.length - 1 ? '1px solid #f1f5f9' : 'none', minHeight: 72 }}>
+            {/* Day label */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa', borderRight: '1px solid var(--border)', padding: '8px 4px' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{TT_DAY_SHORT[d]}</span>
+            </div>
+            {/* Period cells */}
+            {periods.map(p => {
+              const cell = cellMap[`${d}_${p}`];
+              const subjectColor = cell?.subject?.color || '#1a56e8';
+              return (
+                <div key={p} style={{ padding: 6, borderLeft: '1px solid #f1f5f9', display: 'flex', alignItems: 'center' }}>
+                  {cell ? (
+                    <div style={{
+                      width: '100%', borderRadius: 8, padding: '8px 10px',
+                      background: `${subjectColor}18`,
+                      borderLeft: `3px solid ${subjectColor}`,
+                    }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>
+                        {cell.class?.name}{cell.class?.section ? ` ${cell.class.section}` : ''}
+                      </div>
+                      {cell.subject?.name && (
+                        <div style={{ fontSize: 12, color: subjectColor, fontWeight: 600 }}>{cell.subject.name}</div>
+                      )}
+                      {cell.room && (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Room: {cell.room}</div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ width: '100%', height: 44, borderRadius: 6, background: '#f8fafc' }} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
 
-      {/* Calendar grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 16, maxWidth: 420 }}>
-        {ATT_DAY_LABELS.map(d => (
-          <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', padding: '4px 0', textTransform: 'uppercase' }}>{d}</div>
+      {/* List view — per class breakdown */}
+      <div style={{ marginTop: 24 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+          Class-wise Breakdown
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {timetables.map(tt => {
+            const classPeriods = [];
+            tt.schedule.forEach(ds => {
+              ds.periods.forEach(p => {
+                classPeriods.push({ day: ds.day, period: p });
+              });
+            });
+            if (classPeriods.length === 0) return null;
+            const subjectColor = classPeriods[0]?.period?.subject?.color || '#1a56e8';
+            return (
+              <div key={tt._id} style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                {/* Class header */}
+                <div style={{ background: `${subjectColor}12`, padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
+                    {tt.class?.name}{tt.class?.section ? ` — Section ${tt.class.section}` : ''}
+                  </div>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>
+                    {classPeriods.length} period{classPeriods.length !== 1 ? 's' : ''} / week
+                  </span>
+                </div>
+                {/* Period rows */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '12px 16px' }}>
+                  {classPeriods.map(({ day, period: p }, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f8fafc', borderRadius: 8, padding: '6px 12px', border: '1px solid var(--border)' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', minWidth: 28 }}>{TT_DAY_SHORT[day]}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>P{p.periodNumber}</span>
+                      {p.subject?.name && (
+                        <span style={{ fontSize: 12, fontWeight: 600, color: subjectColor, padding: '1px 8px', background: `${subjectColor}18`, borderRadius: 12 }}>{p.subject.name}</span>
+                      )}
+                      {p.startTime && p.endTime && (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.startTime}–{p.endTime}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmployeeSalaryTab({ employee }) {
+  const [expandedId, setExpandedId] = useState(null);
+  const [yearFilter, setYearFilter] = useState('all');
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['emp-salaries', employee._id],
+    queryFn: () => api.get(`/salaries?employeeId=${employee._id}`),
+    enabled: !!employee._id,
+  });
+  const salaries = data?.salaries || [];
+
+  const downloadPayslip = async (id, slipNumber) => {
+    try {
+      const res = await fetch(`/api/salaries/${id}/payslip`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `payslip_${slipNumber || id}.pdf`; a.click();
+    } catch { toast.error('Failed to generate payslip'); }
+  };
+
+  const fmt = n => `₹${(n || 0).toLocaleString('en-IN')}`;
+  const years = [...new Set(salaries.map(s => s.year))].sort((a, b) => b - a);
+  const filtered = yearFilter === 'all' ? salaries : salaries.filter(s => s.year === Number(yearFilter));
+
+  const totalPaid = salaries.filter(s => s.status === 'paid').reduce((sum, s) => sum + (s.netSalary || 0), 0);
+  const pendingCount = salaries.filter(s => s.status === 'pending').length;
+  const latestNet = salaries[0]?.netSalary || 0;
+
+  if (isLoading) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>;
+
+  if (salaries.length === 0) return (
+    <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+      <Banknote size={36} style={{ marginBottom: 8, opacity: 0.3 }} />
+      <p style={{ fontSize: 14 }}>No salary records found for this employee.</p>
+    </div>
+  );
+
+  return (
+    <div>
+      {/* Summary strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+        {[
+          { label: 'Total Records', value: salaries.length,  color: 'var(--primary)', bg: '#eff6ff' },
+          { label: 'Total Paid',    value: fmt(totalPaid),   color: '#10b981',        bg: '#f0fdf4' },
+          { label: 'Pending',       value: pendingCount,     color: '#f59e0b',        bg: '#fffbeb' },
+          { label: 'Latest Net',    value: fmt(latestNet),   color: 'var(--primary)', bg: '#eff6ff' },
+        ].map(item => (
+          <div key={item.label} style={{ background: item.bg, borderRadius: 10, padding: '12px 16px', border: '1px solid var(--border)', textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: item.color, fontVariantNumeric: 'tabular-nums' }}>{item.value}</div>
+          </div>
         ))}
-        {cells.map((day, i) => {
-          if (!day) return <div key={`e${i}`} />;
-          const status = dateMap[`${year}-${month}-${day}`];
-          const meta = status ? EMP_STATUS_META[status] : null;
+      </div>
+
+      {/* Year filter tabs */}
+      {years.length > 1 && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+          {['all', ...years].map(y => (
+            <button key={y} onClick={() => setYearFilter(y)}
+              className="btn btn-sm"
+              style={{
+                background: yearFilter === String(y) ? 'var(--primary)' : 'transparent',
+                color: yearFilter === String(y) ? 'white' : 'var(--text-secondary)',
+                border: `1px solid ${yearFilter === String(y) ? 'var(--primary)' : 'var(--border)'}`,
+              }}>
+              {y === 'all' ? 'All Years' : y}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Records list */}
+      <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+        {/* Table header */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr) 36px', background: '#f8fafc', padding: '10px 16px', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+          {['Month / Year', 'Gross', 'Deductions', 'Net Salary', 'Days', 'Status', ''].map((h, i) => (
+            <div key={i} style={{ minWidth: 0, fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</div>
+          ))}
+        </div>
+
+        {filtered.length === 0 ? (
+          <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No records for selected year.</div>
+        ) : filtered.map((sal, i) => {
+          const isExpanded = expandedId === sal._id;
+          const e = sal.earnings || {};
+          const ded = sal.deductions || {};
+          const statusStyle = sal.status === 'paid'
+            ? { bg: '#dcfce7', color: '#166534' }
+            : sal.status === 'on_hold'
+            ? { bg: '#fef3c7', color: '#92400e' }
+            : { bg: '#fee2e2', color: '#dc2626' };
+
           return (
-            <div key={day} style={{
-              aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              borderRadius: 6, fontSize: 13, fontWeight: meta ? 600 : 400,
-              background: meta ? meta.bg : 'transparent',
-              color: meta ? meta.color : 'var(--text-muted)',
-            }}>
-              {day}
+            <div key={sal._id} style={{ borderBottom: i < filtered.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+              {/* Summary row */}
+              <div
+                onClick={() => setExpandedId(isExpanded ? null : sal._id)}
+                style={{
+                  display: 'grid', gridTemplateColumns: 'repeat(6, 1fr) 36px',
+                  padding: '12px 16px', cursor: 'pointer', alignItems: 'center',
+                  background: isExpanded ? '#f8fafc' : 'white', transition: 'background 0.12s',
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{SAL_MONTHS[sal.month - 1]} {sal.year}</div>
+                  {sal.slipNumber && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sal.slipNumber}</div>}
+                </div>
+                <div style={{ minWidth: 0, fontSize: 14, fontWeight: 500, color: '#16a34a', fontVariantNumeric: 'tabular-nums' }}>{fmt(sal.grossSalary)}</div>
+                <div style={{ minWidth: 0, fontSize: 14, color: '#ef4444', fontVariantNumeric: 'tabular-nums' }}>{fmt(sal.totalDeductions)}</div>
+                <div style={{ minWidth: 0, fontSize: 15, fontWeight: 700, color: 'var(--primary)', fontVariantNumeric: 'tabular-nums' }}>{fmt(sal.netSalary)}</div>
+                <div style={{ minWidth: 0, fontSize: 13, color: 'var(--text-secondary)' }}>{sal.presentDays ?? '—'}/{sal.workingDays ?? '—'}</div>
+                <div style={{ minWidth: 0 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, background: statusStyle.bg, color: statusStyle.color, textTransform: 'capitalize' }}>
+                    {sal.status === 'on_hold' ? 'On Hold' : sal.status}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+                  {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </div>
+              </div>
+
+              {/* Expanded breakdown */}
+              {isExpanded && (
+                <div style={{ padding: '0 16px 16px', background: '#fafafa', borderTop: '1px solid #f1f5f9' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, paddingTop: 14, marginBottom: 14 }}>
+
+                    {/* Earnings card */}
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                      <div style={{ background: '#f0fdf4', padding: '8px 14px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Earnings</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#16a34a' }}>{fmt(sal.grossSalary)}</span>
+                      </div>
+                      {[
+                        ['Basic Salary',      e.basic],
+                        ['HRA',               e.hra],
+                        ['DA',                e.da],
+                        ['Other Allowances',  e.otherAllowances],
+                        ['Overtime',          e.overtime],
+                        ['Bonus',             e.bonus],
+                      ].filter(([, v]) => v > 0).map(([label, value]) => (
+                        <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
+                          <span style={{ fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{fmt(value)}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Deductions card */}
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                      <div style={{ background: '#fef2f2', padding: '8px 14px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deductions</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#dc2626' }}>{fmt(sal.totalDeductions)}</span>
+                      </div>
+                      {[
+                        ['EPF (12%)',      ded.pf],
+                        ['ESI (0.75%)',    ded.esi],
+                        ['Advance / Loan', ded.loan],
+                        ['Loss of Pay',    ded.lossOfPay],
+                        ['Tax',            ded.tax],
+                        ['Other',          ded.other],
+                      ].filter(([, v]) => v > 0).map(([label, value]) => (
+                        <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
+                          <span style={{ fontWeight: 500, color: '#ef4444', fontVariantNumeric: 'tabular-nums' }}>{fmt(value)}</span>
+                        </div>
+                      ))}
+                      {sal.leaveDays > 0 && !(ded.lossOfPay > 0) && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 14px', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>LOP Days</span>
+                          <span style={{ fontWeight: 500, color: '#ef4444' }}>{sal.leaveDays} day{sal.leaveDays !== 1 ? 's' : ''}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Net + payment + payslip */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--primary)', borderRadius: 10, padding: '12px 16px' }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', marginBottom: 2 }}>Net Salary — {SAL_MONTHS[sal.month - 1]} {sal.year}</div>
+                      <div style={{ fontSize: 24, fontWeight: 800, color: 'white', fontVariantNumeric: 'tabular-nums' }}>{fmt(sal.netSalary)}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      {sal.status === 'paid' && sal.payment && (
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.9)', textTransform: 'capitalize' }}>
+                            Paid via {sal.payment.method?.replace('_', ' ')}
+                          </div>
+                          {sal.payment.transactionId && (
+                            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)' }}>Ref: {sal.payment.transactionId}</div>
+                          )}
+                          {sal.payment.date && (
+                            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)' }}>
+                              {new Date(sal.payment.date).toLocaleDateString('en-IN')}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <button
+                        className="btn btn-sm"
+                        style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', gap: 5 }}
+                        onClick={e => { e.stopPropagation(); downloadPayslip(sal._id, sal.slipNumber); }}
+                      >
+                        <Download size={13} /> Payslip
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function EmployeeAttendanceTab({ employee }) {
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year,  setYear]  = useState(now.getFullYear());
+
+  const { data: summaryData } = useQuery({
+    queryKey: ['emp-att-summary', employee._id],
+    queryFn:  () => api.get(`/attendance/employee-summary?employeeId=${employee._id}`),
+    enabled:  !!employee._id,
+  });
+  const overall = summaryData?.summary;
+
+  const { data: recData, isLoading } = useQuery({
+    queryKey: ['emp-att-records', employee._id, month, year],
+    queryFn:  () => api.get(`/attendance/employee-records?employeeId=${employee._id}&month=${month}&year=${year}`),
+    enabled:  !!employee._id,
+  });
+  const records = recData?.records || [];
+
+  // Map date ISO string → record (employees have one record per day)
+  const byDate = {};
+  records.forEach(r => {
+    const key = new Date(r.date).toISOString().slice(0, 10);
+    byDate[key] = r;
+  });
+
+  // Monthly counts
+  const counts = {};
+  records.forEach(r => { counts[r.status] = (counts[r.status] || 0) + 1; });
+  const mTotal   = records.length;
+  const mPresent = counts.present || 0;
+  const mAbsent  = counts.absent  || 0;
+  const mLate    = counts.late    || 0;
+  const mPct     = mTotal ? Math.round((mPresent / mTotal) * 100) : 0;
+
+  // Calendar grid setup
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstDow    = new Date(year, month - 1, 1).getDay();
+
+  const prevMonth = () => { if (month === 1) { setMonth(12); setYear(y => y - 1); } else setMonth(m => m - 1); };
+  const nextMonth = () => { if (month === 12) { setMonth(1); setYear(y => y + 1); } else setMonth(m => m + 1); };
+  const canNext   = year < now.getFullYear() || (year === now.getFullYear() && month < now.getMonth() + 1);
+
+  return (
+    <div>
+      {/* Overall summary strip */}
+      {overall && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 24 }}>
+          {[
+            { label: 'Total Days', value: overall.total,     color: 'var(--primary)', bg: '#eff6ff' },
+            { label: 'Present',    value: overall.present,   color: '#10b981',        bg: '#f0fdf4' },
+            { label: 'Absent',     value: overall.absent,    color: '#ef4444',        bg: '#fef2f2' },
+            { label: 'Late',       value: overall.late,      color: '#f59e0b',        bg: '#fffbeb' },
+            { label: 'Overall %',  value: `${overall.percentage}%`,
+              color: overall.percentage >= 75 ? '#10b981' : overall.percentage >= 50 ? '#f59e0b' : '#ef4444',
+              bg: overall.percentage >= 75 ? '#f0fdf4' : overall.percentage >= 50 ? '#fffbeb' : '#fef2f2' },
+          ].map(item => (
+            <div key={item.label} style={{ background: item.bg, borderRadius: 10, padding: '12px 16px', border: '1px solid var(--border)', textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: item.color }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Month navigator */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button className="btn btn-secondary btn-sm btn-icon" onClick={prevMonth}><ChevronLeft size={16} /></button>
+          <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', minWidth: 160, textAlign: 'center' }}>
+            {ATT_MONTH_NAMES[month - 1]} {year}
+          </span>
+          <button className="btn btn-secondary btn-sm btn-icon" onClick={nextMonth} disabled={!canNext}><ChevronRight size={16} /></button>
+        </div>
+        {/* Monthly summary chips */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {Object.entries({ present: mPresent, absent: mAbsent, late: mLate }).map(([s, n]) => n > 0 && (
+            <span key={s} style={{ fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
+              background: EMP_STATUS_META[s]?.bg, color: EMP_STATUS_META[s]?.color }}>
+              {EMP_STATUS_META[s]?.full}: {n}
+            </span>
+          ))}
+          {mTotal > 0 && (
+            <span style={{ fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
+              background: mPct >= 75 ? '#dcfce7' : mPct >= 50 ? '#fef3c7' : '#fee2e2',
+              color: mPct >= 75 ? '#166534' : mPct >= 50 ? '#92400e' : '#dc2626' }}>
+              {mPct}% this month
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Calendar grid */}
+      <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 24 }}>
+        {/* Day headers */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
+          {ATT_DAY_LABELS.map(d => (
+            <div key={d} style={{ padding: '8px 4px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{d}</div>
+          ))}
+        </div>
+        {/* Day cells */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+          {Array.from({ length: firstDow }).map((_, i) => (
+            <div key={`empty-${i}`} style={{ minHeight: 56, padding: 8, borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9' }} />
+          ))}
+          {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
+            const dateKey = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+            const rec     = byDate[dateKey];
+            const meta    = rec ? EMP_STATUS_META[rec.status] : null;
+            const isToday  = dateKey === now.toISOString().slice(0, 10);
+            const isFuture = new Date(dateKey) > now;
+            return (
+              <div key={day} style={{
+                minHeight: 56, padding: '6px 8px', borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9',
+                background: meta ? `${meta.bg}80` : 'white', position: 'relative',
+              }}>
+                <div style={{
+                  fontSize: 12, fontWeight: isToday ? 700 : 500,
+                  color: isToday ? 'var(--primary)' : isFuture ? 'var(--text-muted)' : 'var(--text-secondary)',
+                  marginBottom: 4, display: 'flex', alignItems: 'center', gap: 3,
+                }}>
+                  {isToday
+                    ? <span style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{day}</span>
+                    : day}
+                </div>
+                {meta && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: meta.color }}>{meta.label}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Legend */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
-        {Object.entries(EMP_STATUS_META).map(([k, v]) => (
-          <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <div style={{ width: 10, height: 10, borderRadius: 3, background: v.bg, border: `1px solid ${v.color}44` }} />
-            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{v.label}</span>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+        {Object.entries(EMP_STATUS_META).map(([key, m]) => (
+          <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
+            <span style={{ width: 22, height: 16, borderRadius: 4, background: m.bg, border: `1px solid ${m.color}40`, display: 'inline-block' }} />
+            <span style={{ color: 'var(--text-secondary)' }}>{m.full}</span>
           </div>
         ))}
       </div>
 
       {/* Records table */}
       {isLoading ? (
-        <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading records…</p>
+        <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
       ) : records.length === 0 ? (
-        <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No attendance records for this month.</p>
+        <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+          <BookOpen size={32} style={{ marginBottom: 8, opacity: 0.35 }} />
+          <p style={{ fontSize: 14 }}>No attendance records for {ATT_MONTH_NAMES[month - 1]} {year}.</p>
+        </div>
       ) : (
-        <div className="table-container">
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Date','Status','Marked By','Remarks'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((r, i) => {
-                const meta = EMP_STATUS_META[r.status] || { label: r.status, bg: '#f1f5f9', color: '#334155' };
-                return (
-                  <tr key={r._id || i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '10px 12px', fontWeight: 500 }}>
-                      {new Date(r.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                    </td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: meta.bg, color: meta.color }}>
-                        {meta.label}
-                      </span>
-                    </td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>{r.markedBy?.name || '—'}</td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>{r.remarks || '—'}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ background: '#f8fafc', padding: '10px 16px', borderBottom: '1px solid var(--border)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Daily Records — {records.length} entries
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc' }}>
+                  {['Date', 'Day', 'Status', 'Marked By', 'Remarks'].map(h => (
+                    <th key={h} style={{ padding: '9px 14px', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.04em', borderTop: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {records.map((r, i) => {
+                  const meta = EMP_STATUS_META[r.status] || { label: r.status, full: r.status, color: '#64748b', bg: '#f1f5f9' };
+                  const d    = new Date(r.date);
+                  return (
+                    <tr key={i} style={{ borderTop: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '9px 14px', fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap' }}>
+                        {d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </td>
+                      <td style={{ padding: '9px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
+                        {d.toLocaleDateString('en-IN', { weekday: 'short' })}
+                      </td>
+                      <td style={{ padding: '9px 14px' }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20, background: meta.bg, color: meta.color }}>
+                          {meta.full}
+                        </span>
+                      </td>
+                      <td style={{ padding: '9px 14px', fontSize: 13, color: 'var(--text-secondary)' }}>
+                        {r.markedBy?.name || '—'}
+                      </td>
+                      <td style={{ padding: '9px 14px', fontSize: 12, color: 'var(--text-muted)', fontStyle: r.remarks ? 'italic' : 'normal' }}>
+                        {r.remarks || '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

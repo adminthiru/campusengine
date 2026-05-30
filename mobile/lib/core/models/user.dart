@@ -6,6 +6,8 @@ class AppUser {
   final String role;
   final String? avatar;
   final String? employeeId;
+  final String? studentId;
+  final String? parentId;
   final SchoolInfo? school;
   final bool firstLogin;
 
@@ -17,6 +19,8 @@ class AppUser {
     required this.role,
     this.avatar,
     this.employeeId,
+    this.studentId,
+    this.parentId,
     this.school,
     this.firstLogin = false,
   });
@@ -29,6 +33,8 @@ class AppUser {
     role: j['role'] ?? 'teacher',
     avatar: j['avatar'],
     employeeId: j['employeeId'] is Map ? j['employeeId']['_id'] : j['employeeId'],
+    studentId: j['studentId'] is Map ? j['studentId']['_id'] : j['studentId'],
+    parentId: j['parentId'] is Map ? j['parentId']['_id'] : j['parentId'],
     school: j['school'] is Map ? SchoolInfo.fromJson(j['school']) : null,
     firstLogin: j['firstLogin'] ?? false,
   );

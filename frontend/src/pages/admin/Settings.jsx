@@ -2,21 +2,25 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Settings as SettingsIcon, School, Key, CreditCard, Bell, Plus, Trash2, Check, Upload, CalendarCheck, ListOrdered, ShieldCheck, GraduationCap, BookOpen } from 'lucide-react';
+import { Settings as SettingsIcon, School, Key, CreditCard, Bell, Plus, Trash2, Check, Upload, CalendarCheck, ListOrdered, ShieldCheck, GraduationCap, BookOpen, UsersRound, UserCheck, KeyRound, Banknote } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useAuth } from '../../store/AuthContext';
 import { PageLoader, FormRow, StatCard } from '../../components/ui';
 
 const TABS = [
-  { id: 'school',       label: 'School Profile',   icon: School },
-  { id: 'grades',       label: 'Grade Config',     icon: Bell },
-  { id: 'leaves',       label: 'Leave Config',     icon: CalendarCheck },
-  { id: 'feeterms',     label: 'Fee Terms',        icon: ListOrdered },
-  { id: 'teacherroles', label: 'Teacher Roles',    icon: ShieldCheck },
-  { id: 'subscription', label: 'Subscription',     icon: CreditCard },
-  { id: 'password',     label: 'Change Password',  icon: Key },
-  { id: 'profile',      label: 'My Profile',       icon: SettingsIcon },
+  { id: 'school',        label: 'School Profile',   icon: School },
+  { id: 'grades',        label: 'Grade Config',     icon: Bell },
+  { id: 'leaves',        label: 'Leave Config',     icon: CalendarCheck },
+  { id: 'feeterms',      label: 'Fee Terms',        icon: ListOrdered },
+  { id: 'teacherroles',  label: 'Teacher Roles',    icon: ShieldCheck },
+  { id: 'parentroles',   label: 'Parent Roles',     icon: UsersRound },
+  { id: 'studentroles',  label: 'Student Roles',    icon: UserCheck },
+  { id: 'salaryconfig',  label: 'Salary & LOP',      icon: Banknote },
+  { id: 'credentials',   label: 'Login Credentials', icon: KeyRound },
+  { id: 'subscription',  label: 'Subscription',     icon: CreditCard },
+  { id: 'password',      label: 'Change Password',  icon: Key },
+  { id: 'profile',       label: 'My Profile',       icon: SettingsIcon },
 ];
 
 export default function Settings() {
@@ -64,6 +68,10 @@ export default function Settings() {
           {activeTab === 'leaves'       && isAdmin && <LeaveSettings />}
           {activeTab === 'feeterms'     && isAdmin && <FeeTermsSettings />}
           {activeTab === 'teacherroles' && isAdmin && <TeacherRolesSettings />}
+          {activeTab === 'parentroles'  && isAdmin && <ParentRolesSettings />}
+          {activeTab === 'studentroles' && isAdmin && <StudentRolesSettings />}
+          {activeTab === 'salaryconfig' && isAdmin && <SalaryConfigSettings />}
+          {activeTab === 'credentials'  && isAdmin && <CredentialsSettings />}
           {activeTab === 'subscription' && isAdmin && <SubscriptionSettings />}
           {activeTab === 'password' && <PasswordSettings />}
           {activeTab === 'profile'  && <ProfileSettings />}
@@ -536,6 +544,234 @@ function FeeTermsSettings() {
   );
 }
 
+function SalaryConfigSettings() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
+  const cfg = data?.school?.salaryConfig || {};
+
+  const [lopMethod,           setLopMethod]           = useState('');
+  const [workingDaysPerMonth, setWorkingDaysPerMonth] = useState('');
+  const [halfDayEnabled,      setHalfDayEnabled]      = useState(true);
+  const [halfDayFactor,       setHalfDayFactor]       = useState('');
+  const [initialized,         setInitialized]         = useState(false);
+
+  if (!isLoading && !initialized) {
+    setLopMethod(cfg.lopMethod || 'calendar_days');
+    setWorkingDaysPerMonth(cfg.workingDaysPerMonth ?? 26);
+    setHalfDayEnabled(cfg.halfDayEnabled !== false);
+    setHalfDayFactor(cfg.halfDayDeductionFactor ?? 0.5);
+    setInitialized(true);
+  }
+
+  const saveMut = useMutation({
+    mutationFn: (body) => api.put('/school', { salaryConfig: body }),
+    onSuccess: () => { toast.success('Salary config saved'); qc.invalidateQueries({ queryKey: ['school'] }); },
+    onError: () => toast.error('Failed to save'),
+  });
+
+  const handleSave = () => {
+    saveMut.mutate({
+      lopMethod,
+      workingDaysPerMonth: Number(workingDaysPerMonth),
+      halfDayEnabled,
+      halfDayDeductionFactor: Number(halfDayFactor),
+    });
+  };
+
+  const METHODS = [
+    {
+      id: 'calendar_days',
+      label: 'Calendar Days Method',
+      badge: 'Most Common in India',
+      badgeColor: '#10b981',
+      formula: 'LOP = (Basic ÷ Days in Month) × Absent Days',
+      desc: 'Divides salary by the actual number of days in the month (28–31). Every calendar day carries equal weight.'
+    },
+    {
+      id: 'fixed_30',
+      label: 'Fixed 30-Day Method',
+      badge: 'Common',
+      badgeColor: '#8b5cf6',
+      formula: 'LOP = (Basic ÷ 30) × Absent Days',
+      desc: 'Always divides by 30 regardless of month length. Simpler and consistent across all months.'
+    },
+    {
+      id: 'working_days',
+      label: 'Working Days Method',
+      badge: 'Less Common',
+      badgeColor: '#64748b',
+      formula: 'LOP = (Basic ÷ Working Days) × Absent Days',
+      desc: 'Divides by the configured working days per month. Each absent working day carries higher weight.'
+    },
+  ];
+
+  if (isLoading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>;
+
+  return (
+    <div>
+      <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 600 }}>Salary & LOP Configuration</h3>
+      <p style={{ margin: '0 0 24px', fontSize: 13, color: 'var(--text-muted)' }}>
+        Choose how Loss of Pay (LOP) is calculated when employees are absent. Applied when generating monthly salaries.
+      </p>
+
+      {/* LOP Method selector */}
+      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>LOP Deduction Method</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
+        {METHODS.map(m => {
+          const selected = lopMethod === m.id;
+          return (
+            <label key={m.id} onClick={() => setLopMethod(m.id)} style={{ cursor: 'pointer', display: 'flex', gap: 14, padding: 16, borderRadius: 12, border: `2px solid ${selected ? 'var(--primary)' : 'var(--border)'}`, background: selected ? '#eff6ff' : 'var(--bg-card,#fff)', transition: 'all 0.15s' }}>
+              <div style={{ marginTop: 2, flexShrink: 0 }}>
+                <div style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${selected ? 'var(--primary)' : 'var(--border)'}`, background: selected ? 'var(--primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {selected && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff' }} />}
+                </div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>{m.label}</span>
+                  <span style={{ fontSize: 11, padding: '1px 8px', borderRadius: 20, background: m.badgeColor + '18', color: m.badgeColor, fontWeight: 600 }}>{m.badge}</span>
+                </div>
+                <div style={{ fontSize: 12, fontFamily: 'monospace', background: 'var(--bg-secondary,#f8fafc)', padding: '4px 10px', borderRadius: 6, marginBottom: 6, color: 'var(--primary)', fontWeight: 600 }}>{m.formula}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.desc}</div>
+              </div>
+            </label>
+          );
+        })}
+      </div>
+
+      {/* Working days input (only for working_days method) */}
+      {lopMethod === 'working_days' && (
+        <div style={{ marginBottom: 24, padding: 16, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg-secondary,#f8fafc)' }}>
+          <label className="form-label">Working Days Per Month</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <input
+              type="number" min={20} max={31} className="form-control"
+              value={workingDaysPerMonth}
+              onChange={e => setWorkingDaysPerMonth(e.target.value)}
+              style={{ maxWidth: 120 }}
+            />
+            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              Typical: 26 (6-day week) · 22 (5-day week)
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Half Day section */}
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 24, marginBottom: 24 }}>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Half Day Deduction</div>
+        <div style={{ padding: 16, borderRadius: 12, border: `1px solid var(--border)`, background: 'var(--bg-card,#fff)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: halfDayEnabled ? 16 : 0 }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>Enable Half Day Deduction</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                When an employee is marked as "Half Day", deduct a fraction of the per-day salary
+              </div>
+            </div>
+            <label style={{ position: 'relative', display: 'inline-block', width: 44, height: 24, cursor: 'pointer', flexShrink: 0 }}>
+              <input type="checkbox" checked={halfDayEnabled} onChange={e => setHalfDayEnabled(e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
+              <span style={{ position: 'absolute', inset: 0, borderRadius: 24, background: halfDayEnabled ? 'var(--primary)' : '#cbd5e1', transition: '0.2s' }}>
+                <span style={{ position: 'absolute', left: halfDayEnabled ? 22 : 2, top: 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
+              </span>
+            </label>
+          </div>
+
+          {halfDayEnabled && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+              <label className="form-label">Deduction Factor</label>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {[{ val: 0.5, label: '0.5 (Half Day)', desc: 'Deduct 50% of daily salary' }, { val: 0.25, label: '0.25 (Quarter Day)', desc: 'Deduct 25% of daily salary' }].map(opt => (
+                  <label key={opt.val} onClick={() => setHalfDayFactor(opt.val)} style={{ cursor: 'pointer', padding: '10px 14px', borderRadius: 10, border: `2px solid ${Number(halfDayFactor) === opt.val ? 'var(--primary)' : 'var(--border)'}`, background: Number(halfDayFactor) === opt.val ? '#eff6ff' : 'transparent', flex: 1, minWidth: 160 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{opt.label}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{opt.desc}</div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Live preview */}
+      <div style={{ padding: 14, borderRadius: 10, background: '#f0fdf4', border: '1px solid #bbf7d0', marginBottom: 24 }}>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, color: '#166534' }}>Preview (₹30,000 basic, 2 absent days)</div>
+        <div style={{ fontSize: 13, color: '#166534' }}>
+          {(() => {
+            const basic = 30000;
+            const absent = 2;
+            const dim = 30; // example month
+            const div = lopMethod === 'fixed_30' ? 30 : lopMethod === 'working_days' ? Number(workingDaysPerMonth) || 26 : dim;
+            const lop = Math.round((basic / div) * absent);
+            return `LOP = ₹${basic} ÷ ${div} × ${absent} = ₹${lop.toLocaleString()} deduction · Net = ₹${(basic - lop).toLocaleString()}`;
+          })()}
+        </div>
+      </div>
+
+      <button className="btn btn-primary" onClick={handleSave} disabled={saveMut.isPending} style={{ minWidth: 140 }}>
+        {saveMut.isPending ? 'Saving...' : 'Save Configuration'}
+      </button>
+    </div>
+  );
+}
+
+function CredentialsSettings() {
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await api.post('/admin/repair-credentials');
+      setResult(res.data);
+      if (res.data.studentsFixed > 0 || res.data.parentsFixed > 0) {
+        toast.success(`Done! ${res.data.studentsFixed} students, ${res.data.parentsFixed} parents updated`);
+      } else {
+        toast.success('All students and parents already have credentials');
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to generate credentials');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div>
+      <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 600 }}>Login Credentials</h3>
+      <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-muted)' }}>
+        Generate login credentials for all existing students and parents who don't have an account yet.
+      </p>
+
+      <div style={{ background: 'var(--bg-secondary,#f8fafc)', border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 20 }}>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Credential rules</div>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 2 }}>
+          <div>🎓 <b>Student:</b> Username = Admission Number &nbsp;·&nbsp; Password = Admission Number</div>
+          <div>👨‍👩‍👧 <b>Parent:</b> Username = Mobile Number &nbsp;·&nbsp; Password = Mobile Number</div>
+        </div>
+      </div>
+
+      <button className="btn btn-primary" onClick={handleGenerate} disabled={loading} style={{ minWidth: 220 }}>
+        {loading ? 'Generating...' : '⚡ Generate Credentials for All'}
+      </button>
+
+      {result && (
+        <div style={{ marginTop: 16, padding: 16, borderRadius: 10, border: '1px solid var(--border)', background: result.errors?.length ? '#fff7ed' : '#f0fdf4' }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>
+            {result.errors?.length ? '⚠️ Done with some errors' : '✅ Done!'}
+          </div>
+          <div style={{ fontSize: 13, lineHeight: 1.9 }}>
+            <div>Students updated: <b>{result.studentsFixed}</b></div>
+            <div>Parents updated: <b>{result.parentsFixed}</b></div>
+            {result.errors?.length > 0 && result.errors.map((e, i) => (
+              <div key={i} style={{ color: 'var(--danger)', fontSize: 12 }}>{e}</div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SubscriptionSettings() {
   const { user, updateUser } = useAuth();
   const sub = user?.subscription;
@@ -745,6 +981,11 @@ const CLASS_TEACHER_PERMS = [
     label: 'View Timetable',
     desc: 'Can view their own timetable and the class-wise overall school timetable'
   },
+  {
+    key: 'viewCalendar',
+    label: 'View School Calendar',
+    desc: 'Can view the school calendar — holidays, events, exam days and other dates added by admin'
+  },
 ];
 
 const SUBJECT_TEACHER_PERMS = [
@@ -772,6 +1013,11 @@ const SUBJECT_TEACHER_PERMS = [
     key: 'viewTimetable',
     label: 'View Timetable',
     desc: 'Can view their own timetable and the class-wise overall school timetable'
+  },
+  {
+    key: 'viewCalendar',
+    label: 'View School Calendar',
+    desc: 'Can view the school calendar — holidays, events and important dates added by admin'
   },
 ];
 
@@ -928,6 +1174,266 @@ function TeacherRolesSettings() {
           perms={stPerms}
           permDefs={SUBJECT_TEACHER_PERMS}
           onChange={updateST}
+        />
+      </div>
+
+      <button className="btn btn-primary" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+        {saveMutation.isPending ? 'Saving...' : 'Save Permissions'}
+      </button>
+    </div>
+  );
+}
+
+// ─── Parent Roles & Permissions ─────────────────────────────────────────────
+
+const PARENT_PERMS = [
+  {
+    key: 'viewStudentInfo',
+    label: 'View Student Information',
+    desc: 'Can view full student profile including personal details and documents'
+  },
+  {
+    key: 'viewAttendance',
+    label: 'View Attendance',
+    desc: "Can view their child's day-by-day attendance records with monthly breakdown"
+  },
+  {
+    key: 'viewFees',
+    label: 'View Fee Records',
+    desc: 'Can view outstanding and paid fee records for their child'
+  },
+  {
+    key: 'viewExamResults',
+    label: 'View Exam Results',
+    desc: 'Can view exam results and answer papers uploaded by teachers'
+  },
+  {
+    key: 'viewTimetable',
+    label: 'View Timetable',
+    desc: "Can view their child's class timetable"
+  },
+  {
+    key: 'viewCalendar',
+    label: 'View School Calendar',
+    desc: "Can view the school calendar — holidays, events and important dates added by admin"
+  },
+  {
+    key: 'viewHomework',
+    label: 'View Homework',
+    desc: 'Can view homework assigned to their child with due dates and status'
+  },
+  {
+    key: 'submitHomework',
+    label: 'Submit / Update Homework',
+    desc: 'Can mark homework as completed and upload answer images or PDFs on behalf of their child'
+  },
+  {
+    key: 'submitLeaveRequest',
+    label: 'Submit Leave Requests',
+    desc: 'Can submit leave requests for their child that require admin approval'
+  },
+];
+
+const PARENT_NOTIFICATION_PERMS = [
+  {
+    key: 'notifyOnAttendance',
+    label: 'Attendance Notifications',
+    desc: "Send in-app alert when student's attendance is marked — present, absent, late, half-day, excused"
+  },
+  {
+    key: 'notifyOnHomeworkAssigned',
+    label: 'Homework Assigned Notifications',
+    desc: 'Notify parents when new homework is assigned to their child\'s class or to them directly'
+  },
+  {
+    key: 'notifyOnExamScheduled',
+    label: 'Exam Scheduled Notifications',
+    desc: 'Notify parents when a new exam is scheduled for their child\'s class'
+  },
+  {
+    key: 'notifyOnExamResults',
+    label: 'Exam Results Published Notifications',
+    desc: 'Notify parents when exam results are published so they can view their child\'s performance'
+  },
+  {
+    key: 'notifyOnFeePayment',
+    label: 'Fee Payment Confirmation',
+    desc: 'Send in-app receipt confirmation when a fee payment is collected for their child'
+  },
+  {
+    key: 'notifyOnFeeReminder',
+    label: 'Fee Reminder Notifications',
+    desc: 'Deliver in-app fee due reminders when admin sends bulk fee reminders'
+  },
+];
+
+function ParentRolesSettings() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
+  const school = data?.school;
+
+  const defaultPerms = (defs, saved) => {
+    const out = {};
+    defs.forEach(p => { out[p.key] = saved?.[p.key] ?? true; });
+    return out;
+  };
+
+  const [accessPerms, setAccessPerms]  = useState(null);
+  const [notifPerms,  setNotifPerms]   = useState(null);
+  const savedPerms = school?.parentPermissions;
+
+  const currentAccess = accessPerms ?? defaultPerms(PARENT_PERMS, savedPerms);
+  const currentNotif  = notifPerms  ?? defaultPerms(PARENT_NOTIFICATION_PERMS, savedPerms);
+
+  const updateAccess = (key, val) => setAccessPerms(prev => ({ ...(prev ?? defaultPerms(PARENT_PERMS, savedPerms)), [key]: val }));
+  const updateNotif  = (key, val) => setNotifPerms(prev  => ({ ...(prev ?? defaultPerms(PARENT_NOTIFICATION_PERMS, savedPerms)), [key]: val }));
+
+  const saveMutation = useMutation({
+    mutationFn: () => api.put('/school/parent-permissions', { ...currentAccess, ...currentNotif }),
+    onSuccess: () => { qc.invalidateQueries(['school']); toast.success('Parent permissions saved!'); },
+    onError: () => toast.error('Failed to save')
+  });
+
+  if (isLoading) return <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>;
+
+  return (
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Parent Roles & Permissions</h2>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+          Control what parents can access and which events trigger in-app notifications.
+          Changes apply immediately for all parents in this school.
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, padding: '12px 16px', borderRadius: 10, background: '#fdf4ff', border: '1px solid #e9d5ff', marginBottom: 24, alignItems: 'flex-start' }}>
+        <UsersRound size={18} color="#7c3aed" style={{ flexShrink: 0, marginTop: 1 }} />
+        <div style={{ fontSize: 13, color: '#6b21a8' }}>
+          Parent accounts are automatically created when students are enrolled. Parents log in with the mobile number used during enrollment.
+          The portal shows all their linked children with per-student tab navigation.
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
+        <PermissionCard
+          icon={UsersRound}
+          title="Portal Access"
+          subtitle="What parents can view and do in their portal"
+          color="#7c3aed"
+          bg="#fdf4ff"
+          perms={currentAccess}
+          permDefs={PARENT_PERMS}
+          onChange={updateAccess}
+        />
+        <PermissionCard
+          icon={Bell}
+          title="Notification Triggers"
+          subtitle="Which events send in-app notifications to parents"
+          color="#0891b2"
+          bg="#f0f9ff"
+          perms={currentNotif}
+          permDefs={PARENT_NOTIFICATION_PERMS}
+          onChange={updateNotif}
+        />
+      </div>
+
+      <button className="btn btn-primary" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+        {saveMutation.isPending ? 'Saving...' : 'Save Permissions'}
+      </button>
+    </div>
+  );
+}
+
+// ─── Student Roles & Permissions ─────────────────────────────────────────────
+
+const STUDENT_ACCESS_PERMS = [
+  { key: 'viewTimetable',      label: 'View Timetable',        desc: "Can view their own class timetable" },
+  { key: 'viewHomework',       label: 'View Homework',         desc: 'Can view homework assigned to them with due dates and status' },
+  { key: 'submitHomework',     label: 'Submit Homework',       desc: 'Can mark homework as completed and upload answer images or PDFs' },
+  { key: 'viewExams',          label: 'View Scheduled Exams',  desc: 'Can view upcoming and scheduled exams for their class' },
+  { key: 'viewExamResults',    label: 'View Exam Results',     desc: 'Can view published exam marks and grades' },
+  { key: 'viewAttendance',     label: 'View Attendance',       desc: 'Can view their own day-by-day attendance records — read only, no actions' },
+  { key: 'submitLeaveRequest', label: 'Apply for Leave',       desc: 'Can submit leave requests that require admin approval' },
+  { key: 'viewFees',           label: 'View Fee Details',      desc: 'Can view their fee payment status and history — read only' },
+  { key: 'viewCalendar',       label: 'View School Calendar',  desc: 'Can view the school calendar — holidays, events and important dates added by admin' },
+];
+
+const STUDENT_NOTIFICATION_PERMS = [
+  { key: 'notifyOnHomeworkAssigned', label: 'Homework Assigned',     desc: 'Notify when new homework is assigned to their class or directly to them' },
+  { key: 'notifyOnExamScheduled',    label: 'Exam Scheduled',        desc: 'Notify when a new exam is scheduled for their class' },
+  { key: 'notifyOnExamResults',      label: 'Exam Results Published', desc: 'Notify when their exam results are published' },
+  { key: 'notifyOnFeePayment',       label: 'Fee Payment Confirmed',  desc: 'Notify when a fee payment is recorded for them' },
+  { key: 'notifyOnFeeReminder',      label: 'Fee Reminder',          desc: 'Notify when admin sends a fee due reminder' },
+  { key: 'notifyOnAttendance',       label: 'Attendance Marked',     desc: 'Notify when their daily attendance is marked (present, absent, late, etc.)' },
+];
+
+function StudentRolesSettings() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
+  const school = data?.school;
+
+  const defaultPerms = (defs, saved) => {
+    const out = {};
+    defs.forEach(p => { out[p.key] = saved?.[p.key] ?? true; });
+    return out;
+  };
+
+  const [accessPerms, setAccessPerms] = useState(null);
+  const [notifPerms,  setNotifPerms]  = useState(null);
+  const savedPerms = school?.studentPermissions;
+
+  const currentAccess = accessPerms ?? defaultPerms(STUDENT_ACCESS_PERMS, savedPerms);
+  const currentNotif  = notifPerms  ?? defaultPerms(STUDENT_NOTIFICATION_PERMS, savedPerms);
+
+  const updateAccess = (key, val) => setAccessPerms(prev => ({ ...(prev ?? defaultPerms(STUDENT_ACCESS_PERMS, savedPerms)), [key]: val }));
+  const updateNotif  = (key, val) => setNotifPerms(prev  => ({ ...(prev ?? defaultPerms(STUDENT_NOTIFICATION_PERMS, savedPerms)), [key]: val }));
+
+  const saveMutation = useMutation({
+    mutationFn: () => api.put('/school/student-permissions', { ...currentAccess, ...currentNotif }),
+    onSuccess: () => { qc.invalidateQueries(['school']); toast.success('Student permissions saved!'); },
+    onError: () => toast.error('Failed to save'),
+  });
+
+  if (isLoading) return <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>;
+
+  return (
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Student Roles & Permissions</h2>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+          Control what students can access in their portal and which events trigger in-app notifications.
+          Changes apply immediately for all students in this school.
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, padding: '12px 16px', borderRadius: 10, background: '#f0fdf4', border: '1px solid #bbf7d0', marginBottom: 24, alignItems: 'flex-start' }}>
+        <UserCheck size={18} color="#059669" style={{ flexShrink: 0, marginTop: 1 }} />
+        <div style={{ fontSize: 13, color: '#065f46' }}>
+          Student accounts are linked at enrollment. Students log in with credentials sent by the admin.
+          The student portal shows their own personal data only — no other students' data is visible.
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
+        <PermissionCard
+          icon={UserCheck}
+          title="Portal Access"
+          subtitle="What students can view and do in their portal"
+          color="#059669"
+          bg="#f0fdf4"
+          perms={currentAccess}
+          permDefs={STUDENT_ACCESS_PERMS}
+          onChange={updateAccess}
+        />
+        <PermissionCard
+          icon={Bell}
+          title="Notification Triggers"
+          subtitle="Which events send in-app notifications to students"
+          color="#0891b2"
+          bg="#f0f9ff"
+          perms={currentNotif}
+          permDefs={STUDENT_NOTIFICATION_PERMS}
+          onChange={updateNotif}
         />
       </div>
 

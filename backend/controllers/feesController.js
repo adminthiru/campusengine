@@ -5,6 +5,7 @@ const School = require('../models/School');
 const Razorpay = require('razorpay');
 const { generateFeeReceipt, generateFeesReport } = require('../utils/pdf');
 const { sendSMS } = require('../utils/sms');
+const { notifyParentUsers, notifyStudentUsers } = require('../utils/notify');
 
 const getRazorpay = () => new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -151,6 +152,10 @@ const collectPayment = async (req, res) => {
           );
         }
       }
+      const termLabel = termName ? ` (${termName})` : '';
+      const feePayMsg = `₹${Number(amount).toLocaleString('en-IN')} received for ${student.name}${termLabel}. Receipt: ${receiptNumber}.`;
+      notifyParentUsers(schoolId, [fee.student], 'notifyOnFeePayment', 'Fee Payment Received', feePayMsg, 'success');
+      notifyStudentUsers(schoolId, [fee.student], 'notifyOnFeePayment', 'Fee Payment Received', feePayMsg, 'success');
     }
 
     res.json({ success: true, fee, receiptNumber });
@@ -331,6 +336,9 @@ const sendFeeReminder = async (req, res) => {
             sent++;
           }
         }
+        const feeReminderMsg = `₹${Number(fee.pendingAmount).toLocaleString('en-IN')} is pending. Please clear your dues at the earliest.`;
+        notifyParentUsers(req.user.school, [fee.student._id], 'notifyOnFeeReminder', `Fee Reminder for ${fee.student.name}`, feeReminderMsg, 'warning');
+        notifyStudentUsers(req.user.school, [fee.student._id], 'notifyOnFeeReminder', 'Fee Reminder', feeReminderMsg, 'warning');
       }
     }
     res.json({ success: true, message: `Reminders sent to ${sent} parents` });

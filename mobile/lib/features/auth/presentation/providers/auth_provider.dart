@@ -15,6 +15,7 @@ class AuthProvider extends ChangeNotifier {
   AppUser? get user => _user;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
   bool get isLoading => _status == AuthStatus.loading;
+  String get role => _user?.role ?? '';
 
   Future<void> checkAuth() async {
     try {

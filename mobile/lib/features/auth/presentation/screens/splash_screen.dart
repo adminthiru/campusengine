@@ -49,7 +49,17 @@ class _SplashScreenState extends State<SplashScreen>
 
       debugPrint('SplashScreen: isAuthenticated = ${auth.isAuthenticated}');
 
-      final route = auth.isAuthenticated ? '/dashboard' : '/auth/login';
+      String route;
+      if (!auth.isAuthenticated) {
+        route = '/auth/login';
+      } else {
+        final role = auth.user?.role ?? '';
+        route = role == 'student'
+            ? '/student/dashboard'
+            : role == 'parent'
+                ? '/parent/dashboard'
+                : '/dashboard';
+      }
 
       debugPrint('SplashScreen: Navigating to $route');
 

@@ -75,6 +75,7 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
   const [editMode, setEditMode] = useState(false);
   const [schedule, setSchedule] = useState([]);
   const [editCell, setEditCell] = useState(null);
+  const [editPeriodTime, setEditPeriodTime] = useState(null);
   const [saving, setSaving] = useState(false);
   const [conflict, setConflict] = useState(null);
 
@@ -144,6 +145,14 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
     return null;
   };
 
+  const getPeriodRawTime = (periodNum) => {
+    for (const ds of schedule) {
+      const p = ds.periods?.find(p => p.periodNumber === periodNum);
+      if (p?.startTime || p?.endTime) return { startTime: p.startTime || '', endTime: p.endTime || '' };
+    }
+    return { startTime: '', endTime: '' };
+  };
+
   const activeDays = schedule.map(s => s.day);
 
   return (
@@ -192,16 +201,24 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
                     const brk = breakInfoByPeriod[p];
                     const timeLabel = brk?.startTime && brk?.endTime ? `${fmtTime(brk.startTime)} – ${fmtTime(brk.endTime)}` : getPeriodTimeLabel(p);
                     return brk ? (
-                      <th key={p} style={{ padding: '12px 8px', textAlign: 'center', background: '#78350f', width: 80 }}>
+                      <th key={p}
+                        onClick={editMode ? () => { const t = getPeriodRawTime(p); setEditPeriodTime({ period: p, ...t }); } : undefined}
+                        style={{ padding: '12px 8px', textAlign: 'center', background: '#78350f', width: 80, cursor: editMode ? 'pointer' : 'default', userSelect: 'none' }}
+                        title={editMode ? 'Click to set time for this period' : undefined}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#fde68a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                           {brk.breakName || 'Break'}
                         </div>
                         {timeLabel && <div style={{ fontSize: 10, color: 'rgba(253,230,138,0.6)', fontWeight: 400, marginTop: 2 }}>{timeLabel}</div>}
+                        {editMode && <div style={{ fontSize: 9, color: 'rgba(253,230,138,0.3)', marginTop: 3 }}>set time</div>}
                       </th>
                     ) : (
-                      <th key={p} style={{ padding: '12px 8px', color: 'white', textAlign: 'center', fontSize: 13, fontWeight: 700, minWidth: 110 }}>
+                      <th key={p}
+                        onClick={editMode ? () => { const t = getPeriodRawTime(p); setEditPeriodTime({ period: p, ...t }); } : undefined}
+                        style={{ padding: '12px 8px', color: 'white', textAlign: 'center', fontSize: 13, fontWeight: 700, minWidth: 110, cursor: editMode ? 'pointer' : 'default', userSelect: 'none' }}
+                        title={editMode ? 'Click to set time for this period' : undefined}>
                         <div>P{p}</div>
                         {getPeriodTimeLabel(p) && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', fontWeight: 400, marginTop: 2 }}>{getPeriodTimeLabel(p)}</div>}
+                        {editMode && <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 3, letterSpacing: '0.03em' }}>set time</div>}
                       </th>
                     );
                   })}
@@ -285,6 +302,19 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
           </div>
         );
       })()}
+
+      {editPeriodTime && (
+        <PeriodTimeModal
+          period={editPeriodTime.period}
+          currentStart={editPeriodTime.startTime}
+          currentEnd={editPeriodTime.endTime}
+          onSave={(start, end) => {
+            activeDays.forEach(d => updateCell(d, editPeriodTime.period, { startTime: start, endTime: end }));
+            setEditPeriodTime(null);
+          }}
+          onClose={() => setEditPeriodTime(null)}
+        />
+      )}
 
       {editCell && (
         <EditCellModal
@@ -710,15 +740,74 @@ function SubstitutionPanel({ teacherId, teacher, academicYear }) {
   );
 }
 
-// ─── Edit Cell Modal (unchanged) ───────────────────────────────────────────────
+// ─── Period Time Picker (module-level to avoid remount/focus-loss) ────────────
+function TimeInput({ label, value, onChange }) {
+  return (
+    <div className="form-group">
+      <label className="form-label">{label}</label>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <input className="form-control" type="number" min={1} max={12}
+          value={value.h} onChange={e => onChange({ ...value, h: e.target.value })}
+          placeholder="hh" style={{ width: 64, textAlign: 'center' }} />
+        <span style={{ fontWeight: 700, fontSize: 20, color: 'var(--text-muted)', lineHeight: 1 }}>:</span>
+        <input className="form-control" type="number" min={0} max={59}
+          value={value.m} onChange={e => onChange({ ...value, m: e.target.value })}
+          placeholder="mm" style={{ width: 64, textAlign: 'center' }} />
+        <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
+          {['AM', 'PM'].map(ap => (
+            <button key={ap} type="button" onClick={() => onChange({ ...value, ampm: ap })}
+              style={{ padding: '8px 13px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                background: value.ampm === ap ? 'var(--primary)' : 'white',
+                color: value.ampm === ap ? 'white' : 'var(--text-secondary)',
+                transition: 'all 0.15s' }}>
+              {ap}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PeriodTimeModal({ period, currentStart, currentEnd, onSave, onClose }) {
+  const parse12 = (t) => {
+    if (!t) return { h: '8', m: '00', ampm: 'AM' };
+    const [hStr, m] = t.split(':');
+    const h24 = parseInt(hStr, 10);
+    return { h: String(h24 % 12 || 12), m: m || '00', ampm: h24 >= 12 ? 'PM' : 'AM' };
+  };
+  const to24 = ({ h, m, ampm }) => {
+    if (!h) return '';
+    let h24 = parseInt(h, 10) % 12;
+    if (ampm === 'PM') h24 += 12;
+    return `${String(h24).padStart(2, '0')}:${String(m || '0').padStart(2, '0')}`;
+  };
+
+  const [start, setStart] = useState(parse12(currentStart));
+  const [end, setEnd] = useState(parse12(currentEnd));
+
+  return (
+    <Modal open onClose={onClose} title={`Period ${period} — Set Time`} size="sm"
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={() => onSave(to24(start), to24(end))}>Apply to All Days</button>
+      </>}>
+      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
+        Sets the same time for <strong>all days</strong> in Period {period}.
+      </p>
+      <TimeInput label="Start Time" value={start} onChange={setStart} />
+      <TimeInput label="End Time" value={end} onChange={setEnd} />
+    </Modal>
+  );
+}
+
+// ─── Edit Cell Modal ───────────────────────────────────────────────────────────
 function EditCellModal({ cell, day, period, subjects, teachers, onSave, onClose, onClear }) {
   const [subjectId, setSubjectId] = useState(cell?.subject?._id || cell?.subject || '');
   const [teacherId, setTeacherId] = useState(cell?.teacher?._id || cell?.teacher || '');
   const [room, setRoom] = useState(cell?.room || '');
   const [isBreak, setIsBreak] = useState(cell?.isBreak || false);
   const [breakName, setBreakName] = useState(cell?.breakName || '');
-  const [startTime, setStartTime] = useState(cell?.startTime || '');
-  const [endTime, setEndTime] = useState(cell?.endTime || '');
 
   return (
     <Modal open onClose={onClose} title={`${day.charAt(0).toUpperCase() + day.slice(1)} — Period ${period}`} size="sm"
@@ -726,7 +815,10 @@ function EditCellModal({ cell, day, period, subjects, teachers, onSave, onClose,
         <button className="btn btn-danger btn-sm" onClick={onClear}>Clear</button>
         <div style={{ flex: 1 }} />
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-        <button className="btn btn-primary" onClick={() => onSave({ subject: subjectId || null, teacher: teacherId || null, room, isBreak, breakName, startTime, endTime })}>Save</button>
+        <button className="btn btn-primary" onClick={() => onSave({
+          subject: subjectId || null, teacher: teacherId || null, room, isBreak, breakName,
+          startTime: cell?.startTime || '', endTime: cell?.endTime || ''
+        })}>Save</button>
       </>}>
       <div className="form-group">
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 16 }}>
@@ -735,22 +827,10 @@ function EditCellModal({ cell, day, period, subjects, teachers, onSave, onClose,
         </label>
       </div>
       {isBreak ? (
-        <>
-          <div className="form-group">
-            <label className="form-label">Break Name</label>
-            <input className="form-control" value={breakName} onChange={e => setBreakName(e.target.value)} placeholder="e.g. Lunch Break" />
-          </div>
-          <FormRow>
-            <div className="form-group">
-              <label className="form-label">Start Time</label>
-              <input className="form-control" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">End Time</label>
-              <input className="form-control" type="time" value={endTime} onChange={e => setEndTime(e.target.value)} />
-            </div>
-          </FormRow>
-        </>
+        <div className="form-group">
+          <label className="form-label">Break Name</label>
+          <input className="form-control" value={breakName} onChange={e => setBreakName(e.target.value)} placeholder="e.g. Lunch Break" />
+        </div>
       ) : <>
         <div className="form-group">
           <label className="form-label">Subject</label>
@@ -766,16 +846,6 @@ function EditCellModal({ cell, day, period, subjects, teachers, onSave, onClose,
             {teachers.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
           </select>
         </div>
-        <FormRow>
-          <div className="form-group">
-            <label className="form-label">Start Time</label>
-            <input className="form-control" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">End Time</label>
-            <input className="form-control" type="time" value={endTime} onChange={e => setEndTime(e.target.value)} />
-          </div>
-        </FormRow>
         <div className="form-group">
           <label className="form-label">Room</label>
           <input className="form-control" value={room} onChange={e => setRoom(e.target.value)} placeholder="e.g. Room 101" />

@@ -55,9 +55,21 @@ const login = async (req, res) => {
   try {
     const { email, password, schoolCode } = req.body;
 
+    const isIdentifier = email && !email.includes('@');
+
     let user;
     if (req.body.isSuperAdmin) {
       user = await User.findOne({ email, role: 'super_admin' });
+    } else if (isIdentifier) {
+      // Admission number (student) or mobile number (parent)
+      let sf = {};
+      if (schoolCode) {
+        const school = await School.findOne({ code: schoolCode.toUpperCase() });
+        if (!school) return res.status(400).json({ success: false, message: 'Invalid school code' });
+        sf = { school: school._id };
+      }
+      user = await User.findOne({ admissionNumber: email, ...sf })
+          || await User.findOne({ phone: email, role: 'parent', ...sf });
     } else if (schoolCode) {
       const school = await School.findOne({ code: schoolCode.toUpperCase() });
       if (!school) return res.status(400).json({ success: false, message: 'Invalid school code' });

@@ -32,12 +32,20 @@ class _LoginScreenState extends State<LoginScreen> {
     await auth.login(_emailCtrl.text.trim(), _passCtrl.text);
     if (!mounted) return;
     if (auth.isAuthenticated) {
-      // Clear any cached profile and pre-fetch the logged-in teacher's profile
-      final profileProv = context.read<ProfileProvider>();
-      profileProv.reset();
-      await profileProv.fetchProfile();
+      final role = auth.role;
+      // Only fetch teacher profile for staff roles
+      if (role != 'student' && role != 'parent') {
+        final profileProv = context.read<ProfileProvider>();
+        profileProv.reset();
+        await profileProv.fetchProfile();
+      }
       if (!mounted) return;
-      context.go('/dashboard');
+      final dest = role == 'student'
+          ? '/student/dashboard'
+          : role == 'parent'
+              ? '/parent/dashboard'
+              : '/dashboard';
+      context.go(dest);
     } else if (auth.errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -91,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Sign in to your teacher account',
+                  'Sign in with your school credentials',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: AppColors.textSecondary,
                   ),
@@ -101,18 +109,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 // ── Email Field ───────────────────────────────────────────
                 TextFormField(
                   controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
+                  keyboardType: TextInputType.text,
                   textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(
-                    labelText: 'Email address',
-                    hintText: 'teacher@school.com',
-                    prefixIcon: Icon(Icons.email_outlined),
+                    labelText: 'Email / Admission No. / Mobile',
+                    hintText: 'Enter your email or admission number',
+                    prefixIcon: Icon(Icons.person_outline),
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Email is required';
-                    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v)) {
-                      return 'Enter a valid email address';
-                    }
+                    if (v == null || v.trim().isEmpty) return 'This field is required';
                     return null;
                   },
                 ),

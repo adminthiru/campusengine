@@ -29,10 +29,12 @@ const userSchema = new mongoose.Schema({
   // Reference to role-specific profile
   employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
   studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' },
-  parentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Parent' }
+  parentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Parent' },
+  admissionNumber: { type: String },
 }, { timestamps: true });
 
 userSchema.index({ email: 1, school: 1 }, { unique: true });
+userSchema.index({ admissionNumber: 1, school: 1 }, { unique: true, sparse: true });
 
 userSchema.pre('save', async function() {
   if (!this.isModified('password')) return;

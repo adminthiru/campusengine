@@ -30,6 +30,7 @@ const Employee = require('../models/Employee');
 const Attendance = require('../models/Attendance');
 const Leave = require('../models/Leave');
 const { v4: uuidv4 } = require('uuid');
+const { notifyParentUsers, notifyStudentUsers } = require('../utils/notify');
 
 // Multer setup
 const storage = multer.diskStorage({
@@ -46,6 +47,61 @@ router.get('/auth/me', protect, authCtrl.getMe);
 router.put('/auth/change-password', protect, authCtrl.changePassword);
 router.put('/auth/profile', protect, authCtrl.updateProfile);
 router.put('/auth/notifications/:notifId/read', protect, authCtrl.markNotification);
+
+// ============== REPAIR CREDENTIALS (one-time migration) ==============
+// Creates User accounts for students/parents added before auto-credential feature
+router.post('/admin/repair-credentials', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const schoolId = req.user.school;
+    const school = await School.findById(schoolId);
+    let studentsFixed = 0, parentsFixed = 0, errors = [];
+
+    // Fix students without a user account
+    const students = await Student.find({ school: schoolId });
+    for (const student of students) {
+      const existingUser = await User.findOne({ studentId: student._id, school: schoolId });
+      if (!existingUser) {
+        try {
+          const studentEmail = student.email || `${student.admissionNumber.toLowerCase()}@skl.internal`;
+          const stuUser = await User.create({
+            school: schoolId, name: student.name, email: studentEmail,
+            phone: student.phone, password: student.admissionNumber,
+            role: 'student', studentId: student._id, admissionNumber: student.admissionNumber,
+          });
+          student.user = stuUser._id;
+          await student.save();
+          studentsFixed++;
+        } catch (e) {
+          errors.push(`Student ${student.admissionNumber}: ${e.message}`);
+        }
+      }
+    }
+
+    // Fix parents without a user account
+    const parents = await Parent.find({ school: schoolId }).populate('students');
+    for (const parent of parents) {
+      const existingUser = await User.findOne({ parentId: parent._id, school: schoolId });
+      if (!existingUser && parent.phone) {
+        try {
+          const parentEmail = parent.email || `${parent.phone}@skl.internal`;
+          const parentUser = await User.create({
+            school: schoolId, name: parent.name, email: parentEmail,
+            phone: parent.phone, password: parent.phone, role: 'parent', parentId: parent._id,
+          });
+          parent.user = parentUser._id;
+          await parent.save();
+          parentsFixed++;
+        } catch (e) {
+          errors.push(`Parent ${parent.phone}: ${e.message}`);
+        }
+      }
+    }
+
+    res.json({ success: true, studentsFixed, parentsFixed, errors });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 // ============== SCHOOL ==============
 router.get('/school', protect, schoolCtrl.getSchool);
@@ -222,8 +278,160 @@ router.post('/students/bulk', protect, checkSubscription, authorize('admin', 'co
 // ============== PARENTS ==============
 router.get('/parents', protect, async (req, res) => {
   try {
-    const parents = await Parent.find({ school: req.user.school }).populate('students', 'name admissionNumber');
-    res.json({ success: true, parents });
+    const { search } = req.query;
+    // Only parents who are primaryGuardian of at least one student
+    const primaryIds = await Student.distinct('primaryGuardian', {
+      school: req.user.school, primaryGuardian: { $ne: null }
+    });
+    const query = { _id: { $in: primaryIds }, school: req.user.school };
+    if (search) query.$or = [{ name: new RegExp(search, 'i') }, { phone: new RegExp(search, 'i') }];
+    const parents = await Parent.find(query).sort({ name: 1 });
+
+    // Query students directly (don't rely on parent.students[] which can be stale)
+    const students = await Student.find({
+      primaryGuardian: { $in: primaryIds }, school: req.user.school
+    }).populate('currentClass', 'name section').select('name admissionNumber currentClass primaryGuardian');
+
+    // Group students by their primaryGuardian ID
+    const byParent = {};
+    students.forEach(s => {
+      const pid = s.primaryGuardian.toString();
+      if (!byParent[pid]) byParent[pid] = [];
+      byParent[pid].push({ _id: s._id, name: s.name, admissionNumber: s.admissionNumber, currentClass: s.currentClass });
+    });
+
+    const result = parents.map(p => ({ ...p.toObject(), students: byParent[p._id.toString()] || [] }));
+    res.json({ success: true, parents: result });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ============== PARENT PORTAL ==============
+const StudentLeave = require('../models/StudentLeave');
+
+// Parent permissions update
+router.put('/school/parent-permissions', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const school = await School.findByIdAndUpdate(req.user.school, { parentPermissions: req.body }, { new: true });
+    res.json({ success: true, school });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Parent: list linked children
+router.get('/parent/my-children', protect, authorize('parent'), async (req, res) => {
+  try {
+    if (!req.user.parentId) return res.status(400).json({ success: false, message: 'No parent profile linked' });
+    const students = await Student.find({
+      school: req.user.school,
+      $or: [{ primaryGuardian: req.user.parentId }, { guardians: req.user.parentId }]
+    })
+      .populate('currentClass', 'name section')
+      .select('name admissionNumber photo gender dateOfBirth currentClass status bloodGroup phone');
+    res.json({ success: true, children: students });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Parent: submit student leave request
+router.post('/parent/student-leave', protect, authorize('parent'), async (req, res) => {
+  try {
+    if (!req.user.parentId) return res.status(400).json({ success: false, message: 'No parent profile' });
+    const { studentId, fromDate, toDate, days, reason } = req.body;
+    const student = await Student.findOne({ _id: studentId, school: req.user.school, $or: [{ primaryGuardian: req.user.parentId }, { guardians: req.user.parentId }] });
+    if (!student) return res.status(403).json({ success: false, message: 'Student not linked to this parent' });
+    const leave = await StudentLeave.create({
+      school: req.user.school, student: studentId, parent: req.user.parentId,
+      fromDate, toDate, days: Number(days), reason
+    });
+    await leave.populate('student', 'name admissionNumber');
+    res.status(201).json({ success: true, leave });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Parent: my students' leave history
+router.get('/parent/student-leave', protect, authorize('parent'), async (req, res) => {
+  try {
+    if (!req.user.parentId) return res.status(400).json({ success: false, message: 'No parent profile' });
+    const { studentId } = req.query;
+    const query = { school: req.user.school, parent: req.user.parentId };
+    if (studentId) query.student = studentId;
+    const leaves = await StudentLeave.find(query).populate('student', 'name admissionNumber').sort({ createdAt: -1 });
+    res.json({ success: true, leaves });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Admin: view all student leave requests
+router.get('/student-leaves', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const { status, studentId } = req.query;
+    const query = { school: req.user.school };
+    if (status) query.status = status;
+    if (studentId) query.student = studentId;
+    const leaves = await StudentLeave.find(query)
+      .populate('student', 'name admissionNumber currentClass')
+      .populate('parent', 'name phone')
+      .sort({ createdAt: -1 });
+    res.json({ success: true, leaves });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Admin: approve/reject student leave
+router.put('/student-leaves/:id', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const { status, adminNote } = req.body;
+    const leave = await StudentLeave.findOneAndUpdate(
+      { _id: req.params.id, school: req.user.school },
+      { status, adminNote: adminNote || '', approvedBy: req.user._id, approvedAt: new Date() },
+      { new: true }
+    ).populate('student', 'name admissionNumber').populate('parent', 'name phone');
+    if (!leave) return res.status(404).json({ success: false, message: 'Not found' });
+    res.json({ success: true, leave });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ============== STUDENT PORTAL ==============
+
+// Student permissions update
+router.put('/school/student-permissions', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const school = await School.findByIdAndUpdate(req.user.school, { studentPermissions: req.body }, { new: true });
+    res.json({ success: true, school });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Student: own profile
+router.get('/student/my-profile', protect, authorize('student'), async (req, res) => {
+  try {
+    if (!req.user.studentId) return res.status(400).json({ success: false, message: 'No student profile linked' });
+    const student = await Student.findById(req.user.studentId)
+      .populate('currentClass', 'name section')
+      .select('name admissionNumber rollNumber photo gender dateOfBirth bloodGroup currentClass status address phone email');
+    if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+    res.json({ success: true, student });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Student: submit own leave request
+router.post('/student/leave', protect, authorize('student'), async (req, res) => {
+  try {
+    if (!req.user.studentId) return res.status(400).json({ success: false, message: 'No student profile linked' });
+    const { fromDate, toDate, days, reason } = req.body;
+    const student = await Student.findOne({ _id: req.user.studentId, school: req.user.school });
+    if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+    const leave = await StudentLeave.create({
+      school: req.user.school, student: req.user.studentId,
+      parent: student.primaryGuardian || undefined,
+      submittedBy: 'student', fromDate, toDate, days: Number(days), reason
+    });
+    await leave.populate('student', 'name admissionNumber');
+    res.status(201).json({ success: true, leave });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Student: own leave history
+router.get('/student/leave', protect, authorize('student'), async (req, res) => {
+  try {
+    if (!req.user.studentId) return res.status(400).json({ success: false, message: 'No student profile linked' });
+    const leaves = await StudentLeave.find({ student: req.user.studentId, school: req.user.school }).sort({ createdAt: -1 });
+    res.json({ success: true, leaves });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
@@ -453,6 +661,7 @@ router.post('/salaries/generate', protect, checkSubscription, authorize('admin',
 router.put('/salaries/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.updateSalary);
 router.post('/salaries/:id/pay', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.paySalary);
 router.post('/salaries/:id/revert', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.revertSalary);
+router.post('/salaries/:id/recalculate', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.recalculateSalary);
 router.delete('/salaries/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.deleteSalaryRecord);
 router.get('/salaries/:id/payslip', protect, salCtrl.getPayslipPDF);
 
@@ -500,6 +709,55 @@ router.delete('/timetable/substitutions/:id', protect, checkSubscription, async 
   try {
     const Substitution = require('../models/Substitution');
     await Substitution.findOneAndDelete({ _id: req.params.id, school: req.user.school });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ============== SCHOOL CALENDAR ==============
+const SchoolCalendar = require('../models/SchoolCalendar');
+
+router.get('/calendar', protect, authorize('admin','correspondent','principal','teacher','accountant','student','parent'), async (req, res) => {
+  try {
+    const { year, month } = req.query;
+    const query = { school: req.user.school };
+    if (year && month) {
+      const start = new Date(Number(year), Number(month) - 1, 1);
+      const end   = new Date(Number(year), Number(month), 0, 23, 59, 59);
+      query.$or = [
+        { date: { $gte: start, $lte: end } },
+        { endDate: { $gte: start, $lte: end } },
+        { date: { $lte: start }, endDate: { $gte: end } }
+      ];
+    } else if (year) {
+      const start = new Date(Number(year), 0, 1);
+      const end   = new Date(Number(year), 11, 31, 23, 59, 59);
+      query.date = { $gte: start, $lte: end };
+    }
+    const events = await SchoolCalendar.find(query).sort({ date: 1 });
+    res.json({ success: true, events });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.post('/calendar', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const event = await SchoolCalendar.create({ ...req.body, school: req.user.school });
+    res.status(201).json({ success: true, event });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.put('/calendar/:id', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const event = await SchoolCalendar.findOneAndUpdate(
+      { _id: req.params.id, school: req.user.school }, req.body, { new: true }
+    );
+    if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
+    res.json({ success: true, event });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.delete('/calendar/:id', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    await SchoolCalendar.findOneAndDelete({ _id: req.params.id, school: req.user.school });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -677,6 +935,22 @@ router.post('/homework', protect, checkSubscription, authorize('admin', 'corresp
     const hw = await Homework.create({ ...req.body, school: req.user.school, createdBy: req.user._id });
     await hw.populate([{ path: 'class', select: 'name section' }, { path: 'subject', select: 'name color' }, { path: 'students', select: 'name admissionNumber' }, { path: 'createdBy', select: 'name' }]);
     res.status(201).json({ success: true, homework: hw });
+
+    // Notify parents after response (fire-and-forget)
+    const dueLabel = hw.dueDate ? new Date(hw.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : null;
+    const subjectName = hw.subject?.name || '';
+    const classLabel  = hw.class ? `${hw.class.name}${hw.class.section ? ` ${hw.class.section}` : ''}` : '';
+    const msg = `${hw.title}${subjectName ? ` (${subjectName})` : ''}${classLabel ? ` — ${classLabel}` : ''}${dueLabel ? `. Due: ${dueLabel}` : ''}.`;
+    if (hw.assignedTo === 'selected' && hw.students?.length) {
+      const ids = hw.students.map(s => s._id || s);
+      notifyParentUsers(req.user.school, ids, 'notifyOnHomeworkAssigned', 'New Homework Assigned', msg, 'info');
+      notifyStudentUsers(req.user.school, ids, 'notifyOnHomeworkAssigned', 'New Homework Assigned', msg, 'info');
+    } else if (hw.class) {
+      const classStudents = await Student.find({ currentClass: hw.class._id || hw.class, school: req.user.school, status: 'active' }).select('_id');
+      const ids = classStudents.map(s => s._id);
+      notifyParentUsers(req.user.school, ids, 'notifyOnHomeworkAssigned', 'New Homework Assigned', msg, 'info');
+      notifyStudentUsers(req.user.school, ids, 'notifyOnHomeworkAssigned', 'New Homework Assigned', msg, 'info');
+    }
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 

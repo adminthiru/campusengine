@@ -51,27 +51,49 @@ const generateSalary = async (req, res) => {
       const existing = await Salary.findOne({ school: schoolId, employee: emp._id, month, year });
       if (existing) continue;
 
-      // Calculate working days
+      // Load school salary config
+      const school = await School.findById(schoolId).select('salaryConfig');
+      const cfg = school?.salaryConfig || {};
+      const lopMethod           = cfg.lopMethod            || 'calendar_days';
+      const workingDaysPerMonth = cfg.workingDaysPerMonth  || 26;
+      const halfDayEnabled      = cfg.halfDayEnabled       !== false;
+      const halfDayFactor       = cfg.halfDayDeductionFactor ?? 0.5;
+
       const daysInMonth = new Date(year, month, 0).getDate();
+
+      // Divisor based on selected method
+      const divisor = lopMethod === 'fixed_30'      ? 30
+                    : lopMethod === 'working_days'   ? workingDaysPerMonth
+                    : daysInMonth; // calendar_days
+
       const attendanceRecords = await Attendance.find({
         school: schoolId, type: 'employee',
         date: { $gte: new Date(year, month - 1, 1), $lt: new Date(year, month, 1) },
         'records.employee': emp._id
       });
-      let presentDays = 0;
+
+      // Count only explicitly marked statuses — days with no record are NOT counted as absent
+      let presentDays = 0, lopDays = 0;
       attendanceRecords.forEach(a => {
         const rec = a.records.find(r => r.employee?.toString() === emp._id.toString());
-        if (rec && rec.status === 'present') presentDays++;
+        if (!rec) return;
+        if (rec.status === 'present') {
+          presentDays += 1;
+        } else if (rec.status === 'half_day' && halfDayEnabled) {
+          presentDays += halfDayFactor;
+          lopDays    += (1 - halfDayFactor);
+        } else if (rec.status === 'absent') {
+          lopDays += 1;
+        }
       });
 
-      const lopDays = Math.max(0, daysInMonth - presentDays);
-      const lopPerDay = emp.salary.basic / daysInMonth;
+      const lopPerDay = emp.salary.basic / divisor;
       const lop = lopDays > 0 ? Math.round(lopPerDay * lopDays) : 0;
 
-      const basic = emp.salary.basic;
-      const hra = emp.salary.hra;
-      const da = emp.salary.da;
-      const other = emp.salary.otherAllowances;
+      const basic = emp.salary.basic || 0;
+      const hra   = emp.salary.hra   || 0;
+      const da    = emp.salary.da    || 0;
+      const other = emp.salary.otherAllowances || 0;
       const grossSalary = basic + hra + da + other;
       const pf = emp.salary.pfDeduction || Math.round(basic * 0.12);
       const esi = emp.salary.esiDeduction || (grossSalary <= 21000 ? Math.round(grossSalary * 0.0075) : 0);
@@ -82,7 +104,7 @@ const generateSalary = async (req, res) => {
 
       const salary = await Salary.create({
         school: schoolId, employee: emp._id, month, year,
-        workingDays: daysInMonth, presentDays, leaveDays: lopDays,
+        workingDays: divisor, presentDays, leaveDays: lopDays,
         earnings: { basic, hra, da, otherAllowances: other, overtime: 0, bonus: 0 },
         deductions: { pf, esi, tax: 0, loan: 0, lossOfPay: lop, other: 0 },
         grossSalary, totalDeductions, netSalary, slipNumber
@@ -336,4 +358,74 @@ const deleteSalaryRecord = async (req, res) => {
   }
 };
 
-module.exports = { generateSalary, createSalaryRecord, getSalaries, paySalary, revertSalary, getPayslipPDF, updateSalary, deleteSalaryRecord, getAttendanceSummary };
+const recalculateSalary = async (req, res) => {
+  try {
+    const schoolId = req.user.school;
+    const existing = await Salary.findOne({ _id: req.params.id, school: schoolId });
+    if (!existing) return res.status(404).json({ success: false, message: 'Salary record not found' });
+    if (existing.status === 'paid') return res.status(400).json({ success: false, message: 'Cannot recalculate a paid salary' });
+
+    const { month, year, employee: empId } = existing;
+    const emp = await Employee.findById(empId);
+    if (!emp) return res.status(404).json({ success: false, message: 'Employee not found' });
+
+    // Load salary config
+    const school = await School.findById(schoolId).select('salaryConfig');
+    const cfg = school?.salaryConfig || {};
+    const lopMethod           = cfg.lopMethod            || 'calendar_days';
+    const workingDaysPerMonth = cfg.workingDaysPerMonth  || 26;
+    const halfDayEnabled      = cfg.halfDayEnabled       !== false;
+    const halfDayFactor       = cfg.halfDayDeductionFactor ?? 0.5;
+
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const divisor = lopMethod === 'fixed_30' ? 30 : lopMethod === 'working_days' ? workingDaysPerMonth : daysInMonth;
+
+    const attendanceRecords = await Attendance.find({
+      school: schoolId, type: 'employee',
+      date: { $gte: new Date(year, month - 1, 1), $lt: new Date(year, month, 1) },
+      'records.employee': empId
+    });
+
+    // Count only explicitly marked days — days with no record are NOT counted as absent
+    let presentDays = 0, lopDays = 0;
+    attendanceRecords.forEach(a => {
+      const rec = a.records.find(r => r.employee?.toString() === empId.toString());
+      if (!rec) return;
+      if (rec.status === 'present') {
+        presentDays += 1;
+      } else if (rec.status === 'half_day' && halfDayEnabled) {
+        presentDays += halfDayFactor;
+        lopDays    += (1 - halfDayFactor);
+      } else if (rec.status === 'absent') {
+        lopDays += 1;
+      }
+    });
+
+    // Fall back to existing salary earnings if employee model has no salary configured
+    const basic = emp.salary?.basic || existing.earnings?.basic || 0;
+    const hra   = emp.salary?.hra   || existing.earnings?.hra   || 0;
+    const da    = emp.salary?.da    || existing.earnings?.da    || 0;
+    const other = emp.salary?.otherAllowances || existing.earnings?.otherAllowances || 0;
+
+    const lopPerDay = basic / divisor;
+    const lop = lopDays > 0 ? Math.round(lopPerDay * lopDays) : 0;
+    const grossSalary = basic + hra + da + other;
+    const pf  = emp.salary?.pfDeduction  || existing.deductions?.pf  || Math.round(basic * 0.12);
+    const esi = emp.salary?.esiDeduction || existing.deductions?.esi || (grossSalary <= 21000 ? Math.round(grossSalary * 0.0075) : 0);
+    const totalDeductions = pf + esi + lop + (emp.salary?.otherDeductions || existing.deductions?.other || 0);
+    const netSalary = grossSalary - totalDeductions;
+
+    const updated = await Salary.findByIdAndUpdate(req.params.id, {
+      workingDays: divisor, presentDays, leaveDays: lopDays,
+      earnings: { basic, hra, da, otherAllowances: other, overtime: existing.earnings?.overtime || 0, bonus: existing.earnings?.bonus || 0 },
+      deductions: { pf, esi, tax: existing.deductions?.tax || 0, loan: existing.deductions?.loan || 0, lossOfPay: lop, other: existing.deductions?.other || 0 },
+      grossSalary, totalDeductions, netSalary
+    }, { new: true }).populate('employee', 'name employeeId role');
+
+    res.json({ success: true, salary: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { generateSalary, createSalaryRecord, getSalaries, paySalary, revertSalary, getPayslipPDF, updateSalary, deleteSalaryRecord, getAttendanceSummary, recalculateSalary };

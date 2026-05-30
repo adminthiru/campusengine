@@ -5,6 +5,7 @@ const Subject = require('../models/Subject');
 const School = require('../models/School');
 const { generateResultCard, generateHallTicket } = require('../utils/pdf');
 const { sendSMS } = require('../utils/sms');
+const { notifyParentUsers, notifyStudentUsers } = require('../utils/notify');
 
 // Get single exam by ID
 const getExamById = async (req, res) => {
@@ -72,6 +73,15 @@ const createExam = async (req, res) => {
       })();
     }
     const exam = await Exam.create({ ...req.body, academicYear, school: req.user.school, createdBy: req.user._id });
+    // Notify parents of students in the exam's classes
+    if (exam.classes?.length) {
+      const classStudents = await Student.find({ currentClass: { $in: exam.classes }, school: req.user.school, status: 'active' }).select('_id');
+      const dateLabel = exam.examDate ? new Date(exam.examDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'TBD';
+      const examSchedMsg = `${exam.name} has been scheduled${exam.examDate ? ` on ${dateLabel}` : ''}. Please prepare accordingly.`;
+      const studentIdList = classStudents.map(s => s._id);
+      notifyParentUsers(req.user.school, studentIdList, 'notifyOnExamScheduled', `Exam Scheduled: ${exam.name}`, examSchedMsg.replace('accordingly', 'your child'), 'info');
+      notifyStudentUsers(req.user.school, studentIdList, 'notifyOnExamScheduled', `Exam Scheduled: ${exam.name}`, examSchedMsg, 'info');
+    }
     res.status(201).json({ success: true, exam });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -227,6 +237,13 @@ const publishResults = async (req, res) => {
           }
         }
       }
+    }
+
+    // In-app notifications
+    const studentIds = results.map(r => r.student?._id).filter(Boolean);
+    if (studentIds.length) {
+      notifyParentUsers(req.user.school, studentIds, 'notifyOnExamResults', `Exam Results Published: ${exam.name}`, `Results for ${exam.name} are published. Log in to view your child's performance.`, 'success');
+      notifyStudentUsers(req.user.school, studentIds, 'notifyOnExamResults', `Exam Results Published: ${exam.name}`, `Results for ${exam.name} are published. Log in to view your marks.`, 'success');
     }
 
     res.json({ success: true, message: 'Results published' });

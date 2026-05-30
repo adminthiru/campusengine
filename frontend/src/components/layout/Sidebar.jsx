@@ -3,10 +3,10 @@ import { useAuth } from '../../store/AuthContext';
 import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, Users, UserCheck, BookOpen, Clock,
-  DollarSign, CreditCard, Calendar, FileText, Truck,
+  DollarSign, CreditCard, CalendarDays, FileText, Truck,
   MessageSquare, CreditCard as IdCard, Settings, LogOut,
   GraduationCap, Building2, ChevronRight, Bell, BarChart3,
-  ClipboardList, Banknote, School, BookMarked
+  ClipboardList, Banknote, School, BookMarked, UsersRound, Calendar
 } from 'lucide-react';
 
 const navConfig = {
@@ -20,10 +20,12 @@ const navConfig = {
     { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
     { section: 'Academics' },
     { label: 'Students', icon: GraduationCap, path: '/students' },
+    { label: 'Parents', icon: UsersRound, path: '/parents' },
     { label: 'Employees', icon: Users, path: '/employees' },
     { label: 'Classes', icon: BookOpen, path: '/classes' },
     { label: 'Subjects', icon: ClipboardList, path: '/subjects' },
     { label: 'Timetable', icon: Clock, path: '/timetable' },
+    { label: 'My Calendar', icon: Calendar, path: '/calendar' },
     { section: 'Attendance & Exams' },
     { label: 'Attendance', icon: UserCheck, path: '/attendance' },
     { label: 'Exams', icon: FileText, path: '/exams' },
@@ -43,10 +45,12 @@ const navConfig = {
     { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
     { section: 'Academics' },
     { label: 'Students', icon: GraduationCap, path: '/students' },
+    { label: 'Parents', icon: UsersRound, path: '/parents' },
     { label: 'Employees', icon: Users, path: '/employees' },
     { label: 'Classes', icon: BookOpen, path: '/classes' },
     { label: 'Subjects', icon: ClipboardList, path: '/subjects' },
     { label: 'Timetable', icon: Clock, path: '/timetable' },
+    { label: 'My Calendar', icon: Calendar, path: '/calendar' },
     { section: 'Attendance & Exams' },
     { label: 'Attendance', icon: UserCheck, path: '/attendance' },
     { label: 'Exams', icon: FileText, path: '/exams' },
@@ -66,6 +70,7 @@ const navConfig = {
     { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
     { section: 'Academics' },
     { label: 'Students', icon: GraduationCap, path: '/students' },
+    { label: 'Parents', icon: UsersRound, path: '/parents' },
     { label: 'Employees', icon: Users, path: '/employees' },
     { label: 'Classes', icon: BookOpen, path: '/classes' },
     { label: 'Timetable', icon: Clock, path: '/timetable' },
@@ -110,10 +115,6 @@ const navConfig = {
   student: [
     { section: 'Overview' },
     { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-    { label: 'My Attendance', icon: UserCheck, path: '/my-attendance' },
-    { label: 'My Timetable', icon: Clock, path: '/my-timetable' },
-    { label: 'My Exams', icon: FileText, path: '/my-exams' },
-    { label: 'My Fees', icon: CreditCard, path: '/my-fees' },
     { section: 'Account' },
     { label: 'Settings', icon: Settings, path: '/settings' },
   ],
@@ -121,10 +122,6 @@ const navConfig = {
     { section: 'Overview' },
     { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
     { label: 'My Children', icon: GraduationCap, path: '/my-children' },
-    { label: 'Attendance', icon: UserCheck, path: '/my-attendance' },
-    { label: 'Fees', icon: CreditCard, path: '/my-fees' },
-    { label: 'Exams', icon: FileText, path: '/my-exams' },
-    { label: 'Timetable', icon: Clock, path: '/my-timetable' },
     { section: 'Account' },
     { label: 'Settings', icon: Settings, path: '/settings' },
   ],

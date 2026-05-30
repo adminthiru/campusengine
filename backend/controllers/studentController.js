@@ -43,22 +43,20 @@ const createStudent = async (req, res) => {
         let parent = await Parent.findOne({ phone: g.phone, school: schoolId });
         if (!parent) {
           parent = await Parent.create({ ...g, school: schoolId });
-          // Create parent user
-          const tempPass = `Parent@${uuidv4().slice(0, 6)}`;
+        }
+        // Create parent user if one doesn't exist yet (runs for new AND existing parents)
+        const existingParentUser = await User.findOne({ parentId: parent._id, school: schoolId });
+        if (!existingParentUser) {
+          const parentEmail = g.email || `${g.phone}@skl.internal`;
+          const parentUser = await User.create({
+            school: schoolId, name: g.name, email: parentEmail,
+            phone: g.phone, password: g.phone, role: 'parent', parentId: parent._id
+          });
+          parent.user = parentUser._id;
+          await parent.save();
           if (g.email) {
-            const parentUser = await User.create({
-              school: schoolId, name: g.name, email: g.email,
-              phone: g.phone, password: tempPass, role: 'parent', parentId: parent._id
-            });
-            parent.user = parentUser._id;
-            await parent.save();
             const portalUrl = `${process.env.CLIENT_URL}?school=${school.code}`;
-            await sendEmail(invitationEmail(g.name, g.email, tempPass, portalUrl, 'parent'));
-            if (g.phone) {
-              await sendSMS(schoolId, g.phone, 'invitation',
-                [g.name, portalUrl, g.email, tempPass], school.language, { parent: parent._id }
-              );
-            }
+            await sendEmail(invitationEmail(g.name, g.email, admissionNumber, portalUrl, 'parent'));
           }
         }
         guardianIds.push(parent._id);
@@ -81,17 +79,18 @@ const createStudent = async (req, res) => {
       await Parent.findByIdAndUpdate(gId, { $addToSet: { students: student._id } });
     }
 
-    // Create student user account
-    const tempPassword = `Stud@${uuidv4().slice(0, 6)}`;
+    // Create student user account — always, even without email
+    const studentEmail = req.body.email || `${admissionNumber.toLowerCase()}@skl.internal`;
+    const stuUser = await User.create({
+      school: schoolId, name: req.body.name, email: studentEmail,
+      phone: req.body.phone, password: admissionNumber,
+      role: 'student', studentId: student._id, admissionNumber,
+    });
+    student.user = stuUser._id;
+    await student.save();
     if (req.body.email) {
-      const stuUser = await User.create({
-        school: schoolId, name: req.body.name, email: req.body.email,
-        phone: req.body.phone, password: tempPassword, role: 'student', studentId: student._id
-      });
-      student.user = stuUser._id;
-      await student.save();
       const portalUrl = `${process.env.CLIENT_URL}?school=${school.code}`;
-      await sendEmail(invitationEmail(req.body.name, req.body.email, tempPassword, portalUrl, 'student'));
+      await sendEmail(invitationEmail(req.body.name, req.body.email, admissionNumber, portalUrl, 'student'));
     }
 
     const populated = await Student.findById(student._id)
@@ -152,12 +151,15 @@ const updateStudent = async (req, res) => {
 
     // Resolve guardian objects → Parent ObjectIds (same logic as createStudent)
     const guardiansInput = Array.isArray(req.body.guardians) ? req.body.guardians : [];
+    const resolvedParents = []; // track Parent docs for credential creation below
     if (guardiansInput.length > 0) {
       const guardianIds = [];
       for (const g of guardiansInput) {
         if (typeof g === 'string' || g?._id) {
           // Already an ObjectId or populated object — keep as-is
           guardianIds.push(g._id || g);
+          const parent = await Parent.findById(g._id || g);
+          if (parent) resolvedParents.push(parent);
         } else if (g.phone) {
           let parent = await Parent.findOne({ phone: g.phone, school: schoolId });
           if (!parent) {
@@ -165,6 +167,7 @@ const updateStudent = async (req, res) => {
           } else {
             await Parent.findByIdAndUpdate(parent._id, { name: g.name, relation: g.relation, alternatePhone: g.alternatePhone });
           }
+          resolvedParents.push(parent);
           guardianIds.push(parent._id);
         }
       }
@@ -178,6 +181,34 @@ const updateStudent = async (req, res) => {
       .populate('guardians', 'name relation phone')
       .populate('transportRoute', 'routeName vehicleType vehicleNumber');
     if (!student) return res.status(404).json({ success: false, message: 'Not found' });
+
+    // Ensure student has a User account (creates one if missing)
+    const existingStuUser = await User.findOne({ studentId: student._id, school: schoolId });
+    if (!existingStuUser) {
+      const studentEmail = student.email || `${student.admissionNumber.toLowerCase()}@skl.internal`;
+      const stuUser = await User.create({
+        school: schoolId, name: student.name, email: studentEmail,
+        phone: student.phone, password: student.admissionNumber,
+        role: 'student', studentId: student._id, admissionNumber: student.admissionNumber,
+      });
+      await Student.findByIdAndUpdate(student._id, { user: stuUser._id });
+    }
+
+    // Ensure each parent has a User account (creates one if missing)
+    for (const parent of resolvedParents) {
+      if (!parent.phone) continue;
+      const existingParentUser = await User.findOne({ parentId: parent._id, school: schoolId });
+      if (!existingParentUser) {
+        const parentEmail = parent.email || `${parent.phone}@skl.internal`;
+        const parentUser = await User.create({
+          school: schoolId, name: parent.name, email: parentEmail,
+          phone: parent.phone, password: parent.phone,
+          role: 'parent', parentId: parent._id,
+        });
+        await Parent.findByIdAndUpdate(parent._id, { user: parentUser._id });
+      }
+    }
+
     res.json({ success: true, student });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

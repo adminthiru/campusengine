@@ -4,6 +4,7 @@ const Employee = require('../models/Employee');
 const Parent = require('../models/Parent');
 const Class = require('../models/Class');
 const { sendSMS } = require('../utils/sms');
+const { notifyParentUsers, notifyStudentUsers } = require('../utils/notify');
 
 // Mark student attendance
 const markStudentAttendance = async (req, res) => {
@@ -60,6 +61,25 @@ const markStudentAttendance = async (req, res) => {
           }
         }
       }
+    }
+
+    // In-app notifications for parents (fire-and-forget)
+    const dateLabel = new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    const ATT_MSG = {
+      present:  (name) => ({ title: `${name} is Present`, msg: `Your child ${name} was marked present on ${dateLabel}.`, type: 'success' }),
+      absent:   (name) => ({ title: `${name} is Absent`,  msg: `Your child ${name} was marked absent on ${dateLabel}.`,  type: 'error'   }),
+      late:     (name) => ({ title: `${name} Arrived Late`, msg: `Your child ${name} arrived late on ${dateLabel}.`,     type: 'warning' }),
+      excused:  (name) => ({ title: `${name} - Excused`,  msg: `Your child ${name} was marked excused on ${dateLabel}.`, type: 'info'    }),
+      half_day: (name) => ({ title: `${name} - Half Day`, msg: `Your child ${name} was marked half-day on ${dateLabel}.`, type: 'warning' }),
+    };
+    for (const rec of records) {
+      if (!rec.student) continue;
+      const student = await Student.findById(rec.student).select('name');
+      if (!student) continue;
+      const tmpl = ATT_MSG[rec.status] || ATT_MSG.present;
+      const { title: ntitle, msg: nmsg, type: ntype } = tmpl(student.name);
+      notifyParentUsers(schoolId, [rec.student], 'notifyOnAttendance', ntitle, nmsg, ntype);
+      notifyStudentUsers(schoolId, [rec.student], 'notifyOnAttendance', ntitle, nmsg, ntype);
     }
 
     res.json({ success: true, message: 'Attendance marked' });

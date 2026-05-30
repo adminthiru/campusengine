@@ -11,6 +11,7 @@ import { Classes, Subjects } from './pages/admin/ClassesSubjects';
 import Attendance from './pages/admin/Attendance';
 import Fees from './pages/admin/Fees';
 import Timetable from './pages/admin/Timetable';
+import Calendar from './pages/admin/Calendar';
 import Salary from './pages/admin/Salary';
 import Exams from './pages/admin/Exams';
 import ExamDetail from './pages/admin/ExamDetail';
@@ -20,6 +21,7 @@ import Transport from './pages/admin/Transport';
 import IDCards from './pages/admin/IDCards';
 import Settings from './pages/admin/Settings';
 import SMS from './pages/admin/SMS';
+import Parents from './pages/admin/Parents';
 import { SuperAdminDashboard } from './pages/superadmin/Dashboard';
 import { TeacherDashboard, MySalary, MyTasks, StudentDashboard, ParentDashboard } from './pages/portals/index';
 
@@ -61,12 +63,14 @@ export default function App() {
       } />
 
       <Route path="/students" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Students /></ProtectedRoute>} />
+      <Route path="/parents" element={<ProtectedRoute roles={['admin','correspondent','principal']}><Parents /></ProtectedRoute>} />
       <Route path="/employees" element={<ProtectedRoute roles={ADMIN}><Employees /></ProtectedRoute>} />
       <Route path="/classes" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Classes /></ProtectedRoute>} />
       <Route path="/subjects" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Subjects /></ProtectedRoute>} />
       <Route path="/attendance" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Attendance /></ProtectedRoute>} />
       <Route path="/fees" element={<ProtectedRoute roles={ADMIN}><Fees /></ProtectedRoute>} />
       <Route path="/timetable" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Timetable /></ProtectedRoute>} />
+      <Route path="/calendar" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Calendar /></ProtectedRoute>} />
       <Route path="/salary" element={<ProtectedRoute roles={ADMIN}><Salary /></ProtectedRoute>} />
       <Route path="/exams" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Exams /></ProtectedRoute>} />
       <Route path="/exams/:id" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><ExamDetail /></ProtectedRoute>} />
@@ -86,6 +90,7 @@ export default function App() {
       <Route path="/my-exams" element={<ProtectedRoute roles={['student','parent']}><StudentDashboard /></ProtectedRoute>} />
       <Route path="/my-fees" element={<ProtectedRoute roles={['student','parent']}><StudentDashboard /></ProtectedRoute>} />
       <Route path="/my-children" element={<ProtectedRoute roles={['parent']}><ParentDashboard /></ProtectedRoute>} />
+      <Route path="/parent-portal" element={<ProtectedRoute roles={['parent']}><ParentDashboard /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

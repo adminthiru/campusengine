@@ -14,6 +14,20 @@ import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/notifications/presentation/screens/notifications_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/more/presentation/screens/more_screen.dart';
+// Student portal screens
+import '../../features/student/presentation/screens/student_dashboard_screen.dart';
+import '../../features/student/presentation/screens/student_homework_screen.dart';
+import '../../features/student/presentation/screens/student_exams_screen.dart';
+import '../../features/student/presentation/screens/student_attendance_screen.dart';
+import '../../features/student/presentation/screens/student_more_screen.dart';
+import '../../features/student/presentation/screens/student_leave_screen.dart';
+import '../../features/student/presentation/screens/student_fees_screen.dart';
+import '../../features/student/presentation/screens/student_timetable_screen.dart';
+// Parent portal screens
+import '../../features/parent/presentation/screens/parent_dashboard_screen.dart';
+import '../../features/parent/presentation/screens/parent_children_screen.dart';
+import '../../features/parent/presentation/screens/parent_leave_screen.dart';
+import '../../features/parent/presentation/screens/parent_profile_screen.dart';
 import '../screens/app_shell.dart';
 
 class AppRouter {
@@ -34,9 +48,14 @@ class AppRouter {
         final isSplash = state.uri.path == '/splash';
         final isAuthPath = state.uri.path.startsWith('/auth');
 
-        if (isSplash) return null; // Let splash handle itself
+        if (isSplash) return null;
         if (!isAuth && !isAuthPath) return '/auth/login';
-        if (isAuth && isAuthPath) return '/dashboard';
+        if (isAuth && isAuthPath) {
+          final role = authProvider.role;
+          if (role == 'student') return '/student/dashboard';
+          if (role == 'parent') return '/parent/dashboard';
+          return '/dashboard';
+        }
         return null;
       },
       routes: [
@@ -57,42 +76,32 @@ class AppRouter {
           navigatorKey: _shellNavigatorKey,
           builder: (context, state, child) => AppShell(child: child),
           routes: [
-            GoRoute(
-              path: '/dashboard',
-              builder: (_, __) => const DashboardScreen(),
-            ),
-            GoRoute(
-              path: '/attendance',
-              builder: (_, __) => const AttendanceScreen(),
-            ),
-            GoRoute(
-              path: '/homework',
-              builder: (_, __) => const HomeworkScreen(),
-            ),
-            GoRoute(
-              path: '/timetable',
-              builder: (_, __) => const TimetableScreen(),
-            ),
-            GoRoute(
-              path: '/students',
-              builder: (_, __) => const StudentsScreen(),
-            ),
-            GoRoute(
-              path: '/profile',
-              builder: (_, __) => const ProfileScreen(),
-            ),
-            GoRoute(
-              path: '/more',
-              builder: (_, __) => const MoreScreen(),
-            ),
-            GoRoute(
-              path: '/notifications',
-              builder: (_, __) => const NotificationsScreen(),
-            ),
-            GoRoute(
-              path: '/settings',
-              builder: (_, __) => const SettingsScreen(),
-            ),
+            // Teacher routes (unchanged)
+            GoRoute(path: '/dashboard',    builder: (_, __) => const DashboardScreen()),
+            GoRoute(path: '/attendance',   builder: (_, __) => const AttendanceScreen()),
+            GoRoute(path: '/homework',     builder: (_, __) => const HomeworkScreen()),
+            GoRoute(path: '/timetable',    builder: (_, __) => const TimetableScreen()),
+            GoRoute(path: '/students',     builder: (_, __) => const StudentsScreen()),
+            GoRoute(path: '/profile',      builder: (_, __) => const ProfileScreen()),
+            GoRoute(path: '/more',         builder: (_, __) => const MoreScreen()),
+            GoRoute(path: '/notifications',builder: (_, __) => const NotificationsScreen()),
+            GoRoute(path: '/settings',     builder: (_, __) => const SettingsScreen()),
+
+            // Student routes
+            GoRoute(path: '/student/dashboard',  builder: (_, __) => const StudentDashboardScreen()),
+            GoRoute(path: '/student/homework',   builder: (_, __) => const StudentHomeworkScreen()),
+            GoRoute(path: '/student/exams',      builder: (_, __) => const StudentExamsScreen()),
+            GoRoute(path: '/student/attendance', builder: (_, __) => const StudentAttendanceScreen()),
+            GoRoute(path: '/student/more',       builder: (_, __) => const StudentMoreScreen()),
+            GoRoute(path: '/student/leave',      builder: (_, __) => const StudentLeaveScreen()),
+            GoRoute(path: '/student/fees',       builder: (_, __) => const StudentFeesScreen()),
+            GoRoute(path: '/student/timetable',  builder: (_, __) => const StudentTimetableScreen()),
+
+            // Parent routes
+            GoRoute(path: '/parent/dashboard', builder: (_, __) => const ParentDashboardScreen()),
+            GoRoute(path: '/parent/children',  builder: (_, __) => const ParentChildrenScreen()),
+            GoRoute(path: '/parent/leave',     builder: (_, __) => const ParentLeaveScreen()),
+            GoRoute(path: '/parent/profile',   builder: (_, __) => const ParentProfileScreen()),
           ],
         ),
       ],

@@ -7,6 +7,31 @@ import { StatusBadge, PageLoader, EmptyState, StatCard, Modal, FormRow, ConfirmD
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+function SalaryFieldHead({ children }) {
+  return (
+    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>
+      {children}
+    </div>
+  );
+}
+
+function SalaryField({ label, value, onChange, highlight }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid #f1f5f9', background: highlight ? '#fffbeb' : 'transparent', borderRadius: highlight ? 4 : 0 }}>
+      <label style={{ fontSize: 13, color: highlight ? '#92400e' : 'var(--text-secondary)', whiteSpace: 'nowrap', fontWeight: highlight ? 600 : 400 }}>{label}</label>
+      <input className="form-control" type="number" min={0} value={value} onChange={e => onChange(e.target.value)}
+        placeholder="0" style={{ width: 120, textAlign: 'right', fontSize: 13, padding: '4px 8px', background: highlight ? '#fef9c3' : undefined }} />
+    </div>
+  );
+}
+
+function SalaryAttChip({ label, count, color, bg }) {
+  if (!count || count <= 0) return null;
+  return (
+    <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 12, fontWeight: 600, background: bg, color }}>{label}: {count}</span>
+  );
+}
+
 export default function Salary() {
   const qc = useQueryClient();
   const now = new Date();
@@ -58,6 +83,12 @@ export default function Salary() {
     mutationFn: (id) => api.post(`/salaries/${id}/pay`, { method: payMethod, transactionId: txId }),
     onSuccess: () => { qc.invalidateQueries(['salaries']); toast.success('Salary paid!'); setPayModal(null); setTxId(''); },
     onError: (err) => toast.error(err.message || 'Failed')
+  });
+
+  const recalculateMutation = useMutation({
+    mutationFn: (id) => api.post(`/salaries/${id}/recalculate`),
+    onSuccess: () => { qc.invalidateQueries(['salaries']); toast.success('Salary recalculated from latest attendance'); },
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to recalculate')
   });
 
   const roles = [...new Set(salaries.map(s => s.employee?.role).filter(Boolean))];
@@ -171,6 +202,11 @@ export default function Salary() {
                       <td><StatusBadge status={sal.status} /></td>
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 4 }}>
+                          {sal.status === 'pending' && (
+                            <button className="btn btn-secondary btn-sm btn-icon" onClick={() => recalculateMutation.mutate(sal._id)} title="Recalculate from latest attendance" disabled={recalculateMutation.isPending}>
+                              <RotateCcw size={14} />
+                            </button>
+                          )}
                           <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setEditSalary(sal)} title="Edit salary">
                             <Edit2 size={14} />
                           </button>
@@ -360,26 +396,6 @@ function AddSalaryModal({ month, year, onClose, onSuccess }) {
     }
   };
 
-  const SectionHead = ({ children }) => (
-    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>
-      {children}
-    </div>
-  );
-
-  const Field = ({ label, value, onChange }) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid #f1f5f9' }}>
-      <label style={{ fontSize: 13, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{label}</label>
-      <input className="form-control" type="number" min={0} value={value} onChange={e => onChange(e.target.value)}
-        placeholder="0" style={{ width: 120, textAlign: 'right', fontSize: 13, padding: '4px 8px' }} />
-    </div>
-  );
-
-  const AttChip = ({ label, count, color, bg }) => count > 0 ? (
-    <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 12, fontWeight: 600, background: bg, color }}>
-      {label}: {count}
-    </span>
-  ) : null;
-
   return (
     <Modal open onClose={onClose} title={`Add Salary Record — ${MONTHS[month - 1]} ${year}`} size="lg"
       footer={<>
@@ -434,11 +450,11 @@ function AddSalaryModal({ month, year, onClose, onSuccess }) {
           ) : (
             <>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                <AttChip label="Present" count={attStats.present} color="#166534" bg="#dcfce7" />
-                <AttChip label="Absent" count={attStats.absent} color="#dc2626" bg="#fee2e2" />
-                <AttChip label="Half Day" count={attStats.half_day} color="#92400e" bg="#fef9c3" />
-                <AttChip label="CL (Leave)" count={attStats.leave} color="#1d4ed8" bg="#dbeafe" />
-                <AttChip label="Late" count={attStats.late} color="#6b7280" bg="#f3f4f6" />
+                <SalaryAttChip label="Present" count={attStats.present} color="#166534" bg="#dcfce7" />
+                <SalaryAttChip label="Absent" count={attStats.absent} color="#dc2626" bg="#fee2e2" />
+                <SalaryAttChip label="Half Day" count={attStats.half_day} color="#92400e" bg="#fef9c3" />
+                <SalaryAttChip label="CL (Leave)" count={attStats.leave} color="#1d4ed8" bg="#dbeafe" />
+                <SalaryAttChip label="Late" count={attStats.late} color="#6b7280" bg="#f3f4f6" />
                 {!Object.values(attStats).some(v => v > 0) && (
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No attendance records found for this month</span>
                 )}
@@ -457,13 +473,13 @@ function AddSalaryModal({ month, year, onClose, onSuccess }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
         {/* Earnings */}
         <div>
-          <SectionHead>Earnings (₹)</SectionHead>
-          <Field label="Basic Salary" value={basic} onChange={setBasic} />
-          <Field label="HRA" value={hra} onChange={setHra} />
-          <Field label="DA" value={da} onChange={setDa} />
-          <Field label="Other Allowances" value={otherAllow} onChange={setOtherAllow} />
-          <Field label="Overtime" value={overtime} onChange={setOvertime} />
-          <Field label="Bonus" value={bonus} onChange={setBonus} />
+          <SalaryFieldHead>Earnings (₹)</SalaryFieldHead>
+          <SalaryField label="Basic Salary" value={basic} onChange={setBasic} />
+          <SalaryField label="HRA" value={hra} onChange={setHra} />
+          <SalaryField label="DA" value={da} onChange={setDa} />
+          <SalaryField label="Other Allowances" value={otherAllow} onChange={setOtherAllow} />
+          <SalaryField label="Overtime" value={overtime} onChange={setOvertime} />
+          <SalaryField label="Bonus" value={bonus} onChange={setBonus} />
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', marginTop: 6, background: '#f0fdf4', borderRadius: 6, paddingLeft: 8, paddingRight: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: '#16a34a' }}>Gross Salary</span>
             <span style={{ fontSize: 14, fontWeight: 700, color: '#16a34a' }}>₹{gross.toLocaleString('en-IN')}</span>
@@ -472,12 +488,12 @@ function AddSalaryModal({ month, year, onClose, onSuccess }) {
 
         {/* Deductions */}
         <div>
-          <SectionHead>Deductions (₹)</SectionHead>
+          <SalaryFieldHead>Deductions (₹)</SalaryFieldHead>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Auto-calculated · you can override</div>
-          <Field label="EPF (12% of basic)" value={pf} onChange={setPf} />
-          <Field label="ESI (0.75% of gross)" value={esi} onChange={setEsi} />
-          <Field label="Advance / Loan" value={loan} onChange={setLoan} />
-          <Field label="Other Deductions" value={otherDed} onChange={setOtherDed} />
+          <SalaryField label="EPF (12% of basic)" value={pf} onChange={setPf} />
+          <SalaryField label="ESI (0.75% of gross)" value={esi} onChange={setEsi} />
+          <SalaryField label="Advance / Loan" value={loan} onChange={setLoan} />
+          <SalaryField label="Other Deductions" value={otherDed} onChange={setOtherDed} />
           {lop > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13, color: '#ef4444' }}>
               <span>Loss of Pay ({lopDays}d)</span>
@@ -571,24 +587,6 @@ function EditSalaryModal({ sal, onClose, onSuccess }) {
     }
   };
 
-  const SectionHead = ({ children }) => (
-    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>
-      {children}
-    </div>
-  );
-
-  const Field = ({ label, value, onChange, highlight }) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid #f1f5f9', background: highlight ? '#fffbeb' : 'transparent', borderRadius: highlight ? 4 : 0 }}>
-      <label style={{ fontSize: 13, color: highlight ? '#92400e' : 'var(--text-secondary)', whiteSpace: 'nowrap', fontWeight: highlight ? 600 : 400 }}>{label}</label>
-      <input className="form-control" type="number" min={0} value={value} onChange={e => onChange(e.target.value)}
-        placeholder="0" style={{ width: 120, textAlign: 'right', fontSize: 13, padding: '4px 8px', background: highlight ? '#fef9c3' : undefined }} />
-    </div>
-  );
-
-  const AttChip = ({ label, count, color, bg }) => count > 0 ? (
-    <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 12, fontWeight: 600, background: bg, color }}>{label}: {count}</span>
-  ) : null;
-
   return (
     <Modal open onClose={onClose} title={`Edit Salary — ${MONTHS[month - 1]} ${year}`} size="lg"
       footer={<>
@@ -620,11 +618,11 @@ function EditSalaryModal({ sal, onClose, onSuccess }) {
         ) : (
           <>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-              <AttChip label="Present" count={attStats.present} color="#166534" bg="#dcfce7" />
-              <AttChip label="Absent" count={attStats.absent} color="#dc2626" bg="#fee2e2" />
-              <AttChip label="Half Day" count={attStats.half_day} color="#92400e" bg="#fef9c3" />
-              <AttChip label="CL (Leave)" count={attStats.leave} color="#1d4ed8" bg="#dbeafe" />
-              <AttChip label="Late" count={attStats.late} color="#6b7280" bg="#f3f4f6" />
+              <SalaryAttChip label="Present" count={attStats.present} color="#166534" bg="#dcfce7" />
+              <SalaryAttChip label="Absent" count={attStats.absent} color="#dc2626" bg="#fee2e2" />
+              <SalaryAttChip label="Half Day" count={attStats.half_day} color="#92400e" bg="#fef9c3" />
+              <SalaryAttChip label="CL (Leave)" count={attStats.leave} color="#1d4ed8" bg="#dbeafe" />
+              <SalaryAttChip label="Late" count={attStats.late} color="#6b7280" bg="#f3f4f6" />
               {!Object.values(attStats).some(v => v > 0) && (
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No attendance records found for this month</span>
               )}
@@ -642,13 +640,13 @@ function EditSalaryModal({ sal, onClose, onSuccess }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
         {/* Earnings */}
         <div>
-          <SectionHead>Earnings (₹)</SectionHead>
-          <Field label="Basic Salary" value={basic} onChange={setBasic} />
-          <Field label="HRA" value={hra} onChange={setHra} />
-          <Field label="DA" value={da} onChange={setDa} />
-          <Field label="Other Allowances" value={otherAllow} onChange={setOtherAllow} />
-          <Field label="Overtime" value={overtime} onChange={setOvertime} />
-          <Field label="Bonus" value={bonus} onChange={setBonus} />
+          <SalaryFieldHead>Earnings (₹)</SalaryFieldHead>
+          <SalaryField label="Basic Salary" value={basic} onChange={setBasic} />
+          <SalaryField label="HRA" value={hra} onChange={setHra} />
+          <SalaryField label="DA" value={da} onChange={setDa} />
+          <SalaryField label="Other Allowances" value={otherAllow} onChange={setOtherAllow} />
+          <SalaryField label="Overtime" value={overtime} onChange={setOvertime} />
+          <SalaryField label="Bonus" value={bonus} onChange={setBonus} />
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', marginTop: 6, background: '#f0fdf4', borderRadius: 6, paddingLeft: 8, paddingRight: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: '#16a34a' }}>Gross Salary</span>
             <span style={{ fontSize: 14, fontWeight: 700, color: '#16a34a' }}>₹{gross.toLocaleString('en-IN')}</span>
@@ -657,12 +655,12 @@ function EditSalaryModal({ sal, onClose, onSuccess }) {
 
         {/* Deductions */}
         <div>
-          <SectionHead>Deductions (₹)</SectionHead>
+          <SalaryFieldHead>Deductions (₹)</SalaryFieldHead>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Auto-calculated · you can override</div>
-          <Field label="EPF (12% of basic)" value={pf} onChange={setPf} />
-          <Field label="ESI (0.75% of gross)" value={esi} onChange={setEsi} />
-          <Field label="Advance Amount" value={loan} onChange={setLoan} highlight />
-          <Field label="Other Deductions" value={otherDed} onChange={setOtherDed} />
+          <SalaryField label="EPF (12% of basic)" value={pf} onChange={setPf} />
+          <SalaryField label="ESI (0.75% of gross)" value={esi} onChange={setEsi} />
+          <SalaryField label="Advance Amount" value={loan} onChange={setLoan} highlight />
+          <SalaryField label="Other Deductions" value={otherDed} onChange={setOtherDed} />
           {lop > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13, color: '#ef4444' }}>
               <span>Loss of Pay ({lopDays}d)</span>

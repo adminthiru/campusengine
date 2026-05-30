@@ -51,6 +51,16 @@ const schoolSchema = new mongoose.Schema({
     razorpaySubscriptionId: { type: String },
     amount: { type: Number, default: 20000 }
   },
+  salaryConfig: {
+    lopMethod: {
+      type: String,
+      enum: ['calendar_days', 'fixed_30', 'working_days'],
+      default: 'calendar_days'
+    },
+    workingDaysPerMonth: { type: Number, default: 26 },
+    halfDayEnabled: { type: Boolean, default: true },
+    halfDayDeductionFactor: { type: Number, default: 0.5 }
+  },
   gradeConfig: {
     system: { type: String, enum: ['percentage', 'gpa', 'letter', 'custom'], default: 'percentage' },
     grades: [{
@@ -105,6 +115,38 @@ const schoolSchema = new mongoose.Schema({
       enterExamMarks:        { type: Boolean, default: true },
       viewTimetable:         { type: Boolean, default: true },
     }
+  },
+  parentPermissions: {
+    viewStudentInfo:          { type: Boolean, default: true },
+    viewAttendance:           { type: Boolean, default: true },
+    viewFees:                 { type: Boolean, default: true },
+    viewExamResults:          { type: Boolean, default: true },
+    viewTimetable:            { type: Boolean, default: true },
+    viewHomework:             { type: Boolean, default: true },
+    submitHomework:           { type: Boolean, default: true },
+    submitLeaveRequest:       { type: Boolean, default: true },
+    notifyOnAttendance:       { type: Boolean, default: true },
+    notifyOnHomeworkAssigned: { type: Boolean, default: true },
+    notifyOnExamScheduled:    { type: Boolean, default: true },
+    notifyOnExamResults:      { type: Boolean, default: true },
+    notifyOnFeePayment:       { type: Boolean, default: true },
+    notifyOnFeeReminder:      { type: Boolean, default: true },
+  },
+  studentPermissions: {
+    viewTimetable:            { type: Boolean, default: true },
+    viewHomework:             { type: Boolean, default: true },
+    submitHomework:           { type: Boolean, default: true },
+    viewExams:                { type: Boolean, default: true },
+    viewExamResults:          { type: Boolean, default: true },
+    viewAttendance:           { type: Boolean, default: true },
+    submitLeaveRequest:       { type: Boolean, default: true },
+    viewFees:                 { type: Boolean, default: true },
+    notifyOnHomeworkAssigned: { type: Boolean, default: true },
+    notifyOnExamScheduled:    { type: Boolean, default: true },
+    notifyOnExamResults:      { type: Boolean, default: true },
+    notifyOnFeePayment:       { type: Boolean, default: true },
+    notifyOnFeeReminder:      { type: Boolean, default: true },
+    notifyOnAttendance:       { type: Boolean, default: true },
   },
   profileCompleted: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true }

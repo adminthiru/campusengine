@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../store/AuthContext';
 import api from '../../utils/api';
 import { PageLoader, StatusBadge, StatCard } from '../../components/ui';
-import { BookOpen, Users, Clock } from 'lucide-react';
+import { BookOpen, Users } from 'lucide-react';
+export { ParentDashboard } from './ParentPortal';
 
 export function TeacherDashboard() {
   const { user } = useAuth();
@@ -141,55 +142,5 @@ export function MyTasks() {
   );
 }
 
-// Student portal
-export function StudentDashboard() {
-  const { user } = useAuth();
-  return (
-    <div>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">My Dashboard</h1>
-          <p className="page-subtitle">Welcome back, {user?.name?.split(' ')[0]}!</p>
-        </div>
-      </div>
-      <div className="grid-2">
-        <div className="card">
-          <h3 className="text-16-bold" style={{ marginBottom: 12 }}>Quick Links</h3>
-          {[
-            { label: 'My Attendance', path: '/my-attendance' },
-            { label: 'My Timetable', path: '/my-timetable' },
-            { label: 'My Exams', path: '/my-exams' },
-            { label: 'My Fees', path: '/my-fees' },
-          ].map(l => (
-            <a key={l.path} href={l.path} className="text-14-medium" style={{ display: 'block', padding: '10px 14px', background: '#f8fafc', borderRadius: 8, marginBottom: 8, color: 'var(--primary)', textDecoration: 'none' }}>{l.label} →</a>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
+export { StudentDashboard } from './StudentPortal';
 
-// Parent portal
-export function ParentDashboard() {
-  const { user } = useAuth();
-  return (
-    <div>
-      <div className="page-header">
-        <h1 className="page-title">Parent Dashboard</h1>
-      </div>
-      <div className="grid-2">
-        <div className="card">
-          <h3 className="text-16-bold" style={{ marginBottom: 12 }}>Quick Links</h3>
-          {[
-            { label: 'My Children', path: '/my-children' },
-            { label: 'Attendance', path: '/my-attendance' },
-            { label: 'Fees', path: '/my-fees' },
-            { label: 'Exam Results', path: '/my-exams' },
-          ].map(l => (
-            <a key={l.path} href={l.path} className="text-14-medium" style={{ display: 'block', padding: '10px 14px', background: '#f8fafc', borderRadius: 8, marginBottom: 8, color: 'var(--primary)', textDecoration: 'none' }}>{l.label} →</a>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
