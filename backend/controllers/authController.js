@@ -54,7 +54,6 @@ const registerSchool = async (req, res) => {
 const login = async (req, res) => {
   try {
     const { email, password, schoolCode } = req.body;
-
     const isIdentifier = email && !email.includes('@');
 
     let user;

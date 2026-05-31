@@ -17,7 +17,7 @@ class HomeworkScreen extends StatelessWidget {
       create: (context) {
         final provider = HomeworkProvider();
         provider.fetchProfile().then((_) {
-          provider.fetchHomework(date: DateTime.now().toIso8601String().split('T')[0]);
+          provider.fetchHomework(); // load all homework, no date filter
         });
         return provider;
       },
@@ -241,7 +241,17 @@ class _HomeworkListState extends State<_HomeworkList> {
           Expanded(
             child: provider.isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : allHw.isEmpty
+                : provider.error != null
+                    ? Center(
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          const Icon(Icons.error_outline, color: Colors.red, size: 36),
+                          const SizedBox(height: 8),
+                          Text(provider.error!, style: AppTypography.s14Regular(color: Colors.red), textAlign: TextAlign.center),
+                          const SizedBox(height: 12),
+                          ElevatedButton(onPressed: () => context.read<HomeworkProvider>().fetchHomework(), child: const Text('Retry')),
+                        ]),
+                      )
+                    : allHw.isEmpty
                     ? Center(child: Text('No homework matches filters', style: AppTypography.s14Regular(color: AppColors.textMuted)))
                     : ListView.separated(
                         padding: const EdgeInsets.all(16).copyWith(bottom: 80),

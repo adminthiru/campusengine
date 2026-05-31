@@ -965,9 +965,13 @@ router.get('/homework', protect, checkSubscription, async (req, res) => {
     if (classId) query.class = classId;
     if (status) query.status = status;
     if (date) {
-      const d = new Date(date);
+      // Filter by assignedDate OR dueDate matching the given date
+      const d    = new Date(date);
       const next = new Date(date); next.setDate(next.getDate() + 1);
-      query.assignedDate = { $gte: d, $lt: next };
+      query.$or = [
+        { assignedDate: { $gte: d, $lt: next } },
+        { dueDate:      { $gte: d, $lt: next } },
+      ];
     }
     const homework = await Homework.find(query)
       .populate('class', 'name section')

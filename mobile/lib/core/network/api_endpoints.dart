@@ -1,82 +1,83 @@
 // ── API Endpoints — mirrors the existing Express backend routes ──────────────
+// NOTE: baseUrl already includes /api, so paths here start with just /
 
 class ApiEndpoints {
   ApiEndpoints._();
 
-  // ── Base path prefix (appended after base URL) ───────────────────────────
-  static const String _api = '/api';
-
   // ── Auth ─────────────────────────────────────────────────────────────────
-  static const String login         = '$_api/auth/login';
-  static const String logout        = '$_api/auth/logout';
-  static const String refreshToken  = '$_api/auth/refresh';
-  static const String changePassword= '$_api/auth/change-password';
-  static const String me            = '$_api/auth/me';
+  static const String login          = '/auth/login';
+  static const String logout         = '/auth/logout';
+  static const String refreshToken   = '/auth/refresh';
+  static const String changePassword = '/auth/change-password';
+  static const String me             = '/auth/me';
 
   // ── School ────────────────────────────────────────────────────────────────
-  static const String school        = '$_api/school';
+  static const String school         = '/school';
 
   // ── Employees / Teacher Profile ───────────────────────────────────────────
-  static const String employees     = '$_api/employees';
-  static String employeeById(String id) => '$_api/employees/$id';
+  static const String employees      = '/employees';
+  static String employeeById(String id) => '/employees/$id';
 
   // ── Classes ───────────────────────────────────────────────────────────────
-  static const String classes       = '$_api/classes';
-  static String classById(String id) => '$_api/classes/$id';
+  static const String classes        = '/classes';
+  static String classById(String id) => '/classes/$id';
 
   // ── Subjects ──────────────────────────────────────────────────────────────
-  static const String subjects      = '$_api/subjects';
+  static const String subjects       = '/subjects';
 
   // ── Students ──────────────────────────────────────────────────────────────
-  static const String students      = '$_api/students';
-  static String studentById(String id) => '$_api/students/$id';
+  static const String students       = '/students';
+  static String studentById(String id) => '/students/$id';
 
   // ── Attendance ────────────────────────────────────────────────────────────
-  static const String attendance    = '$_api/attendance';
-  static const String attendanceBulk= '$_api/attendance/bulk';
-  static const String attendanceStudent = '$_api/attendance/student';
+  static const String attendance         = '/attendance';
+  static const String attendanceBulk     = '/attendance/bulk';
+  static const String attendanceStudent  = '/attendance/student';
 
   // ── Homework ──────────────────────────────────────────────────────────────
-  static const String homework      = '$_api/homework';
-  static String homeworkById(String id)        => '$_api/homework/$id';
-  static String homeworkSubmissions(String id) => '$_api/homework/$id/submissions';
-  static String submissionUpdate(String hwId, String studentId) => '$_api/homework/$hwId/submissions/$studentId';
-  static String homeworkNotify(String id) => '$_api/homework/$id/notify';
+  static const String homework       = '/homework';
+  static String homeworkById(String id)        => '/homework/$id';
+  static String homeworkSubmissions(String id) => '/homework/$id/submissions';
+  static String submissionUpdate(String hwId, String studentId) => '/homework/$hwId/submissions/$studentId';
+  static String homeworkNotify(String id) => '/homework/$id/notify';
 
   // ── Timetable ─────────────────────────────────────────────────────────────
-  static const String timetable     = '$_api/timetable';
+  static const String timetable      = '/timetable';
 
   // ── Exams ─────────────────────────────────────────────────────────────────
-  static const String exams          = '$_api/exams';
-  static String examById(String id)  => '$_api/exams/$id';
-  static String examPublish(String id) => '$_api/exams/$id/publish';
-  static const String examResults    = '$_api/exams/results';
-  static const String examMarks      = '$_api/exams/marks';
+  static const String exams           = '/exams';
+  static String examById(String id)   => '/exams/$id';
+  static String examPublish(String id) => '/exams/$id/publish';
+  static const String examResults     = '/exams/results';
+  static const String examMarks       = '/exams/marks';
 
-  // ── Fees (view-only for teacher) ──────────────────────────────────────────
-  static const String fees          = '$_api/fees';
+  // ── Fees ──────────────────────────────────────────────────────────────────
+  static const String fees           = '/fees';
 
-  // ── Leave / Permission ────────────────────────────────────────────────────
-  static const String leaves        = '$_api/leaves';
-  static String leaveById(String id) => '$_api/leaves/$id';
+  // ── Leave ─────────────────────────────────────────────────────────────────
+  static const String leaves         = '/leaves';
+  static String leaveById(String id) => '/leaves/$id';
 
   // ── Notifications ─────────────────────────────────────────────────────────
-  static const String notifications = '$_api/notifications';
-  static const String markAllRead   = '$_api/notifications/mark-all-read';
+  static const String notifications  = '/notifications';
+  static const String markAllRead    = '/notifications/mark-all-read';
 
-  // ── School Calendar (holidays, events, exam days, meetings) ──────────────
-  static const String calendar      = '$_api/calendar';
+  // ── School Calendar ───────────────────────────────────────────────────────
+  static const String calendar       = '/calendar';
 
   // ── Reports ───────────────────────────────────────────────────────────────
-  static const String reportsTeacher = '$_api/reports/teacher';
+  static const String reportsTeacher  = '/reports/teacher';
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
-  static const String dashboardTeacher = '$_api/dashboard/teacher';
+  static const String dashboardTeacher = '/dashboard/teacher';
 
   // ── Chat / Messages ───────────────────────────────────────────────────────
-  static const String conversations  = '$_api/conversations';
-  static String messages(String convId) => '$_api/conversations/$convId/messages';
+  static const String conversations   = '/conversations';
+  static String messages(String convId) => '/conversations/$convId/messages';
 
-  // ── FCM Token registration ────────────────────────────────────────────────
-  static const String registerFcmToken = '$_api/notifications/fcm-token';
+  // ── FCM Token ─────────────────────────────────────────────────────────────
+  static const String registerFcmToken = '/notifications/fcm-token';
+
+  // ── Teacher profile ───────────────────────────────────────────────────────
+  static const String teacherProfile = '/teacher/my-profile';
 }

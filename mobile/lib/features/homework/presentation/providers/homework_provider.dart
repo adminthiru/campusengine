@@ -89,9 +89,12 @@ class HomeworkProvider extends ChangeNotifier {
       if (status != null && status.isNotEmpty) queryParams['status'] = status;
 
       final res = await ApiClient.get(ApiEndpoints.homework, params: queryParams);
+      debugPrint('fetchHomework response: status=${res.statusCode} count=${(res.data['homework'] as List?)?.length}');
       final List data = res.data['homework'] ?? [];
       _homeworkList = data.map((j) => Homework.fromJson(j)).toList();
+      debugPrint('Parsed ${_homeworkList.length} homework items');
     } catch (e) {
+      debugPrint('fetchHomework ERROR: $e');
       _error = ApiClient.errorMessage(e);
     } finally {
       _isLoading = false;

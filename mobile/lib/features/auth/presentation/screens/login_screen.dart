@@ -6,6 +6,7 @@ import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
 import 'package:skl_teacher/core/theme/app_dimensions.dart';
 import 'package:skl_teacher/core/storage/secure_storage.dart';
+import 'package:skl_teacher/core/network/api_client.dart';
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -289,11 +290,61 @@ class _LoginScreenState extends State<LoginScreen> {
                           style: theme.textTheme.labelSmall,
                         ),
                       ),
+                      const SizedBox(height: 6),
+                      Center(
+                        child: GestureDetector(
+                          onTap: _changeServerIp,
+                          child: Text(
+                            '⚙ Server IP',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textMuted,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
       ),
     );
+  }
+
+  Future<void> _changeServerIp() async {
+    final current = ApiClient.currentBaseUrl
+        .replaceFirst('http://', '')
+        .replaceFirst(':5000/api', '');
+    final ctrl = TextEditingController(text: current);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Server IP Address'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(
+            labelText: 'IP Address',
+            hintText: '192.168.x.x',
+            prefixText: 'http://',
+            suffixText: ':5000',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (confirmed == true && ctrl.text.trim().isNotEmpty) {
+      await ApiClient.setBaseUrl(ctrl.text.trim());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Server set to ${ctrl.text.trim()}'), backgroundColor: Colors.green),
+        );
+      }
+    }
   }
 }
