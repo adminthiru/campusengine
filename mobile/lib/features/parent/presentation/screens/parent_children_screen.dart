@@ -569,7 +569,7 @@ class _ExamsTabState extends State<_ExamsTab> {
       itemCount: _exams.length,
       itemBuilder: (_, i) {
         final e = _exams[i];
-        final isPublished = e['isPublished'] as bool? ?? false;
+        final isPublished = e['isResultPublished'] as bool? ?? false;
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.all(14),

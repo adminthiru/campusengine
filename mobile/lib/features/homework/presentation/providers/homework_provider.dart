@@ -6,6 +6,18 @@ import '../../../../core/models/teacher_profile.dart';
 import '../../../../core/models/student.dart';
 
 class HomeworkProvider extends ChangeNotifier {
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
@@ -71,7 +83,7 @@ class HomeworkProvider extends ChangeNotifier {
         _subjects = sList.map((j) => SubjectInfo.fromJson(j)).toList();
       }
       
-      notifyListeners();
+      _notify();
     } catch (e) {
       debugPrint('Error fetching profile: $e');
     }
@@ -80,7 +92,7 @@ class HomeworkProvider extends ChangeNotifier {
   Future<void> fetchHomework({String? classId, String? date, String? status}) async {
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    _notify();
 
     try {
       final queryParams = <String, dynamic>{};
@@ -91,21 +103,26 @@ class HomeworkProvider extends ChangeNotifier {
       final res = await ApiClient.get(ApiEndpoints.homework, params: queryParams);
       debugPrint('fetchHomework response: status=${res.statusCode} count=${(res.data['homework'] as List?)?.length}');
       final List data = res.data['homework'] ?? [];
-      _homeworkList = data.map((j) => Homework.fromJson(j)).toList();
+      // Dedupe by id so the same homework can never appear twice in the list.
+      final seen = <String>{};
+      _homeworkList = data
+          .map((j) => Homework.fromJson(j))
+          .where((hw) => hw.id.isEmpty || seen.add(hw.id))
+          .toList();
       debugPrint('Parsed ${_homeworkList.length} homework items');
     } catch (e) {
       debugPrint('fetchHomework ERROR: $e');
       _error = ApiClient.errorMessage(e);
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _notify();
     }
   }
 
   Future<Homework?> fetchDetail(String id) async {
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    _notify();
     try {
       final res = await ApiClient.get(ApiEndpoints.homeworkById(id));
       final hw = Homework.fromJson(res.data['homework']);
@@ -115,7 +132,7 @@ class HomeworkProvider extends ChangeNotifier {
       return null;
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _notify();
     }
   }
 
@@ -144,7 +161,7 @@ class HomeworkProvider extends ChangeNotifier {
   Future<bool> addHomework(Map<String, dynamic> payload) async {
     _isSaving = true;
     _error = null;
-    notifyListeners();
+    _notify();
     try {
       await ApiClient.post(ApiEndpoints.homework, data: payload);
       return true;
@@ -153,14 +170,14 @@ class HomeworkProvider extends ChangeNotifier {
       return false;
     } finally {
       _isSaving = false;
-      notifyListeners();
+      _notify();
     }
   }
 
   Future<bool> editHomework(String id, Map<String, dynamic> payload) async {
     _isSaving = true;
     _error = null;
-    notifyListeners();
+    _notify();
     try {
       await ApiClient.put(ApiEndpoints.homeworkById(id), data: payload);
       return true;
@@ -169,14 +186,14 @@ class HomeworkProvider extends ChangeNotifier {
       return false;
     } finally {
       _isSaving = false;
-      notifyListeners();
+      _notify();
     }
   }
 
   Future<bool> deleteHomework(String id) async {
     _isSaving = true;
     _error = null;
-    notifyListeners();
+    _notify();
     try {
       await ApiClient.delete(ApiEndpoints.homeworkById(id));
       return true;
@@ -185,7 +202,7 @@ class HomeworkProvider extends ChangeNotifier {
       return false;
     } finally {
       _isSaving = false;
-      notifyListeners();
+      _notify();
     }
   }
 

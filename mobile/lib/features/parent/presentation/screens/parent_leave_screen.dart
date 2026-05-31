@@ -373,9 +373,10 @@ class _HistoryTabState extends State<_HistoryTab> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    if (_loading)
+    if (_loading) {
       return const Center(
           child: CircularProgressIndicator(color: AppColors.primary));
+    }
     if (_leaves.isEmpty) {
       return Center(
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [

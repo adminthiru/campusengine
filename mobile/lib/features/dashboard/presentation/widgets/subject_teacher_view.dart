@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:skl_teacher/features/dashboard/presentation/widgets/schedule_and_tasks.dart';
-// Note: We can reuse QuickActionsGrid or create a specific one for Subject Teacher later.
 import 'package:skl_teacher/features/dashboard/presentation/widgets/quick_actions_grid.dart';
 import 'package:skl_teacher/features/dashboard/presentation/widgets/homework_and_exams.dart';
 
@@ -9,20 +8,19 @@ class SubjectTeacherView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
+    return const CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              // A simpler version of quick actions for subjects
+            children: [
+              SizedBox(height: 8),
               QuickActionsGrid(),
-              Divider(height: 32, thickness: 8, color: Colors.black12),
+              SizedBox(height: 12),
               ScheduleAndTasks(),
-              Divider(height: 32, thickness: 8, color: Colors.black12),
-              // Reusing homework and exams, assuming it shows across multiple classes here
+              SizedBox(height: 12),
               HomeworkAndExams(),
-              Divider(height: 32, thickness: 8, color: Colors.black12),
+              SizedBox(height: 24),
             ],
           ),
         ),

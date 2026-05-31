@@ -5,6 +5,9 @@ import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
 import 'package:skl_teacher/features/auth/presentation/providers/auth_provider.dart';
 import 'package:skl_teacher/features/parent/presentation/providers/parent_data_provider.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:skl_teacher/core/theme/app_dimensions.dart';
+import 'package:skl_teacher/core/theme/theme_provider.dart';
 
 class ParentProfileScreen extends StatelessWidget {
   const ParentProfileScreen({super.key});
@@ -174,7 +177,7 @@ class ParentProfileScreen extends StatelessWidget {
             subtitle: 'Sign out of your account',
             isDark: isDark,
             isDestructive: true,
-            onTap: () => _confirmLogout(context, auth),
+            onTap: () => _showLogoutBottomSheet(context, auth),
           ),
           const SizedBox(height: 32),
         ]),
@@ -182,25 +185,99 @@ class ParentProfileScreen extends StatelessWidget {
     );
   }
 
-  void _confirmLogout(BuildContext context, AuthProvider auth) {
-    showDialog(
+  void _showLogoutBottomSheet(BuildContext context, AuthProvider authProvider) {
+    showModalBottomSheet(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Logout', style: AppTypography.s18Bold()),
-        content: Text('Are you sure you want to sign out?',
-            style: AppTypography.s14Regular()),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              auth.logout();
-            },
-            child: Text('Logout', style: TextStyle(color: AppColors.accentRed)),
-          ),
-        ],
+      backgroundColor: Colors.transparent,
+      builder: (context) => Consumer<ThemeProvider>(
+        builder: (context, themeProvider, child) {
+          final isDark = themeProvider.isDark;
+          return Container(
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.cardDark : Colors.white,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(AppDimensions.radiusLg),
+                topRight: Radius.circular(AppDimensions.radiusLg),
+              ),
+            ),
+            padding: const EdgeInsets.all(AppDimensions.base),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color:
+                        isDark ? AppColors.borderDark : AppColors.borderLight,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: AppDimensions.lg),
+                Text(
+                  'Log Out',
+                  style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 18,
+                      color: AppColors.accentRed),
+                ),
+                const SizedBox(height: AppDimensions.sm),
+                Text(
+                  'Are you sure you want to log out of your account?',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                      fontSize: 14, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: AppDimensions.xl),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: AppDimensions.md),
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppDimensions.radiusMd),
+                          ),
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                        child: Text('Cancel',
+                            style: TextStyle(
+                                color: AppColors.textMuted,
+                                fontWeight: FontWeight.w600,
+                                inherit: false)),
+                      ),
+                    ),
+                    const SizedBox(width: AppDimensions.base),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.accentRed,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              vertical: AppDimensions.md),
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppDimensions.radiusMd),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          authProvider.logout();
+                        },
+                        child: const Text('Log Out',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600, inherit: false)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppDimensions.sm),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

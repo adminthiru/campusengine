@@ -5,6 +5,18 @@ import '../../../../core/models/teacher_profile.dart';
 import '../../../../core/models/student.dart';
 
 class AttendanceProvider extends ChangeNotifier {
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
   DateTime _selectedDate = DateTime.now();
   DateTime get selectedDate => _selectedDate;
 
@@ -45,7 +57,7 @@ class AttendanceProvider extends ChangeNotifier {
       for (final s in _students) s.id: {'status': 'present', 'remarks': ''}
     };
 
-    notifyListeners();
+    _notify();
     if (_selectedClassId != null) {
       fetchExistingAttendance();
     }
@@ -53,33 +65,33 @@ class AttendanceProvider extends ChangeNotifier {
 
   void setClass(String classId) {
     _selectedClassId = classId;
-    notifyListeners();
+    _notify();
     fetchStudents();
   }
 
   void setStatus(String studentId, String status) {
     if (_attendanceMap.containsKey(studentId)) {
       _attendanceMap[studentId]!['status'] = status;
-      notifyListeners();
+      _notify();
     }
   }
 
   void setRemarks(String studentId, String remarks) {
     if (_attendanceMap.containsKey(studentId)) {
       _attendanceMap[studentId]!['remarks'] = remarks;
-      notifyListeners();
+      _notify();
     }
   }
 
   void setIsSaved(bool saved) {
     _isSaved = saved;
-    notifyListeners();
+    _notify();
   }
 
   Future<void> fetchClasses() async {
     _isLoadingClasses = true;
     _error = null;
-    notifyListeners();
+    _notify();
 
     try {
       final res = await ApiClient.get('/teacher/my-profile');
@@ -98,7 +110,7 @@ class AttendanceProvider extends ChangeNotifier {
       _error = 'Failed to load classes: ${ApiClient.errorMessage(e)}';
     } finally {
       _isLoadingClasses = false;
-      notifyListeners();
+      _notify();
     }
   }
 
@@ -110,7 +122,7 @@ class AttendanceProvider extends ChangeNotifier {
     _students = [];
     _attendanceMap = {};
     _isSaved = false;
-    notifyListeners();
+    _notify();
 
     try {
       final response = await ApiClient.get('/students', params: {
@@ -130,7 +142,7 @@ class AttendanceProvider extends ChangeNotifier {
       _error = 'Failed to load students: ${ApiClient.errorMessage(e)}';
     } finally {
       _isLoadingStudents = false;
-      notifyListeners();
+      _notify();
     }
   }
 
@@ -170,14 +182,14 @@ class AttendanceProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('No existing attendance or error: $e');
     }
-    notifyListeners();
+    _notify();
   }
 
   Future<bool> saveAttendance() async {
     if (_selectedClassId == null || _students.isEmpty) return false;
 
     _isSaving = true;
-    notifyListeners();
+    _notify();
 
     try {
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
@@ -204,7 +216,7 @@ class AttendanceProvider extends ChangeNotifier {
       return false;
     } finally {
       _isSaving = false;
-      notifyListeners();
+      _notify();
     }
   }
 }

@@ -173,7 +173,7 @@ class _AppShellState extends State<AppShell> {
         foregroundColor: isDark ? Colors.white : AppColors.textPrimary,
         leading: _isSubRoute(loc, tabs)
             ? IconButton(
-                icon: const Icon(Icons.arrow_back),
+                icon: const Icon(Icons.arrow_back_ios_new, size: 20),
                 onPressed: () {
                   final moreTab = tabs.firstWhere(
                       (t) => t.path.endsWith('/more'),

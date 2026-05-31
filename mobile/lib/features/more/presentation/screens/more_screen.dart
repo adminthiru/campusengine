@@ -25,10 +25,6 @@ class MoreScreen extends StatelessWidget {
     final ct = profile?.permissions.classTeacher;
     final st = profile?.permissions.subjectTeacher;
 
-    // Derived permissions
-    final canViewStudents = (isClassTeacher && (ct?.viewStudents ?? true)) ||
-        (isSubjectTeacher && (st?.viewSubjectStudents ?? true));
-
     // Subject teacher: unique classes (skip classes already covered by class teacher role)
     final classTeacherClassId = profile?.classTeacher?.classInfo.id;
     final seenClassIds = <String>{};
@@ -125,20 +121,7 @@ class MoreScreen extends StatelessWidget {
             const SizedBox(height: 16),
           ],
 
-          // ── Exam Marks entry (subject teacher) ───────────────────────────────
-          if (isSubjectTeacher && (st?.enterExamMarks ?? true)) ...[
-            _sectionLabel('Exam Marks', isDark),
-            const SizedBox(height: 8),
-            _MenuTile(
-              icon: Icons.quiz_outlined,
-              iconColor: const Color(0xFFE11D48),
-              title: 'Enter Exam Marks',
-              subtitle: 'Select exam and class to enter marks for your subjects',
-              onTap: () => context.go('/exams'),
-              isDark: isDark,
-            ),
-            const SizedBox(height: 16),
-          ],
+
 
           // ── School Calendar ───────────────────────────────────────────────────
           _sectionLabel('School Calendar', isDark),

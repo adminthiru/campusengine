@@ -1,280 +1,237 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:intl/intl.dart';
 
+/// Today's class schedule for the teacher (real timetable data only).
 class ScheduleAndTasks extends StatelessWidget {
   const ScheduleAndTasks({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final provider = context.watch<DashboardProvider>();
 
-    // Determine today's day string (e.g. "Monday")
     final todayStr = DateFormat('EEEE').format(DateTime.now());
 
     // Extract today's periods from all timetables assigned to this teacher
     final List<Map<String, dynamic>> todaysPeriods = [];
-
     for (var tt in provider.timetables) {
       final className = tt['class']?['name'] ?? '';
       final section = tt['class']?['section'] ?? '';
       final classFullName = '$className $section'.trim();
 
       final schedule = tt['schedule'] as List?;
-      if (schedule != null) {
-        for (var daySchedule in schedule) {
-          if (daySchedule['day']?.toString().toLowerCase() ==
-              todayStr.toLowerCase()) {
-            final periods = daySchedule['periods'] as List?;
-            if (periods != null) {
-              for (var period in periods) {
-                // If it's a valid period
-                if (period['subject'] != null) {
-                  todaysPeriods.add({
-                    'subject': period['subject']['name'] ?? 'Subject',
-                    'class': classFullName,
-                    'periodNumber': period['periodNumber'],
-                    'time':
-                        'Period ${period['periodNumber']}', // We don't have absolute times easily available here
-                  });
-                }
-              }
-            }
+      if (schedule == null) continue;
+      for (var daySchedule in schedule) {
+        if (daySchedule['day']?.toString().toLowerCase() !=
+            todayStr.toLowerCase()) {
+          continue;
+        }
+        final periods = daySchedule['periods'] as List?;
+        if (periods == null) continue;
+        for (var period in periods) {
+          if (period['subject'] != null) {
+            final pNum = (period['periodNumber'] as num?)?.toInt() ?? 0;
+            todaysPeriods.add({
+              'subject': period['subject']['name'] ?? 'Subject',
+              'class': classFullName,
+              'periodNumber': pNum,
+            });
           }
         }
       }
     }
-
-    // Sort by period number
     todaysPeriods.sort((a, b) =>
         (a['periodNumber'] as int).compareTo(b['periodNumber'] as int));
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Today\'s Schedule',
-            style: GoogleFonts.inter(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: isDark ? Colors.white : AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Horizontal timeline/schedule
-          if (provider.isLoading)
-            const Center(child: CircularProgressIndicator())
-          else if (todaysPeriods.isEmpty)
-            Text(
-              'No classes scheduled for today ($todayStr).',
-              style: GoogleFonts.inter(
-                  color:
-                      isDark ? AppColors.textMuted : AppColors.textSecondary),
-            )
-          else
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: todaysPeriods.map((period) {
-                  final idx = todaysPeriods.indexOf(period);
-                  final colors = [
-                    AppColors.primary,
-                    AppColors.accentOrange,
-                    AppColors.accentPurple
-                  ];
-                  final color = colors[idx % colors.length];
-
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 12.0),
-                    child: _ClassCard(
-                      subject: period['subject'],
-                      className: period['class'],
-                      time: period['time'],
-                      isActive: idx == 0, // Mock current period
-                      isDark: isDark,
-                      color: color,
-                    ),
-                  );
-                }).toList(),
+          Row(
+            children: [
+              Text(
+                'Today\'s Schedule',
+                style: GoogleFonts.inter(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : AppColors.textPrimary,
+                ),
               ),
-            ),
-          const SizedBox(height: 24),
-          Text(
-            'Pending Tasks',
-            style: GoogleFonts.inter(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: isDark ? Colors.white : AppColors.textPrimary,
-            ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => context.go('/timetable'),
+                child: Text(
+                  'Timetable',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
-          _TaskTile(
-              taskName: 'Grade 10-A Midterm Papers',
-              isCompleted: false,
-              isDark: isDark),
-          _TaskTile(
-              taskName: 'Update Attendance for Friday',
-              isCompleted: false,
-              isDark: isDark),
-          _TaskTile(
-              taskName: 'Prepare Chemistry Lab',
-              isCompleted: true,
-              isDark: isDark),
+          if (provider.isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 28),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (todaysPeriods.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.cardDark : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color:
+                        isDark ? AppColors.borderDark : AppColors.borderLight),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.event_available_outlined,
+                      size: 36,
+                      color: isDark
+                          ? AppColors.textMuted
+                          : AppColors.textSecondary),
+                  const SizedBox(height: 8),
+                  Text('No classes today',
+                      style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color:
+                              isDark ? Colors.white : AppColors.textPrimary)),
+                  const SizedBox(height: 2),
+                  Text('Enjoy your $todayStr',
+                      style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: isDark
+                              ? AppColors.textMuted
+                              : AppColors.textSecondary)),
+                ],
+              ),
+            )
+          else
+            SizedBox(
+              height: 116,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: todaysPeriods.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (_, i) {
+                  final p = todaysPeriods[i];
+                  final palette = [
+                    AppColors.primary,
+                    AppColors.accentOrange,
+                    AppColors.accentPurple,
+                    AppColors.accentGreen,
+                  ];
+                  return _PeriodCard(
+                    period: p['periodNumber'] as int,
+                    subject: p['subject'] as String,
+                    className: p['class'] as String,
+                    color: palette[i % palette.length],
+                    isDark: isDark,
+                  );
+                },
+              ),
+            ),
         ],
       ),
     );
   }
 }
 
-class _ClassCard extends StatelessWidget {
+class _PeriodCard extends StatelessWidget {
+  final int period;
   final String subject;
   final String className;
-  final String time;
-  final bool isActive;
-  final bool isDark;
   final Color color;
+  final bool isDark;
 
-  const _ClassCard({
+  const _PeriodCard({
+    required this.period,
     required this.subject,
     required this.className,
-    required this.time,
-    required this.isActive,
-    required this.isDark,
     required this.color,
+    required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 200,
-      padding: const EdgeInsets.all(16),
+      width: 170,
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isActive ? color : (isDark ? AppColors.cardDark : Colors.white),
+        color: isDark ? AppColors.cardDark : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: isActive
-            ? null
-            : Border.all(
-                color: isDark ? AppColors.borderDark : AppColors.borderLight),
-        boxShadow:
-            isActive ? AppColors.shadowMd : (isDark ? [] : AppColors.shadowSm),
+        border:
+            Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+        boxShadow: isDark ? [] : AppColors.shadowSm,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                className,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isActive
-                      ? Colors.white70
-                      : (isDark
-                          ? AppColors.textMuted
-                          : AppColors.textSecondary),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Period $period',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
                 ),
               ),
-              if (isActive)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'NOW',
-                    style: GoogleFonts.inter(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
             ],
           ),
-          const SizedBox(height: 8),
+          const Spacer(),
           Text(
             subject,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: GoogleFonts.inter(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: isActive
-                  ? Colors.white
-                  : (isDark ? Colors.white : AppColors.textPrimary),
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white : AppColors.textPrimary,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Row(
             children: [
-              Icon(Icons.schedule,
-                  size: 14,
-                  color: isActive
-                      ? Colors.white70
-                      : (isDark ? AppColors.textMuted : AppColors.textMuted)),
+              Icon(Icons.class_outlined,
+                  size: 13,
+                  color:
+                      isDark ? AppColors.textMuted : AppColors.textSecondary),
               const SizedBox(width: 4),
-              Text(
-                time,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: isActive
-                      ? Colors.white70
-                      : (isDark ? AppColors.textMuted : AppColors.textMuted),
+              Expanded(
+                child: Text(
+                  className,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: isDark
+                        ? AppColors.textMuted
+                        : AppColors.textSecondary,
+                  ),
                 ),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TaskTile extends StatelessWidget {
-  final String taskName;
-  final bool isCompleted;
-  final bool isDark;
-
-  const _TaskTile({
-    required this.taskName,
-    required this.isCompleted,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
-        children: [
-          Icon(
-            isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: isCompleted
-                ? AppColors.success
-                : (isDark ? AppColors.textMuted : AppColors.textMuted),
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              taskName,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: isCompleted
-                    ? (isDark ? AppColors.textMuted : AppColors.textMuted)
-                    : (isDark ? Colors.white : AppColors.textPrimary),
-                decoration: isCompleted ? TextDecoration.lineThrough : null,
-              ),
-            ),
           ),
         ],
       ),

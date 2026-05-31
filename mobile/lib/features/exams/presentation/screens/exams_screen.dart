@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/models/student.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -13,8 +15,7 @@ class ExamsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => ExamsProvider()
-        ..fetchProfile().then((_) {}),
+      create: (_) => ExamsProvider()..fetchProfile().then((_) {}),
       child: const _ExamsScreenContent(),
     );
   }
@@ -47,25 +48,46 @@ class _ExamsScreenContentState extends State<_ExamsScreenContent> {
     });
   }
 
-  void _openDetail(ExamInfo exam) =>
-      setState(() { _selectedExam = exam; _view = _View.detail; });
+  void _openDetail(ExamInfo exam) => setState(() {
+        _selectedExam = exam;
+        _view = _View.detail;
+      });
 
-  void _openMarks(ExamScheduleEntry s) async {
-    setState(() { _selectedSchedule = s; _view = _View.marks; });
-    final p = context.read<ExamsProvider>();
-    await p.fetchStudentsAndResults(s.classId!, _selectedExam!.id, s.subjectId!);
+  void _openMarks(ExamScheduleEntry s) {
+    final classId = s.classId;
+    final subjectId = s.subjectId;
+    final exam = _selectedExam;
+    if (classId == null || subjectId == null || exam == null) return;
+    setState(() {
+      _selectedSchedule = s;
+      _view = _View.marks;
+    });
+    context
+        .read<ExamsProvider>()
+        .fetchStudentsAndResults(classId, exam.id, subjectId);
   }
 
   void _openResults({String? classId}) {
-    setState(() { _resultsClassId = classId; _view = _View.results; });
-    context.read<ExamsProvider>().fetchExamResults(_selectedExam!.id, classId: classId);
+    final exam = _selectedExam;
+    if (exam == null) return;
+    setState(() {
+      _resultsClassId = classId;
+      _view = _View.results;
+    });
+    context.read<ExamsProvider>().fetchExamResults(exam.id, classId: classId);
   }
 
   void _back() {
     if (_view == _View.marks || _view == _View.results) {
-      setState(() { _selectedSchedule = null; _view = _View.detail; });
+      setState(() {
+        _selectedSchedule = null;
+        _view = _View.detail;
+      });
     } else {
-      setState(() { _selectedExam = null; _view = _View.list; });
+      setState(() {
+        _selectedExam = null;
+        _view = _View.list;
+      });
     }
   }
 
@@ -74,7 +96,9 @@ class _ExamsScreenContentState extends State<_ExamsScreenContent> {
     final p = context.watch<ExamsProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    if (_view == _View.marks && _selectedExam != null && _selectedSchedule != null) {
+    if (_view == _View.marks &&
+        _selectedExam != null &&
+        _selectedSchedule != null) {
       return _MarksEntryView(
         exam: _selectedExam!,
         schedule: _selectedSchedule!,
@@ -132,7 +156,8 @@ class _NoPermissionView extends StatelessWidget {
             Text(
               'You do not have permission to view or enter exam marks.',
               style: AppTypography.s14Regular(
-                  color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                  color:
+                      isDark ? AppColors.textMuted : AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
           ],
@@ -198,7 +223,12 @@ class _ExamListViewState extends State<_ExamListView> {
                   isDark: isDark,
                 ),
                 const SizedBox(width: 8),
-                for (final s in ['scheduled', 'ongoing', 'completed', 'cancelled'])
+                for (final s in [
+                  'scheduled',
+                  'ongoing',
+                  'completed',
+                  'cancelled'
+                ])
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: _FilterChip(
@@ -247,7 +277,8 @@ class _ExamListViewState extends State<_ExamListView> {
                           exam: filtered[i],
                           isDark: isDark,
                           onTap: () => widget.onSelectExam(filtered[i]),
-                          onDelete: () => _confirmDelete(context, p, filtered[i]),
+                          onDelete: () =>
+                              _confirmDelete(context, p, filtered[i]),
                         ),
                       ),
           ),
@@ -278,7 +309,8 @@ class _ExamListViewState extends State<_ExamListView> {
       final success = await p.deleteExam(exam.id);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(success ? 'Exam deleted' : (p.error ?? 'Delete failed')),
+          content:
+              Text(success ? 'Exam deleted' : (p.error ?? 'Delete failed')),
           backgroundColor: success ? AppColors.success : AppColors.error,
         ));
       }
@@ -346,10 +378,12 @@ class _ExamCard extends StatelessWidget {
                 Expanded(
                   child: Text(exam.name,
                       style: AppTypography.s16Bold(
-                          color: isDark ? Colors.white : AppColors.textPrimary)),
+                          color:
+                              isDark ? Colors.white : AppColors.textPrimary)),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                       color: statusBg, borderRadius: BorderRadius.circular(20)),
                   child: Text(exam.status.toUpperCase(),
@@ -362,19 +396,23 @@ class _ExamCard extends StatelessWidget {
               children: [
                 Icon(Icons.calendar_today,
                     size: 13,
-                    color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                    color:
+                        isDark ? AppColors.textMuted : AppColors.textSecondary),
                 const SizedBox(width: 4),
                 Text(
                   exam.examDate != null
                       ? DateFormat('dd MMM yyyy').format(exam.examDate!)
                       : 'Date TBD',
                   style: AppTypography.s12Regular(
-                      color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                      color: isDark
+                          ? AppColors.textMuted
+                          : AppColors.textSecondary),
                 ),
                 const SizedBox(width: 16),
                 Icon(Icons.school_outlined,
                     size: 13,
-                    color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                    color:
+                        isDark ? AppColors.textMuted : AppColors.textSecondary),
                 const SizedBox(width: 4),
                 Text(exam.academicYear,
                     style: AppTypography.s12Regular(
@@ -387,7 +425,8 @@ class _ExamCard extends StatelessWidget {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(Icons.check_circle, size: 13, color: AppColors.success),
+                  const Icon(Icons.check_circle,
+                      size: 13, color: AppColors.success),
                   const SizedBox(width: 4),
                   Text('Results Published',
                       style: AppTypography.s11Bold(color: AppColors.success)),
@@ -408,7 +447,8 @@ class _ExamCard extends StatelessWidget {
                 ),
                 Icon(Icons.chevron_right,
                     size: 18,
-                    color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                    color:
+                        isDark ? AppColors.textMuted : AppColors.textSecondary),
               ],
             ),
           ],
@@ -446,8 +486,13 @@ class _ExamDetailView extends StatelessWidget {
     final classIds = exam.schedule
         .map((s) => s.classId)
         .whereType<String>()
+        .where((id) => p.canViewResultsForClass(id))
         .toSet()
         .toList();
+
+    // Schedule entries this teacher is allowed to enter marks for
+    final myEntries =
+        exam.schedule.where((s) => p.canEnterMarksForEntry(s)).toList();
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
@@ -460,7 +505,8 @@ class _ExamDetailView extends StatelessWidget {
             child: Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.arrow_back,
+                  icon: Icon(Icons.arrow_back_ios_new,
+                      size: 20,
                       color: isDark ? Colors.white : AppColors.textPrimary),
                   onPressed: onBack,
                 ),
@@ -470,40 +516,6 @@ class _ExamDetailView extends StatelessWidget {
                           color: isDark ? Colors.white : AppColors.textPrimary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
-                ),
-                IconButton(
-                  icon: Icon(Icons.edit_outlined,
-                      color: isDark ? AppColors.textMuted : AppColors.textSecondary),
-                  onPressed: () => _showEditSheet(context, p),
-                  tooltip: 'Edit',
-                ),
-                PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert,
-                      color: isDark ? AppColors.textMuted : AppColors.textSecondary),
-                  onSelected: (v) {
-                    if (v == 'publish') _confirmPublish(context, p);
-                    if (v == 'delete') _confirmDelete(context, p);
-                  },
-                  itemBuilder: (_) => [
-                    if (!exam.isResultPublished)
-                      const PopupMenuItem(
-                        value: 'publish',
-                        child: Row(children: [
-                          Icon(Icons.publish, size: 18, color: AppColors.success),
-                          SizedBox(width: 8),
-                          Text('Publish Results'),
-                        ]),
-                      ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(children: [
-                        Icon(Icons.delete_outline, size: 18, color: AppColors.error),
-                        SizedBox(width: 8),
-                        Text('Delete Exam',
-                            style: TextStyle(color: AppColors.error)),
-                      ]),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -531,12 +543,15 @@ class _ExamDetailView extends StatelessWidget {
                           style: AppTypography.s18Bold(color: Colors.white)),
                       const SizedBox(height: 8),
                       Row(children: [
-                        _InfoPill(_typeLabel(exam.type), Colors.white.withValues(alpha: 0.25)),
+                        _InfoPill(_typeLabel(exam.type),
+                            Colors.white.withValues(alpha: 0.25)),
                         const SizedBox(width: 8),
-                        _InfoPill(exam.status.toUpperCase(), Colors.white.withValues(alpha: 0.25)),
+                        _InfoPill(exam.status.toUpperCase(),
+                            Colors.white.withValues(alpha: 0.25)),
                         if (exam.isResultPublished) ...[
                           const SizedBox(width: 8),
-                          _InfoPill('PUBLISHED', AppColors.success.withValues(alpha: 0.7)),
+                          _InfoPill('PUBLISHED',
+                              AppColors.success.withValues(alpha: 0.7)),
                         ],
                       ]),
                       if (exam.examDate != null) ...[
@@ -558,28 +573,37 @@ class _ExamDetailView extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
 
-                // ── Schedule entries ────────────────────────────────────────
-                Text('SCHEDULE',
+                // ── Schedule entries (only the ones this teacher can enter) ──
+                Text('MY SUBJECTS',
                     style: AppTypography.s11Bold(
                         color: isDark
                             ? AppColors.textMuted
                             : AppColors.textSecondary)),
                 const SizedBox(height: 10),
-                if (exam.schedule.isEmpty)
-                  _EmptyNote('No schedule entries', isDark)
+                if (p.isLoading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.primary)),
+                  )
+                else if (myEntries.isEmpty)
+                  _EmptyNote(
+                    exam.schedule.isEmpty
+                        ? 'No subjects scheduled for this exam yet'
+                        : 'No subjects assigned to you for this exam',
+                    isDark,
+                  )
                 else
-                  ...exam.schedule.map((s) {
-                    final canEnter = p.canEnterMarksForEntry(s);
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _ScheduleEntryCard(
-                        entry: s,
-                        isDark: isDark,
-                        canEnter: canEnter,
-                        onTap: canEnter ? () => onSelectSchedule(s) : null,
-                      ),
-                    );
-                  }),
+                  ...myEntries.map((s) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _ScheduleEntryCard(
+                          entry: s,
+                          isDark: isDark,
+                          canEnter: !exam.isResultPublished,
+                          onTap: () => onSelectSchedule(s),
+                        ),
+                      )),
 
                 // ── Results section ─────────────────────────────────────────
                 const SizedBox(height: 8),
@@ -590,7 +614,7 @@ class _ExamDetailView extends StatelessWidget {
                             : AppColors.textSecondary)),
                 const SizedBox(height: 10),
                 if (classIds.isEmpty)
-                  _EmptyNote('No classes in this exam', isDark)
+                  _EmptyNote('No results available for your classes', isDark)
                 else
                   ...classIds.map((cid) {
                     final entry = exam.schedule.firstWhere(
@@ -605,16 +629,6 @@ class _ExamDetailView extends StatelessWidget {
                       ),
                     );
                   }),
-
-                // ── Publish banner ──────────────────────────────────────────
-                if (!exam.isResultPublished && exam.schedule.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _PublishBanner(
-                    isDark: isDark,
-                    isLoading: p.isActionLoading,
-                    onPublish: () => _confirmPublish(context, p),
-                  ),
-                ],
               ],
             ),
           ),
@@ -637,75 +651,16 @@ class _ExamDetailView extends StatelessWidget {
     );
   }
 
-  void _confirmPublish(BuildContext context, ExamsProvider p) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Publish Results'),
-        content: Text(
-            'Publish results for "${exam.name}"? Students and parents will be notified.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Publish',
-                  style: TextStyle(color: AppColors.success))),
-        ],
-      ),
-    );
-    if (ok == true && context.mounted) {
-      final success = await p.publishResults(exam.id);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(success
-              ? 'Results published successfully!'
-              : (p.error ?? 'Failed to publish')),
-          backgroundColor: success ? AppColors.success : AppColors.error,
-        ));
-      }
-    }
-  }
-
-  void _confirmDelete(BuildContext context, ExamsProvider p) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete Exam'),
-        content: Text('Delete "${exam.name}"? This removes all results too.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete',
-                  style: TextStyle(color: AppColors.error))),
-        ],
-      ),
-    );
-    if (ok == true && context.mounted) {
-      final success = await p.deleteExam(exam.id);
-      if (context.mounted) {
-        if (success) {
-          onExamDeleted();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(p.error ?? 'Delete failed'),
-            backgroundColor: AppColors.error,
-          ));
-        }
-      }
-    }
-  }
-
   String _typeLabel(String t) {
     switch (t) {
-      case 'unit_test':   return 'Unit Test';
-      case 'mid_term':    return 'Mid Term';
-      case 'final':       return 'Final Exam';
-      default:            return t.isNotEmpty ? t[0].toUpperCase() + t.substring(1) : 'Exam';
+      case 'unit_test':
+        return 'Unit Test';
+      case 'mid_term':
+        return 'Mid Term';
+      case 'final':
+        return 'Final Exam';
+      default:
+        return t.isNotEmpty ? t[0].toUpperCase() + t.substring(1) : 'Exam';
     }
   }
 }
@@ -728,7 +683,8 @@ class _ResultsView extends StatelessWidget {
     // Resolve class name from schedule
     String className = 'Class';
     if (classId != null) {
-      final match = exam.schedule.where((s) => s.classId == classId).firstOrNull;
+      final match =
+          exam.schedule.where((s) => s.classId == classId).firstOrNull;
       if (match != null) className = match.classFullName;
     }
 
@@ -741,7 +697,8 @@ class _ResultsView extends StatelessWidget {
             child: Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.arrow_back,
+                  icon: Icon(Icons.arrow_back_ios_new,
+                      size: 20,
                       color: isDark ? Colors.white : AppColors.textPrimary),
                   onPressed: onBack,
                 ),
@@ -751,7 +708,9 @@ class _ResultsView extends StatelessWidget {
                     children: [
                       Text('Results',
                           style: AppTypography.s16Bold(
-                              color: isDark ? Colors.white : AppColors.textPrimary)),
+                              color: isDark
+                                  ? Colors.white
+                                  : AppColors.textPrimary)),
                       Text('${exam.name} · $className',
                           style: AppTypography.s12Regular(
                               color: isDark
@@ -893,7 +852,8 @@ class _ResultRow extends StatelessWidget {
             child: Text(
               result.rank > 0 ? '${result.rank}' : '-',
               style: AppTypography.s13Bold(
-                  color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                  color:
+                      isDark ? AppColors.textMuted : AppColors.textSecondary),
             ),
           ),
           Expanded(
@@ -936,7 +896,8 @@ class _ResultRow extends StatelessWidget {
             child: Text(
               result.grade.isNotEmpty ? result.grade : '-',
               style: AppTypography.s12Bold(
-                  color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                  color:
+                      isDark ? AppColors.textMuted : AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
           ),
@@ -1016,7 +977,8 @@ class _CreateEditExamSheetState extends State<_CreateEditExamSheet> {
               padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
               decoration: BoxDecoration(
                 color: isDark ? AppColors.cardDark : Colors.white,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(20)),
                 border: Border(
                     bottom: BorderSide(
                         color: isDark
@@ -1073,10 +1035,15 @@ class _CreateEditExamSheetState extends State<_CreateEditExamSheet> {
                             _dropdown<String>(
                               value: _type,
                               items: const [
-                                DropdownMenuItem(value: 'unit_test', child: Text('Unit Test')),
-                                DropdownMenuItem(value: 'mid_term', child: Text('Mid Term')),
-                                DropdownMenuItem(value: 'final', child: Text('Final Exam')),
-                                DropdownMenuItem(value: 'other', child: Text('Other')),
+                                DropdownMenuItem(
+                                    value: 'unit_test',
+                                    child: Text('Unit Test')),
+                                DropdownMenuItem(
+                                    value: 'mid_term', child: Text('Mid Term')),
+                                DropdownMenuItem(
+                                    value: 'final', child: Text('Final Exam')),
+                                DropdownMenuItem(
+                                    value: 'other', child: Text('Other')),
                               ],
                               onChanged: (v) => setState(() => _type = v!),
                               isDark: isDark,
@@ -1094,9 +1061,14 @@ class _CreateEditExamSheetState extends State<_CreateEditExamSheet> {
                             _dropdown<String>(
                               value: _status,
                               items: const [
-                                DropdownMenuItem(value: 'scheduled', child: Text('Scheduled')),
-                                DropdownMenuItem(value: 'ongoing', child: Text('Ongoing')),
-                                DropdownMenuItem(value: 'completed', child: Text('Completed')),
+                                DropdownMenuItem(
+                                    value: 'scheduled',
+                                    child: Text('Scheduled')),
+                                DropdownMenuItem(
+                                    value: 'ongoing', child: Text('Ongoing')),
+                                DropdownMenuItem(
+                                    value: 'completed',
+                                    child: Text('Completed')),
                               ],
                               onChanged: (v) => setState(() => _status = v!),
                               isDark: isDark,
@@ -1126,7 +1098,9 @@ class _CreateEditExamSheetState extends State<_CreateEditExamSheet> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 13),
                       decoration: BoxDecoration(
-                        color: isDark ? AppColors.cardDark : const Color(0xFFF8FAFC),
+                        color: isDark
+                            ? AppColors.cardDark
+                            : const Color(0xFFF8FAFC),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                             color: isDark
@@ -1147,7 +1121,9 @@ class _CreateEditExamSheetState extends State<_CreateEditExamSheet> {
                                 : 'Select date',
                             style: AppTypography.s14Regular(
                                 color: _examDate != null
-                                    ? (isDark ? Colors.white : AppColors.textPrimary)
+                                    ? (isDark
+                                        ? Colors.white
+                                        : AppColors.textPrimary)
                                     : AppColors.textMuted),
                           ),
                           const Spacer(),
@@ -1174,15 +1150,19 @@ class _CreateEditExamSheetState extends State<_CreateEditExamSheet> {
                                     : AppColors.textSecondary)),
                       ),
                       TextButton.icon(
-                        onPressed: p.isMetaLoading ? null : () => _addEntry(context, p),
-                        icon: const Icon(Icons.add, size: 16, color: AppColors.primary),
+                        onPressed: p.isMetaLoading
+                            ? null
+                            : () => _addEntry(context, p),
+                        icon: const Icon(Icons.add,
+                            size: 16, color: AppColors.primary),
                         label: const Text('Add Entry',
                             style: TextStyle(
                                 color: AppColors.primary,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 13)),
                         style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4)),
                       ),
                     ],
                   ),
@@ -1198,7 +1178,9 @@ class _CreateEditExamSheetState extends State<_CreateEditExamSheet> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: isDark ? AppColors.cardDark : const Color(0xFFF8FAFC),
+                        color: isDark
+                            ? AppColors.cardDark
+                            : const Color(0xFFF8FAFC),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                             color: isDark
@@ -1301,38 +1283,30 @@ class _CreateEditExamSheetState extends State<_CreateEditExamSheet> {
       style: AppTypography.s12SemiBold(
           color: isDark ? AppColors.textMuted : AppColors.textSecondary));
 
-  Widget _textField(
-      TextEditingController ctrl, String hint, bool isDark) {
+  Widget _textField(TextEditingController ctrl, String hint, bool isDark) {
     return TextField(
       controller: ctrl,
       style: AppTypography.s14Regular(
           color: isDark ? Colors.white : AppColors.textPrimary),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle:
-            AppTypography.s14Regular(color: AppColors.textMuted),
+        hintStyle: AppTypography.s14Regular(color: AppColors.textMuted),
         isDense: true,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
         filled: true,
-        fillColor:
-            isDark ? AppColors.cardDark : const Color(0xFFF8FAFC),
+        fillColor: isDark ? AppColors.cardDark : const Color(0xFFF8FAFC),
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(
-                color: isDark
-                    ? AppColors.borderDark
-                    : AppColors.borderLight)),
+                color: isDark ? AppColors.borderDark : AppColors.borderLight)),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(
-                color: isDark
-                    ? AppColors.borderDark
-                    : AppColors.borderLight)),
+                color: isDark ? AppColors.borderDark : AppColors.borderLight)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide:
-                const BorderSide(color: AppColors.primary, width: 1.5)),
+            borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
       ),
     );
   }
@@ -1420,7 +1394,9 @@ class _ScheduleDraftCardState extends State<_ScheduleDraftCard> {
         : (widget.classes.isNotEmpty ? widget.classes.first.id : entry.classId);
     final subjectId = widget.subjects.any((s) => s.id == entry.subjectId)
         ? entry.subjectId
-        : (widget.subjects.isNotEmpty ? widget.subjects.first.id : entry.subjectId);
+        : (widget.subjects.isNotEmpty
+            ? widget.subjects.first.id
+            : entry.subjectId);
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -1439,11 +1415,14 @@ class _ScheduleDraftCardState extends State<_ScheduleDraftCard> {
             children: [
               Text('Entry ${widget.index + 1}',
                   style: AppTypography.s12Bold(
-                      color: isDark ? AppColors.textMuted : AppColors.textSecondary)),
+                      color: isDark
+                          ? AppColors.textMuted
+                          : AppColors.textSecondary)),
               const Spacer(),
               InkWell(
                 onTap: widget.onRemove,
-                child: const Icon(Icons.close, size: 18, color: AppColors.error),
+                child:
+                    const Icon(Icons.close, size: 18, color: AppColors.error),
               ),
             ],
           ),
@@ -1455,7 +1434,8 @@ class _ScheduleDraftCardState extends State<_ScheduleDraftCard> {
           _miniDropdown<String>(
             value: classId,
             items: widget.classes
-                .map((c) => DropdownMenuItem(value: c.id, child: Text(c.displayName)))
+                .map((c) =>
+                    DropdownMenuItem(value: c.id, child: Text(c.displayName)))
                 .toList(),
             onChanged: (v) {
               if (v == null) return;
@@ -1515,7 +1495,8 @@ class _ScheduleDraftCardState extends State<_ScheduleDraftCard> {
                     _label('Pass Marks', isDark),
                     const SizedBox(height: 4),
                     _numField(_passCtrl, isDark, (v) {
-                      entry.passingMarks = int.tryParse(v) ?? entry.passingMarks;
+                      entry.passingMarks =
+                          int.tryParse(v) ?? entry.passingMarks;
                       widget.onChanged();
                     }),
                   ],
@@ -1561,7 +1542,8 @@ class _ScheduleDraftCardState extends State<_ScheduleDraftCard> {
     );
   }
 
-  Widget _numField(TextEditingController ctrl, bool isDark, Function(String) onChanged) {
+  Widget _numField(
+      TextEditingController ctrl, bool isDark, Function(String) onChanged) {
     return TextField(
       controller: ctrl,
       keyboardType: TextInputType.number,
@@ -1570,8 +1552,7 @@ class _ScheduleDraftCardState extends State<_ScheduleDraftCard> {
       onChanged: onChanged,
       decoration: InputDecoration(
         isDense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         filled: true,
         fillColor: isDark ? AppColors.bgDark : const Color(0xFFF8FAFC),
         border: OutlineInputBorder(
@@ -1624,7 +1605,8 @@ class _MarksEntryView extends StatelessWidget {
             child: Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.arrow_back,
+                  icon: Icon(Icons.arrow_back_ios_new,
+                      size: 20,
                       color: isDark ? Colors.white : AppColors.textPrimary),
                   onPressed: onBack,
                 ),
@@ -1634,7 +1616,9 @@ class _MarksEntryView extends StatelessWidget {
                     children: [
                       Text(schedule.subjectName ?? 'Subject',
                           style: AppTypography.s16Bold(
-                              color: isDark ? Colors.white : AppColors.textPrimary)),
+                              color: isDark
+                                  ? Colors.white
+                                  : AppColors.textPrimary)),
                       Text(
                         '${exam.name} · ${schedule.classFullName}',
                         style: AppTypography.s12Regular(
@@ -1663,37 +1647,71 @@ class _MarksEntryView extends StatelessWidget {
             child: p.isLoadingStudents
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.primary))
-                : p.students.isEmpty
+                : p.error != null
                     ? Center(
-                        child: Text('No students in this class',
-                            style: AppTypography.s14Regular(
-                                color: isDark
-                                    ? AppColors.textMuted
-                                    : AppColors.textSecondary)))
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-                        itemCount: p.students.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (_, i) {
-                          final student = p.students[i];
-                          final entry =
-                              p.marksMap[student.id] ?? ExamMarkEntry();
-                          return _StudentMarkCard(
-                            index: i + 1,
-                            student: student,
-                            entry: entry,
-                            maxMarks: schedule.maxMarks,
-                            isDark: isDark,
-                            onChanged: (updated) => p.updateMark(
-                              student.id,
-                              theory: updated.theoryMarks,
-                              practical: updated.practicalMarks,
-                              absent: updated.isAbsent,
-                              remarks: updated.remarks,
-                            ),
-                          );
-                        },
-                      ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.error_outline,
+                                  size: 40, color: AppColors.error),
+                              const SizedBox(height: 8),
+                              Text(p.error!,
+                                  style: AppTypography.s13Regular(
+                                      color: AppColors.error),
+                                  textAlign: TextAlign.center),
+                            ],
+                          ),
+                        ),
+                      )
+                    : p.students.isEmpty
+                        ? Center(
+                            child: Text('No students in this class',
+                                style: AppTypography.s14Regular(
+                                    color: isDark
+                                        ? AppColors.textMuted
+                                        : AppColors.textSecondary)))
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                            itemCount: p.students.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (_, i) {
+                              final student = p.students[i];
+                              final entry =
+                                  p.marksMap[student.id] ?? ExamMarkEntry();
+                              return _StudentMarkCard(
+                                index: i + 1,
+                                student: student,
+                                entry: entry,
+                                maxMarks: schedule.maxMarks,
+                                isDark: isDark,
+                                onChanged: (updated) => p.updateMark(
+                                  student.id,
+                                  theory: updated.theoryMarks,
+                                  practical: updated.practicalMarks,
+                                  absent: updated.isAbsent,
+                                  remarks: updated.remarks,
+                                ),
+                                onUploadPdf: (path, name) async {
+                                  final success = await p.uploadAnswerPaper(
+                                    examId: exam.id,
+                                    classId: schedule.classId ?? '',
+                                    studentId: student.id,
+                                    subjectId: schedule.subjectId ?? '',
+                                    filePath: path,
+                                    fileName: name,
+                                  );
+                                  if (!success && context.mounted && p.error != null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(p.error!)),
+                                    );
+                                  }
+                                },
+                              );
+                            },
+                          ),
           ),
         ],
       ),
@@ -1703,10 +1721,13 @@ class _MarksEntryView extends StatelessWidget {
               onPressed: p.isSaving
                   ? null
                   : () async {
+                      final classId = schedule.classId;
+                      final subjectId = schedule.subjectId;
+                      if (classId == null || subjectId == null) return;
                       final ok = await p.saveMarks(
                         exam.id,
-                        schedule.classId!,
-                        schedule.subjectId!,
+                        classId,
+                        subjectId,
                       );
                       if (context.mounted) {
                         if (ok) {
@@ -1748,6 +1769,7 @@ class _StudentMarkCard extends StatefulWidget {
   final int maxMarks;
   final bool isDark;
   final Function(ExamMarkEntry) onChanged;
+  final Future<void> Function(String path, String name)? onUploadPdf;
 
   const _StudentMarkCard({
     required this.index,
@@ -1756,6 +1778,7 @@ class _StudentMarkCard extends StatefulWidget {
     required this.maxMarks,
     required this.isDark,
     required this.onChanged,
+    this.onUploadPdf,
   });
 
   @override
@@ -1767,6 +1790,24 @@ class _StudentMarkCardState extends State<_StudentMarkCard> {
   late final TextEditingController _practicalCtrl;
   late final TextEditingController _remarksCtrl;
   late bool _isAbsent;
+  bool _isUploadingPdf = false;
+
+  Future<void> _pickAndUploadPdf() async {
+    if (widget.onUploadPdf == null) return;
+    
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+    );
+    
+    if (result != null && result.files.single.path != null) {
+      final path = result.files.single.path!;
+      final name = result.files.single.name;
+      setState(() => _isUploadingPdf = true);
+      await widget.onUploadPdf!(path, name);
+      if (mounted) setState(() => _isUploadingPdf = false);
+    }
+  }
 
   @override
   void initState() {
@@ -1808,14 +1849,10 @@ class _StudentMarkCardState extends State<_StudentMarkCard> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _isAbsent
-            ? AppColors.error.withValues(alpha: 0.06)
-            : (isDark ? AppColors.cardDark : Colors.white),
+        color: isDark ? AppColors.cardDark : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: _isAbsent
-              ? AppColors.error.withValues(alpha: 0.3)
-              : (isDark ? AppColors.borderDark : AppColors.borderLight),
+          color: isDark ? AppColors.borderDark : AppColors.borderLight,
         ),
         boxShadow: isDark ? [] : AppColors.shadowSm,
       ),
@@ -1842,7 +1879,8 @@ class _StudentMarkCardState extends State<_StudentMarkCard> {
                   children: [
                     Text(widget.student.name,
                         style: AppTypography.s14SemiBold(
-                            color: isDark ? Colors.white : AppColors.textPrimary)),
+                            color:
+                                isDark ? Colors.white : AppColors.textPrimary)),
                     if (widget.student.admissionNumber != null)
                       Text(widget.student.admissionNumber!,
                           style: AppTypography.s11Regular(
@@ -1855,6 +1893,19 @@ class _StudentMarkCardState extends State<_StudentMarkCard> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  Checkbox(
+                    value: _isAbsent,
+                    activeColor: AppColors.error,
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() => _isAbsent = v);
+                        _notify();
+                      }
+                    },
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  const SizedBox(width: 4),
                   Text('Absent',
                       style: AppTypography.s12Medium(
                           color: _isAbsent
@@ -1862,18 +1913,6 @@ class _StudentMarkCardState extends State<_StudentMarkCard> {
                               : (isDark
                                   ? AppColors.textMuted
                                   : AppColors.textSecondary))),
-                  const SizedBox(width: 4),
-                  Switch(
-                    value: _isAbsent,
-                    activeThumbColor: AppColors.error,
-                    activeTrackColor:
-                        AppColors.error.withValues(alpha: 0.4),
-                    onChanged: (v) {
-                      setState(() => _isAbsent = v);
-                      _notify();
-                    },
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
                 ],
               ),
             ],
@@ -1915,8 +1954,7 @@ class _StudentMarkCardState extends State<_StudentMarkCard> {
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 filled: true,
-                fillColor:
-                    isDark ? AppColors.bgDark : const Color(0xFFF8FAFC),
+                fillColor: isDark ? AppColors.bgDark : const Color(0xFFF8FAFC),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide(
@@ -1933,11 +1971,99 @@ class _StudentMarkCardState extends State<_StudentMarkCard> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(
-                      color: AppColors.primary, width: 1.5),
+                  borderSide:
+                      const BorderSide(color: AppColors.primary, width: 1.5),
                 ),
               ),
               onChanged: (_) => _notify(),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: widget.entry.answerPaperFileName != null
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isDark ? AppColors.bgDark : const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  widget.entry.answerPaperFileName!,
+                                  style: AppTypography.s12Medium(
+                                      color: isDark ? Colors.white : AppColors.textPrimary),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (_isUploadingPdf)
+                                const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                              else
+                                InkWell(
+                                  onTap: _pickAndUploadPdf,
+                                  child: const Icon(Icons.edit_outlined, size: 16, color: AppColors.textSecondary),
+                                ),
+                            ],
+                          ),
+                        )
+                      : OutlinedButton.icon(
+                          onPressed: _isUploadingPdf ? null : _pickAndUploadPdf,
+                          icon: _isUploadingPdf
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.upload_file, size: 16),
+                          label: Text(_isUploadingPdf ? 'Uploading...' : 'Upload Answer PDF'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: isDark ? Colors.white : AppColors.textPrimary,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            textStyle: AppTypography.s12Medium(),
+                            side: BorderSide(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                ),
+                if (widget.entry.answerPaperUrl != null) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.open_in_new, size: 20),
+                    color: AppColors.primary,
+                    tooltip: 'View PDF',
+                    onPressed: () async {
+                      final url = Uri.parse(widget.entry.answerPaperUrl!);
+                      if (await canLaunchUrl(url)) await launchUrl(url);
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ] else ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border:
+                    Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.person_off_outlined,
+                      color: AppColors.error, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Student marked as absent',
+                    style: AppTypography.s13SemiBold(color: AppColors.error),
+                  ),
+                ],
+              ),
             ),
           ],
         ],
@@ -1965,8 +2091,7 @@ class _MarksField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
-      keyboardType:
-          const TextInputType.numberWithOptions(decimal: true),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
       style: AppTypography.s14SemiBold(
           color: isDark ? Colors.white : AppColors.textPrimary),
       decoration: InputDecoration(
@@ -1993,8 +2118,7 @@ class _MarksField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide:
-              const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
       ),
       onChanged: onChanged,
@@ -2020,8 +2144,7 @@ class _StatChip extends StatelessWidget {
           color: isDark ? AppColors.cardDark : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-              color:
-                  isDark ? AppColors.borderDark : AppColors.borderLight),
+              color: isDark ? AppColors.borderDark : AppColors.borderLight),
           boxShadow: isDark ? [] : AppColors.shadowSm,
         ),
         child: Column(
@@ -2141,8 +2264,7 @@ class _ScheduleEntryCard extends StatelessWidget {
               children: [
                 Text('${entry.maxMarks} marks',
                     style: AppTypography.s12SemiBold(
-                        color:
-                            isDark ? Colors.white : AppColors.textPrimary)),
+                        color: isDark ? Colors.white : AppColors.textPrimary)),
                 Text('Pass: ${entry.passingMarks}',
                     style: AppTypography.s11Regular(
                         color: isDark
@@ -2204,67 +2326,9 @@ class _ResultsTile extends StatelessWidget {
             Text('View Results',
                 style: AppTypography.s12Medium(color: AppColors.primary)),
             const SizedBox(width: 4),
-            const Icon(Icons.chevron_right,
-                size: 16, color: AppColors.primary),
+            const Icon(Icons.chevron_right, size: 16, color: AppColors.primary),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _PublishBanner extends StatelessWidget {
-  final bool isDark;
-  final bool isLoading;
-  final VoidCallback onPublish;
-  const _PublishBanner(
-      {required this.isDark,
-      required this.isLoading,
-      required this.onPublish});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.success.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.publish, color: AppColors.success, size: 22),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text('Ready to publish results to students & parents.',
-                style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.success,
-                    fontWeight: FontWeight.w500)),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: isLoading ? null : onPublish,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.success,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-            ),
-            child: isLoading
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
-                : const Text('Publish',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700)),
-          ),
-        ],
       ),
     );
   }
@@ -2279,13 +2343,11 @@ class _InfoPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-          color: bg, borderRadius: BorderRadius.circular(12)),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
       child: Text(label,
           style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.w700)),
+              color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
     );
   }
 }

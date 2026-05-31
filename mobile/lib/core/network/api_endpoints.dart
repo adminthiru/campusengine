@@ -50,7 +50,7 @@ class ApiEndpoints {
   static String examPublish(String id) => '/exams/$id/publish';
   static const String examResults     = '/exams/results';
   static const String examMarks       = '/exams/marks';
-
+  static const String examAnswerPaper = '/exams/answer-paper';
   // ── Fees ──────────────────────────────────────────────────────────────────
   static const String fees           = '/fees';
 

@@ -107,11 +107,9 @@ class _StudentDetailScreenState extends State<StudentDetailScreen>
     final classLabel =
         cls is Map ? '${cls['name'] ?? ''} ${cls['section'] ?? ''}'.trim() : '';
     final gender = s['gender'] as String? ?? '';
-    final dob = s['dateOfBirth'] as String?;
     final status = s['status'] as String? ?? 'active';
     final photo = s['photo'] as String?;
     final roll = s['rollNumber'] as String? ?? '';
-    final attSummary = s['attendanceSummary'];
 
     final genderColor = gender.toLowerCase() == 'female'
         ? const Color(0xFFEC4899)
@@ -218,7 +216,7 @@ class _StudentDetailScreenState extends State<StudentDetailScreen>
         foregroundColor: isDark ? Colors.white : AppColors.textPrimary,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
       );
@@ -608,11 +606,12 @@ class _AttendanceTabState extends State<_AttendanceTab> {
         'month': _month.toString(),
         'year': _year.toString(),
       });
-      if (mounted)
+      if (mounted) {
         setState(() {
           _records = res.data['records'] as List? ?? [];
           _loading = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -623,8 +622,9 @@ class _AttendanceTabState extends State<_AttendanceTab> {
       if (_month == 1) {
         _month = 12;
         _year--;
-      } else
+      } else {
         _month--;
+      }
     });
     _loadRecords();
   }
@@ -636,8 +636,9 @@ class _AttendanceTabState extends State<_AttendanceTab> {
       if (_month == 12) {
         _month = 1;
         _year++;
-      } else
+      } else {
         _month++;
+      }
     });
     _loadRecords();
   }
@@ -685,14 +686,12 @@ class _AttendanceTabState extends State<_AttendanceTab> {
         _year < now.year || (_year == now.year && _month < now.month);
 
     // Monthly counts
-    int present = 0, absent = 0, late = 0;
+    int present = 0;
     for (final r in _records) {
       final st = r['status'] as String? ?? '';
-      if (st == 'present')
+      if (st == 'present') {
         present++;
-      else if (st == 'absent')
-        absent++;
-      else if (st == 'late') late++;
+      }
     }
     final mTotal = _records.length;
     final mPct = mTotal > 0 ? ((present / mTotal) * 100).round() : 0;
@@ -916,11 +915,12 @@ class _HomeworkTabState extends State<_HomeworkTab> {
     try {
       final res = await ApiClient.get('/homework',
           params: {'studentId': widget.studentId, 'limit': '50'});
-      if (mounted)
+      if (mounted) {
         setState(() {
           _hw = res.data['homeworks'] as List? ?? [];
           _loading = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -928,9 +928,10 @@ class _HomeworkTabState extends State<_HomeworkTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading)
+    if (_loading) {
       return const Center(
           child: CircularProgressIndicator(color: AppColors.primary));
+    }
     if (_hw.isEmpty) return _EmptyState('No homework records found');
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -1022,11 +1023,12 @@ class _ExamsTabState extends State<_ExamsTab> {
     try {
       final res = await ApiClient.get('/exams/results',
           params: {'studentId': widget.studentId});
-      if (mounted)
+      if (mounted) {
         setState(() {
           _results = res.data['results'] as List? ?? [];
           _loading = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -1034,9 +1036,10 @@ class _ExamsTabState extends State<_ExamsTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading)
+    if (_loading) {
       return const Center(
           child: CircularProgressIndicator(color: AppColors.primary));
+    }
     if (_results.isEmpty) return _EmptyState('No exam results found');
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -1136,9 +1139,10 @@ class _FeesTabState extends State<_FeesTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading)
+    if (_loading) {
       return const Center(
           child: CircularProgressIndicator(color: AppColors.primary));
+    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),

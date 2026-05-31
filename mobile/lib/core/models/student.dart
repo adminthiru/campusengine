@@ -23,7 +23,8 @@ class Student {
     gender: j['gender'],
     dateOfBirth: j['dateOfBirth'],
     guardians: (j['guardians'] as List? ?? [])
-        .map((g) => Guardian.fromJson(g))
+        .whereType<Map>()
+        .map((g) => Guardian.fromJson(Map<String, dynamic>.from(g)))
         .toList(),
   );
 }

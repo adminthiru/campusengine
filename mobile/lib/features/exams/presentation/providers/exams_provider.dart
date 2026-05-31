@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:dio/dio.dart';
+
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_endpoints.dart';
 import '../../../../core/models/teacher_profile.dart';
@@ -154,12 +157,16 @@ class ExamMarkEntry {
   double practicalMarks;
   bool isAbsent;
   String remarks;
+  String? answerPaperUrl;
+  String? answerPaperFileName;
 
   ExamMarkEntry({
     this.theoryMarks = 0,
     this.practicalMarks = 0,
     this.isAbsent = false,
     this.remarks = '',
+    this.answerPaperUrl,
+    this.answerPaperFileName,
   });
 
   ExamMarkEntry copyWith({
@@ -167,12 +174,16 @@ class ExamMarkEntry {
     double? practicalMarks,
     bool? isAbsent,
     String? remarks,
+    String? answerPaperUrl,
+    String? answerPaperFileName,
   }) =>
       ExamMarkEntry(
         theoryMarks: theoryMarks ?? this.theoryMarks,
         practicalMarks: practicalMarks ?? this.practicalMarks,
         isAbsent: isAbsent ?? this.isAbsent,
         remarks: remarks ?? this.remarks,
+        answerPaperUrl: answerPaperUrl ?? this.answerPaperUrl,
+        answerPaperFileName: answerPaperFileName ?? this.answerPaperFileName,
       );
 }
 
@@ -302,7 +313,8 @@ class ExamsProvider extends ChangeNotifier {
 
   bool get canEnterMarks {
     final p = _permissions;
-    if (p == null) return false;
+    // Optimistic: allow until profile loads (avoids false "no permission" flash)
+    if (p == null) return true;
     return (_isClassTeacher && p.classTeacher.viewAndEnterExamMarks) ||
         (_isSubjectTeacher && p.subjectTeacher.enterExamMarks);
   }
@@ -409,9 +421,8 @@ class ExamsProvider extends ChangeNotifier {
 
   bool canEnterMarksForEntry(ExamScheduleEntry entry) {
     if (!canEnterMarks) return false;
-    if (_isClassTeacher && _classTeacherInfo != null) {
-      if (entry.classId == _classTeacherInfo!.classInfo.id) return true;
-    }
+    // Optimistic while profile is still loading — show all entries
+    if (_permissions == null) return true;
     if (_isSubjectTeacher) {
       for (final a in _subjectAssignments) {
         if (entry.classId == a.classInfo.id &&
@@ -419,6 +430,14 @@ class ExamsProvider extends ChangeNotifier {
           return true;
         }
       }
+    }
+    return false;
+  }
+
+  bool canViewResultsForClass(String classId) {
+    if (_permissions == null) return true;
+    if (_isClassTeacher && _classTeacherInfo != null) {
+      if (_classTeacherInfo!.classInfo.id == classId) return true;
     }
     return false;
   }
@@ -434,7 +453,10 @@ class ExamsProvider extends ChangeNotifier {
     _students = [];
     _marksMap = {};
     _error = null;
-    notifyListeners();
+
+    // Defer the first notification so setState in the caller processes first,
+    // preventing the detail view from rebuilding with cleared state mid-frame.
+    await Future.microtask(() => notifyListeners());
 
     try {
       final studRes = await ApiClient.get(
@@ -468,11 +490,14 @@ class ExamsProvider extends ChangeNotifier {
           final mSubjId =
               rawSubj is Map ? rawSubj['_id']?.toString() : rawSubj?.toString();
           if (mSubjId != subjectId) continue;
+          final paper = mMap['answerPaper'] as Map?;
           _marksMap[studentId] = ExamMarkEntry(
             theoryMarks: (mMap['theoryMarks'] as num?)?.toDouble() ?? 0,
             practicalMarks: (mMap['practicalMarks'] as num?)?.toDouble() ?? 0,
             isAbsent: mMap['isAbsent'] == true,
             remarks: mMap['remarks']?.toString() ?? '',
+            answerPaperUrl: paper?['url']?.toString(),
+            answerPaperFileName: paper?['fileName']?.toString(),
           );
           break;
         }
@@ -507,7 +532,7 @@ class ExamsProvider extends ChangeNotifier {
       String examId, String classId, String subjectId) async {
     _isSaving = true;
     _error = null;
-    notifyListeners();
+    await Future.microtask(() => notifyListeners());
 
     try {
       final marksData = _students.map((s) {
@@ -537,12 +562,61 @@ class ExamsProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> uploadAnswerPaper({
+    required String examId,
+    required String classId,
+    required String studentId,
+    required String subjectId,
+    required String filePath,
+    required String fileName,
+  }) async {
+    _isActionLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final formData = FormData.fromMap({
+        'examId': examId,
+        'classId': classId,
+        'studentId': studentId,
+        'subjectId': subjectId,
+        'answerPaper': await MultipartFile.fromFile(filePath, filename: fileName),
+      });
+
+      final res = await ApiClient.post(ApiEndpoints.examAnswerPaper, data: formData);
+      final resultData = (res.data as Map)['result'] as Map?;
+      if (resultData != null) {
+        final marksList = resultData['marks'] as List? ?? [];
+        final updatedMark = marksList.firstWhere(
+            (m) => (m['subject'] is Map ? m['subject']['_id'] : m['subject']).toString() == subjectId,
+            orElse: () => null);
+        
+        if (updatedMark != null) {
+          final paper = updatedMark['answerPaper'] as Map?;
+          final entry = _marksMap[studentId];
+          if (entry != null) {
+            _marksMap[studentId] = entry.copyWith(
+              answerPaperUrl: paper?['url']?.toString(),
+              answerPaperFileName: paper?['fileName']?.toString(),
+            );
+          }
+        }
+      }
+      return true;
+    } catch (e) {
+      _error = ApiClient.errorMessage(e);
+      return false;
+    } finally {
+      _isActionLoading = false;
+      notifyListeners();
+    }
+  }
+
   // ── Metadata for create/edit form ─────────────────────────────────────────────
 
   Future<void> fetchClassesAndSubjects() async {
     if (_availableClasses.isNotEmpty && _availableSubjects.isNotEmpty) return;
     _isMetaLoading = true;
-    notifyListeners();
+    await Future.microtask(() => notifyListeners());
     try {
       final responses = await Future.wait([
         ApiClient.get(ApiEndpoints.classes),
@@ -714,7 +788,7 @@ class ExamsProvider extends ChangeNotifier {
     _isResultsLoading = true;
     _results = [];
     _error = null;
-    notifyListeners();
+    await Future.microtask(() => notifyListeners());
     try {
       final params = <String, dynamic>{'examId': examId};
       if (classId != null) params['classId'] = classId;

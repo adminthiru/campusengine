@@ -128,9 +128,10 @@ class _ExamScheduleTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (loading)
+    if (loading) {
       return const Center(
           child: CircularProgressIndicator(color: AppColors.primary));
+    }
     if (exams.isEmpty) {
       return Center(
           child: Column(
@@ -151,7 +152,7 @@ class _ExamScheduleTab extends StatelessWidget {
         itemBuilder: (_, i) {
           final e = exams[i];
           final name = e['name'] as String? ?? 'Exam';
-          final isPublished = e['isPublished'] as bool? ?? false;
+          final isPublished = e['isResultPublished'] as bool? ?? false;
           final dateStr = _fmtDate(e['date'] ?? e['startDate']);
           final subjects = e['subjects'] as List<dynamic>? ?? [];
 
@@ -259,9 +260,10 @@ class _ExamResultsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (loading)
+    if (loading) {
       return const Center(
           child: CircularProgressIndicator(color: AppColors.primary));
+    }
     if (results.isEmpty) {
       return Center(
           child: Column(

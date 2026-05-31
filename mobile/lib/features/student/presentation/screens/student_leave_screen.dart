@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
-import 'package:skl_teacher/features/student/presentation/providers/student_profile_provider.dart';
 
 class StudentLeaveScreen extends StatefulWidget {
   const StudentLeaveScreen({super.key});
@@ -308,9 +306,10 @@ class _HistoryTabState extends State<_HistoryTab> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    if (_loading)
+    if (_loading) {
       return const Center(
           child: CircularProgressIndicator(color: AppColors.primary));
+    }
     if (_leaves.isEmpty) {
       return Center(
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [

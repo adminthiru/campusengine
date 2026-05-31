@@ -14,13 +14,7 @@ class HomeworkScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (context) {
-        final provider = HomeworkProvider();
-        provider.fetchProfile().then((_) {
-          provider.fetchHomework(); // load all homework, no date filter
-        });
-        return provider;
-      },
+      create: (_) => HomeworkProvider(),
       child: const _HomeworkScreenContent(),
     );
   }
@@ -36,11 +30,17 @@ class _HomeworkScreenContent extends StatefulWidget {
 class _HomeworkScreenContentState extends State<_HomeworkScreenContent> {
   String? _viewHwId;
 
-  void _showSnack(String msg, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: isError ? AppColors.error : AppColors.success,
-    ));
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final p = context.read<HomeworkProvider>();
+      p.fetchProfile().then((_) {
+        if (!mounted) return;
+        p.fetchHomework();
+      });
+    });
   }
 
   @override
@@ -72,7 +72,7 @@ class _HomeworkList extends StatefulWidget {
 
 class _HomeworkListState extends State<_HomeworkList> {
   String _activeClass = 'all';
-  String _dateFilter = DateTime.now().toIso8601String().split('T')[0];
+  String? _dateFilter; // null = any date
   String _statusFilter = '';
 
   Color _hexToColor(String? hex) {
@@ -106,13 +106,13 @@ class _HomeworkListState extends State<_HomeworkList> {
       floatingActionButton: provider.canManage
           ? FloatingActionButton(
               onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) => ChangeNotifierProvider.value(
-                    value: provider,
-                    child: const _AddEditSheet(),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ChangeNotifierProvider.value(
+                      value: provider,
+                      child: const _AddEditScreen(),
+                    ),
                   ),
                 ).then((_) => _applyFilters());
               },
@@ -122,122 +122,113 @@ class _HomeworkListState extends State<_HomeworkList> {
           : null,
       body: Column(
         children: [
-          // Stats
+          // ── Compact stats strip ──────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Row(
               children: [
-                Expanded(child: _StatCard(title: 'Total', value: allHw.length, color: AppColors.primary, bg: AppColors.primary.withValues(alpha: 0.1), isDark: isDark)),
-                const SizedBox(width: 8),
-                Expanded(child: _StatCard(title: 'Active', value: activeCount, color: AppColors.success, bg: AppColors.success.withValues(alpha: 0.1), isDark: isDark)),
-                const SizedBox(width: 8),
-                Expanded(child: _StatCard(title: 'Due Today', value: dueTodayCount, color: AppColors.warning, bg: AppColors.warning.withValues(alpha: 0.1), isDark: isDark)),
+                Expanded(child: _StatCard(title: 'Total', value: allHw.length, color: AppColors.primary, isDark: isDark)),
+                const SizedBox(width: 10),
+                Expanded(child: _StatCard(title: 'Active', value: activeCount, color: AppColors.success, isDark: isDark)),
+                const SizedBox(width: 10),
+                Expanded(child: _StatCard(title: 'Due Today', value: dueTodayCount, color: AppColors.warning, isDark: isDark)),
               ],
             ),
           ),
-          
-          // Filters
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: GestureDetector(
-                    onTap: () async {
-                      final dt = await showDatePicker(
-                        context: context,
-                        initialDate: DateTime.parse(_dateFilter),
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime(2100),
-                      );
-                      if (dt != null) {
-                        setState(() => _dateFilter = dt.toIso8601String().split('T')[0]);
-                        _applyFilters();
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.cardDark : Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.calendar_today, size: 16, color: isDark ? AppColors.textMuted : AppColors.textSecondary),
-                          const SizedBox(width: 8),
-                          Text(DateFormat('dd MMM yyyy').format(DateTime.parse(_dateFilter)), style: AppTypography.s12Medium(color: isDark ? Colors.white : AppColors.textPrimary)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 2,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.cardDark : Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _statusFilter,
-                        isExpanded: true,
-                        dropdownColor: isDark ? AppColors.cardDark : Colors.white,
-                        style: AppTypography.s12Medium(color: isDark ? Colors.white : AppColors.textPrimary),
-                        items: const [
-                          DropdownMenuItem(value: '', child: Text('All Status')),
-                          DropdownMenuItem(value: 'active', child: Text('Active')),
-                          DropdownMenuItem(value: 'completed', child: Text('Completed')),
-                          DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
-                        ],
-                        onChanged: (v) {
-                          if (v != null) {
-                            setState(() => _statusFilter = v);
-                            _applyFilters();
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // Class Tabs
-          Container(
-            height: 48,
-            margin: const EdgeInsets.only(top: 12, bottom: 4),
+
+          const SizedBox(height: 14),
+
+          // ── Status filter chips + date toggle ────────────────────────────
+          SizedBox(
+            height: 36,
             child: ListView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
               children: [
-                _ClassTab(
-                  label: 'All Classes',
-                  isActive: _activeClass == 'all',
-                  onTap: () {
-                    setState(() => _activeClass = 'all');
+                for (final s in const [
+                  ['', 'All'],
+                  ['active', 'Active'],
+                  ['completed', 'Completed'],
+                  ['cancelled', 'Cancelled'],
+                ])
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _Chip(
+                      label: s[1],
+                      isActive: _statusFilter == s[0],
+                      onTap: () {
+                        setState(() => _statusFilter = s[0]);
+                        _applyFilters();
+                      },
+                    ),
+                  ),
+                _DateChip(
+                  date: _dateFilter,
+                  isDark: isDark,
+                  onPick: () async {
+                    final dt = await showDatePicker(
+                      context: context,
+                      initialDate: _dateFilter != null
+                          ? DateTime.parse(_dateFilter!)
+                          : DateTime.now(),
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100),
+                    );
+                    if (dt != null) {
+                      setState(() =>
+                          _dateFilter = dt.toIso8601String().split('T')[0]);
+                      _applyFilters();
+                    }
+                  },
+                  onClear: () {
+                    setState(() => _dateFilter = null);
                     _applyFilters();
                   },
                 ),
-                ...provider.classes.map((c) => _ClassTab(
-                  label: c.fullName,
-                  isActive: _activeClass == c.id,
-                  onTap: () {
-                    setState(() => _activeClass = c.id);
-                    _applyFilters();
-                  },
-                )),
               ],
             ),
           ),
-          
-          // List
+
+          // ── Class filter chips ───────────────────────────────────────────
+          if (provider.classes.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 36,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _Chip(
+                      label: 'All Classes',
+                      isActive: _activeClass == 'all',
+                      icon: Icons.class_outlined,
+                      onTap: () {
+                        setState(() => _activeClass = 'all');
+                        _applyFilters();
+                      },
+                    ),
+                  ),
+                  ...provider.classes.map((c) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: _Chip(
+                          label: c.fullName,
+                          isActive: _activeClass == c.id,
+                          onTap: () {
+                            setState(() => _activeClass = c.id);
+                            _applyFilters();
+                          },
+                        ),
+                      )),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 12),
+
+          // ── List ─────────────────────────────────────────────────────────
           Expanded(
             child: provider.isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -252,97 +243,381 @@ class _HomeworkListState extends State<_HomeworkList> {
                         ]),
                       )
                     : allHw.isEmpty
-                    ? Center(child: Text('No homework matches filters', style: AppTypography.s14Regular(color: AppColors.textMuted)))
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(16).copyWith(bottom: 80),
-                        itemCount: allHw.length,
-                        separatorBuilder: (c, i) => const SizedBox(height: 12),
-                        itemBuilder: (c, i) {
-                          final hw = allHw[i];
-                          final isOverdue = hw.dueDate != null && DateTime.parse(hw.dueDate!).isBefore(DateTime.now()) && hw.status == 'active';
-                          
-                          return GestureDetector(
-                            onTap: () => widget.onViewDetail(hw.id),
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: isDark ? AppColors.cardDark : Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
-                                boxShadow: isDark ? [] : AppColors.shadowSm,
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(hw.title, style: AppTypography.s16Bold(color: isDark ? Colors.white : AppColors.textPrimary)),
-                                            if (hw.description?.isNotEmpty == true) ...[
-                                              const SizedBox(height: 4),
-                                              Text(hw.description!, maxLines: 2, overflow: TextOverflow.ellipsis, style: AppTypography.s12Regular(color: isDark ? AppColors.textMuted : AppColors.textSecondary)),
-                                            ]
-                                          ],
-                                        ),
-                                      ),
-                                      _StatusBadge(status: hw.status),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      if (hw.subject != null)
-                                        Row(
-                                          children: [
-                                            Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: _hexToColor(hw.subject!.color))),
-                                            const SizedBox(width: 6),
-                                            Text(hw.subject!.name, style: AppTypography.s12Medium(color: isDark ? AppColors.textMuted : AppColors.textSecondary)),
-                                          ],
-                                        ),
-                                      Text(hw.classRef?.fullName ?? '', style: AppTypography.s12Bold(color: isDark ? Colors.white : AppColors.textPrimary)),
-                                    ],
-                                  ),
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(vertical: 10),
-                                    child: Divider(height: 1),
-                                  ),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text('Assigned', style: AppTypography.s10Medium(color: isDark ? AppColors.textMuted : AppColors.textSecondary)),
-                                          Text(hw.assignedDate != null ? DateFormat('dd MMM').format(DateTime.parse(hw.assignedDate!)) : '—', style: AppTypography.s12Medium(color: isDark ? Colors.white : AppColors.textPrimary)),
-                                        ],
-                                      ),
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text('Due', style: AppTypography.s10Medium(color: isOverdue ? AppColors.error : (isDark ? AppColors.textMuted : AppColors.textSecondary))),
-                                          Text(hw.dueDate != null ? DateFormat('dd MMM').format(DateTime.parse(hw.dueDate!)) : '—', style: AppTypography.s12Bold(color: isOverdue ? AppColors.error : (isDark ? Colors.white : AppColors.textPrimary))),
-                                        ],
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(color: AppColors.info.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                                        child: Text(hw.assignedTo == 'all' ? 'All Students' : '${hw.students.length} Students', style: AppTypography.s10Medium(color: AppColors.info)),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                        ? _EmptyHomework(isDark: isDark)
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
+                            itemCount: allHw.length,
+                            separatorBuilder: (c, i) => const SizedBox(height: 10),
+                            itemBuilder: (c, i) => _HomeworkCard(
+                              hw: allHw[i],
+                              color: _hexToColor(allHw[i].subject?.color),
+                              isDark: isDark,
+                              onTap: () => widget.onViewDetail(allHw[i].id),
                             ),
-                          );
-                        },
-                      ),
+                          ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Empty state ─────────────────────────────────────────────────────────────
+class _EmptyHomework extends StatelessWidget {
+  final bool isDark;
+  const _EmptyHomework({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.assignment_outlined,
+              size: 52,
+              color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+          const SizedBox(height: 12),
+          Text('No homework found',
+              style: AppTypography.s15SemiBold(
+                  color: isDark ? Colors.white : AppColors.textPrimary)),
+          const SizedBox(height: 4),
+          Text('Try changing the filters above',
+              style: AppTypography.s13Regular(color: AppColors.textMuted)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Homework card ───────────────────────────────────────────────────────────
+class _HomeworkCard extends StatelessWidget {
+  final Homework hw;
+  final Color color;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _HomeworkCard({
+    required this.hw,
+    required this.color,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  String _dueLabel() {
+    if (hw.dueDate == null) return '';
+    final due = DateTime.tryParse(hw.dueDate!);
+    if (due == null) return '';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final dueDay = DateTime(due.year, due.month, due.day);
+    final diff = dueDay.difference(today).inDays;
+    if (diff < 0) return 'Overdue';
+    if (diff == 0) return 'Due today';
+    if (diff == 1) return 'Due tomorrow';
+    return 'Due ${DateFormat('dd MMM').format(due)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dueLabel = _dueLabel();
+    final isUrgent = (dueLabel == 'Overdue' || dueLabel == 'Due today') &&
+        hw.status == 'active';
+    final studentsLabel =
+        hw.assignedTo == 'all' ? 'All students' : '${hw.students.length} students';
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.cardDark : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: isDark ? AppColors.borderDark : AppColors.borderLight),
+          boxShadow: isDark ? [] : AppColors.shadowSm,
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Subject color accent bar
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(14)),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title + status
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              hw.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.s15Bold(
+                                  color: isDark
+                                      ? Colors.white
+                                      : AppColors.textPrimary),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _StatusBadge(status: hw.status),
+                        ],
+                      ),
+                      // Subject · class
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration:
+                                BoxDecoration(shape: BoxShape.circle, color: color),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              hw.subject?.name ?? 'No subject',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.s12Medium(
+                                  color: isDark
+                                      ? AppColors.textMuted
+                                      : AppColors.textSecondary),
+                            ),
+                          ),
+                          if (hw.classRef != null) ...[
+                            Text('  ·  ',
+                                style: AppTypography.s12Medium(
+                                    color: AppColors.textMuted)),
+                            Text(
+                              hw.classRef!.fullName,
+                              style: AppTypography.s12SemiBold(
+                                  color: isDark
+                                      ? Colors.white
+                                      : AppColors.textPrimary),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (hw.description?.isNotEmpty == true) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          hw.description!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.s12Regular(
+                              color: isDark
+                                  ? AppColors.textMuted
+                                  : AppColors.textSecondary),
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      // Footer chips
+                      Row(
+                        children: [
+                          if (dueLabel.isNotEmpty)
+                            _MetaPill(
+                              icon: Icons.event_outlined,
+                              label: dueLabel,
+                              color: isUrgent ? AppColors.error : AppColors.info,
+                            ),
+                          if (dueLabel.isNotEmpty) const SizedBox(width: 8),
+                          _MetaPill(
+                            icon: Icons.group_outlined,
+                            label: studentsLabel,
+                            color: AppColors.textSecondary,
+                            subtle: true,
+                            isDark: isDark,
+                          ),
+                          const Spacer(),
+                          Icon(Icons.chevron_right,
+                              size: 18,
+                              color: isDark
+                                  ? AppColors.textMuted
+                                  : AppColors.textSecondary),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Small meta pill (due date / students) ────────────────────────────────────
+class _MetaPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final bool subtle;
+  final bool isDark;
+
+  const _MetaPill({
+    required this.icon,
+    required this.label,
+    required this.color,
+    this.subtle = false,
+    this.isDark = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = subtle
+        ? (isDark ? AppColors.textMuted : AppColors.textSecondary)
+        : color;
+    final bg = subtle
+        ? (isDark ? AppColors.bgDark : AppColors.bgLight)
+        : color.withValues(alpha: 0.1);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: fg),
+          const SizedBox(width: 4),
+          Text(label, style: AppTypography.s10Bold(color: fg)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Filter chip (status + class) ─────────────────────────────────────────────
+class _Chip extends StatelessWidget {
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+  final IconData? icon;
+
+  const _Chip({
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isActive
+              ? AppColors.primary
+              : (isDark ? AppColors.cardDark : Colors.white),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: isActive
+                  ? AppColors.primary
+                  : (isDark ? AppColors.borderDark : AppColors.borderLight)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon,
+                  size: 14,
+                  color: isActive
+                      ? Colors.white
+                      : (isDark ? AppColors.textMuted : AppColors.textSecondary)),
+              const SizedBox(width: 6),
+            ],
+            Text(label,
+                style: AppTypography.s12SemiBold(
+                    color: isActive
+                        ? Colors.white
+                        : (isDark
+                            ? AppColors.textMuted
+                            : AppColors.textSecondary))),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Date filter chip ─────────────────────────────────────────────────────────
+class _DateChip extends StatelessWidget {
+  final String? date;
+  final bool isDark;
+  final VoidCallback onPick;
+  final VoidCallback onClear;
+
+  const _DateChip({
+    required this.date,
+    required this.isDark,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final active = date != null;
+    final label =
+        active ? DateFormat('dd MMM').format(DateTime.parse(date!)) : 'Any date';
+    return GestureDetector(
+      onTap: onPick,
+      child: Container(
+        padding: EdgeInsets.only(left: 12, right: active ? 6 : 12),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active
+              ? AppColors.primary.withValues(alpha: 0.12)
+              : (isDark ? AppColors.cardDark : Colors.white),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: active
+                  ? AppColors.primary
+                  : (isDark ? AppColors.borderDark : AppColors.borderLight)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.calendar_today,
+                size: 13,
+                color: active
+                    ? AppColors.primary
+                    : (isDark ? AppColors.textMuted : AppColors.textSecondary)),
+            const SizedBox(width: 6),
+            Text(label,
+                style: AppTypography.s12SemiBold(
+                    color: active
+                        ? AppColors.primary
+                        : (isDark
+                            ? AppColors.textMuted
+                            : AppColors.textSecondary))),
+            if (active) ...[
+              const SizedBox(width: 2),
+              GestureDetector(
+                onTap: onClear,
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.close, size: 14, color: AppColors.primary),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -352,58 +627,53 @@ class _StatCard extends StatelessWidget {
   final String title;
   final int value;
   final Color color;
-  final Color bg;
   final bool isDark;
 
-  const _StatCard({required this.title, required this.value, required this.color, required this.bg, required this.isDark});
+  const _StatCard({
+    required this.title,
+    required this.value,
+    required this.color,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
       decoration: BoxDecoration(
         color: isDark ? AppColors.cardDark : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: isDark ? AppColors.borderDark : AppColors.borderLight),
         boxShadow: isDark ? [] : AppColors.shadowSm,
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-            child: Text(value.toString(), style: AppTypography.s16Bold(color: color)),
+          Row(
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.s11Medium(
+                      color: isDark
+                          ? AppColors.textMuted
+                          : AppColors.textSecondary),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 6),
-          Text(title, style: AppTypography.s10Medium(color: isDark ? AppColors.textMuted : AppColors.textSecondary), textAlign: TextAlign.center, maxLines: 1),
+          Text(value.toString(), style: AppTypography.s20Bold(color: color)),
         ],
-      ),
-    );
-  }
-}
-
-class _ClassTab extends StatelessWidget {
-  final String label;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _ClassTab({required this.label, required this.isActive, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isActive ? AppColors.primary : (isDark ? AppColors.cardDark : Colors.white),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: isActive ? AppColors.primary : (isDark ? AppColors.borderDark : AppColors.borderLight)),
-        ),
-        child: Text(label, style: AppTypography.s12Medium(color: isActive ? Colors.white : (isDark ? AppColors.textMuted : AppColors.textSecondary))),
       ),
     );
   }
@@ -463,10 +733,13 @@ class _HomeworkDetailState extends State<_HomeworkDetail> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadData();
+    });
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     final p = context.read<HomeworkProvider>();
     final hw = await p.fetchDetail(widget.hwId);
@@ -508,8 +781,11 @@ class _HomeworkDetailState extends State<_HomeworkDetail> {
         if (!ok) allOk = false;
       }
     }
-    if (allOk) _showSnack('Statuses updated!');
-    else _showSnack('Some updates failed', isError: true);
+    if (allOk) {
+      _showSnack('Statuses updated!');
+    } else {
+      _showSnack('Some updates failed', isError: true);
+    }
     
     setState(() => _editMode = false);
     _loadData();
@@ -523,81 +799,157 @@ class _HomeworkDetailState extends State<_HomeworkDetail> {
     }
   }
 
-  Widget _inlineHeader(BuildContext context, HomeworkProvider p, bool isDark) {
+  Color _hexToColor(String? hex) {
+    if (hex == null || hex.isEmpty) return AppColors.primary;
+    var h = hex.replaceFirst('#', '');
+    if (h.length == 6) h = 'ff$h';
+    final v = int.tryParse(h, radix: 16);
+    return v == null ? AppColors.primary : Color(v);
+  }
+
+  Widget _header(BuildContext context, HomeworkProvider p, bool isDark) {
     return Container(
       color: isDark ? AppColors.cardDark : Colors.white,
+      padding: const EdgeInsets.only(right: 4),
       child: Row(
         children: [
           IconButton(
-            icon: Icon(Icons.arrow_back,
-                color: isDark ? Colors.white : AppColors.textPrimary),
+            icon: Icon(Icons.arrow_back_ios_new,
+                size: 20, color: isDark ? Colors.white : AppColors.textPrimary),
             onPressed: widget.onBack,
           ),
           Expanded(
-            child: Text('Homework Details',
+            child: Text('Homework',
                 style: AppTypography.s16Bold(
                     color: isDark ? Colors.white : AppColors.textPrimary)),
           ),
-          if (p.canManage) ...[
+          if (p.canManage)
             IconButton(
-              icon: Icon(Icons.notifications_active, color: AppColors.warning),
-              onPressed: () async {
-                final ok = await p.notifyParents(widget.hwId);
-                _showSnack(
-                    ok ? 'Parents notified' : 'Failed to notify',
-                    isError: !ok);
-              },
+              icon: Icon(Icons.more_vert,
+                  color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+              onPressed: () => _showActionsSheet(p),
             ),
-            IconButton(
-              icon: Icon(Icons.edit,
-                  color: isDark ? Colors.white : AppColors.textPrimary),
-              onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) => ChangeNotifierProvider.value(
-                    value: p,
-                    child: _AddEditSheet(hw: _hw),
-                  ),
-                ).then((_) => _loadData());
-              },
-            ),
-            IconButton(
-              icon: Icon(Icons.delete, color: AppColors.error),
-              onPressed: () async {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (c) => AlertDialog(
-                    title: const Text('Delete Homework?'),
-                    content: const Text(
-                        'Are you sure you want to delete this homework?'),
-                    actions: [
-                      TextButton(
-                          onPressed: () => Navigator.pop(c, false),
-                          child: const Text('Cancel')),
-                      TextButton(
-                          onPressed: () => Navigator.pop(c, true),
-                          child: const Text('Delete',
-                              style: TextStyle(color: Colors.red))),
-                    ],
-                  ),
-                );
-                if (confirm == true) {
-                  final ok = await p.deleteHomework(widget.hwId);
-                  if (ok) {
-                    _showSnack('Deleted successfully');
-                    widget.onBack();
-                  } else {
-                    _showSnack('Failed to delete', isError: true);
-                  }
-                }
-              },
-            ),
-          ],
         ],
       ),
     );
+  }
+
+  void _showActionsSheet(HomeworkProvider p) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.cardDark : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 10),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.black12,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Row(
+                  children: [
+                    Text('Homework Actions',
+                        style: AppTypography.s13SemiBold(
+                            color: isDark
+                                ? AppColors.textMuted
+                                : AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+              _ActionTile(
+                icon: Icons.notifications_active_outlined,
+                color: AppColors.warning,
+                title: 'Notify Parents',
+                subtitle: 'Send a reminder to parents',
+                isDark: isDark,
+                onTap: () async {
+                  Navigator.pop(sheetCtx);
+                  final ok = await p.notifyParents(widget.hwId);
+                  _showSnack(ok ? 'Parents notified' : 'Failed to notify',
+                      isError: !ok);
+                },
+              ),
+              _ActionTile(
+                icon: Icons.edit_outlined,
+                color: AppColors.primary,
+                title: 'Edit Homework',
+                subtitle: 'Update details and assignment',
+                isDark: isDark,
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ChangeNotifierProvider.value(
+                        value: p,
+                        child: _AddEditScreen(hw: _hw),
+                      ),
+                    ),
+                  ).then((_) => _loadData());
+                },
+              ),
+              _ActionTile(
+                icon: Icons.delete_outline,
+                color: AppColors.error,
+                title: 'Delete Homework',
+                subtitle: 'Permanently remove this homework',
+                isDark: isDark,
+                destructive: true,
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _confirmDelete(context, p);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, HomeworkProvider p) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Delete Homework?'),
+        content:
+            const Text('Are you sure you want to delete this homework?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Delete',
+                  style: TextStyle(color: AppColors.error))),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      final ok = await p.deleteHomework(widget.hwId);
+      if (ok) {
+        _showSnack('Deleted successfully');
+        widget.onBack();
+      } else {
+        _showSnack('Failed to delete', isError: true);
+      }
+    }
   }
 
   @override
@@ -606,246 +958,552 @@ class _HomeworkDetailState extends State<_HomeworkDetail> {
     final p = context.watch<HomeworkProvider>();
 
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (_hw == null) {
       return Scaffold(
+        backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
         body: Column(
           children: [
-            _inlineHeader(context, p, isDark),
+            _header(context, p, isDark),
             const Expanded(child: Center(child: Text('Homework not found'))),
           ],
         ),
       );
     }
 
-    final isOverdue = _hw!.dueDate != null && DateTime.parse(_hw!.dueDate!).isBefore(DateTime.now()) && _hw!.status == 'active';
-    
-    int completedCount = 0;
-    int inProgressCount = 0;
+    final hw = _hw!;
+    final accent = _hexToColor(hw.subject?.color);
+    final isOverdue = hw.dueDate != null &&
+        DateTime.parse(hw.dueDate!).isBefore(DateTime.now()) &&
+        hw.status == 'active';
+
+    int completed = 0, inProgress = 0;
     for (var s in _students) {
       final st = _getSubStatus(s.id);
-      if (st == 'completed') completedCount++;
-      if (st == 'in_progress') inProgressCount++;
+      if (st == 'completed') completed++;
+      if (st == 'in_progress') inProgress++;
     }
-    int pendingCount = _students.length - completedCount - inProgressCount;
+    final pending = _students.length - completed - inProgress;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
       body: Column(
         children: [
-          _inlineHeader(context, p, isDark),
-          // Header Info Card
-          Container(
-            padding: const EdgeInsets.all(20),
-            color: isDark ? AppColors.cardDark : Colors.white,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          _header(context, p, isDark),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               children: [
-                Text(_hw!.title, style: AppTypography.s20Bold(color: isDark ? Colors.white : AppColors.textPrimary)),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _StatusBadge(status: _hw!.status),
-                    const SizedBox(width: 8),
-                    Text(_hw!.classRef?.fullName ?? '', style: AppTypography.s14Medium(color: isDark ? AppColors.textMuted : AppColors.textSecondary)),
-                    if (_hw!.subject != null) ...[
-                      const SizedBox(width: 8),
-                      Text('•', style: AppTypography.s14Medium(color: isDark ? AppColors.textMuted : AppColors.textSecondary)),
-                      const SizedBox(width: 8),
-                      Text(_hw!.subject!.name, style: AppTypography.s14Medium(color: isDark ? AppColors.textMuted : AppColors.textSecondary)),
-                    ]
-                  ],
+                // ── Hero card ──────────────────────────────────────────────
+                _card(
+                  isDark,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 4,
+                            height: 40,
+                            decoration: BoxDecoration(
+                                color: accent,
+                                borderRadius: BorderRadius.circular(4)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(hw.title,
+                                style: AppTypography.s18Bold(
+                                    color: isDark
+                                        ? Colors.white
+                                        : AppColors.textPrimary)),
+                          ),
+                          const SizedBox(width: 8),
+                          _StatusBadge(status: hw.status),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                                shape: BoxShape.circle, color: accent),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(hw.subject?.name ?? 'No subject',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.s13Medium(
+                                    color: isDark
+                                        ? AppColors.textMuted
+                                        : AppColors.textSecondary)),
+                          ),
+                          if (hw.classRef != null) ...[
+                            Text('  ·  ',
+                                style: AppTypography.s13Medium(
+                                    color: AppColors.textMuted)),
+                            Text(hw.classRef!.fullName,
+                                style: AppTypography.s13SemiBold(
+                                    color: isDark
+                                        ? Colors.white
+                                        : AppColors.textPrimary)),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _DateTile(
+                              label: 'ASSIGNED',
+                              value: hw.assignedDate != null
+                                  ? DateFormat('dd MMM yyyy')
+                                      .format(DateTime.parse(hw.assignedDate!))
+                                  : '—',
+                              isDark: isDark,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _DateTile(
+                              label: isOverdue ? 'DUE · OVERDUE' : 'DUE',
+                              value: hw.dueDate != null
+                                  ? DateFormat('dd MMM yyyy')
+                                      .format(DateTime.parse(hw.dueDate!))
+                                  : '—',
+                              isDark: isDark,
+                              danger: isOverdue,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (hw.description?.isNotEmpty == true) ...[
+                        const SizedBox(height: 14),
+                        Text('DESCRIPTION',
+                            style: AppTypography.s10Bold(
+                                color: isDark
+                                    ? AppColors.textMuted
+                                    : AppColors.textSecondary)),
+                        const SizedBox(height: 6),
+                        Text(hw.description!,
+                            style: AppTypography.s14Regular(
+                                color: isDark
+                                    ? Colors.white
+                                    : AppColors.textPrimary)),
+                      ],
+                    ],
+                  ),
                 ),
+
+                // ── Progress card ──────────────────────────────────────────
+                if (_students.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _card(
+                    isDark,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Submission Progress',
+                            style: AppTypography.s13SemiBold(
+                                color: isDark
+                                    ? Colors.white
+                                    : AppColors.textPrimary)),
+                        const SizedBox(height: 10),
+                        _ProgressBar(
+                          completed: completed,
+                          inProgress: inProgress,
+                          pending: pending,
+                          total: _students.length,
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 16,
+                          runSpacing: 6,
+                          children: [
+                            _Legend(
+                                color: AppColors.success,
+                                label: 'Completed',
+                                count: completed),
+                            _Legend(
+                                color: AppColors.warning,
+                                label: 'In progress',
+                                count: inProgress),
+                            _Legend(
+                                color: AppColors.error,
+                                label: 'Pending',
+                                count: pending),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // ── Students ───────────────────────────────────────────────
                 const SizedBox(height: 16),
                 Row(
                   children: [
+                    Text('Students (${_students.length})',
+                        style: AppTypography.s16Bold(
+                            color:
+                                isDark ? Colors.white : AppColors.textPrimary)),
+                    const Spacer(),
+                    if (p.canManage && _students.isNotEmpty && !_editMode)
+                      TextButton.icon(
+                        onPressed: () {
+                          final initMap = <String, String>{};
+                          for (var s in _students) {
+                            initMap[s.id] = _getSubStatus(s.id);
+                          }
+                          setState(() {
+                            _localStatuses = initMap;
+                            _editMode = true;
+                          });
+                        },
+                        icon: const Icon(Icons.edit_outlined, size: 16),
+                        label: const Text('Edit status'),
+                        style: TextButton.styleFrom(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 8),
+                            minimumSize: Size.zero),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (_students.isEmpty)
+                  _card(
+                    isDark,
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text('No students assigned',
+                            style: AppTypography.s14Regular(
+                                color: AppColors.textMuted)),
+                      ),
+                    ),
+                  )
+                else
+                  _card(
+                    isDark,
+                    Column(
+                      children: [
+                        for (int i = 0; i < _students.length; i++) ...[
+                          if (i > 0)
+                            Divider(
+                                height: 18,
+                                color: isDark
+                                    ? AppColors.borderDark
+                                    : AppColors.borderLight),
+                          _studentRow(i, isDark),
+                        ],
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: _editMode
+          ? SafeArea(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.cardDark : Colors.white,
+                  border: Border(
+                      top: BorderSide(
+                          color: isDark
+                              ? AppColors.borderDark
+                              : AppColors.borderLight)),
+                ),
+                child: Row(
+                  children: [
                     Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: isDark ? AppColors.bgDark : AppColors.bgLight, borderRadius: BorderRadius.circular(8)),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('ASSIGNED', style: AppTypography.s10Bold(color: isDark ? AppColors.textMuted : AppColors.textSecondary)),
-                            const SizedBox(height: 4),
-                            Text(_hw!.assignedDate != null ? DateFormat('dd MMM yyyy').format(DateTime.parse(_hw!.assignedDate!)) : '—', style: AppTypography.s14Bold(color: isDark ? Colors.white : AppColors.textPrimary)),
-                          ],
+                      child: OutlinedButton(
+                        onPressed: () => setState(() => _editMode = false),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
                         ),
+                        child: const Text('Cancel'),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isOverdue ? AppColors.badgeDangerBg : (isDark ? AppColors.bgDark : AppColors.bgLight), 
-                          borderRadius: BorderRadius.circular(8),
-                          border: isOverdue ? Border.all(color: AppColors.error.withValues(alpha: 0.3)) : null,
+                      flex: 2,
+                      child: ElevatedButton(
+                        onPressed: _saveStatuses,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('DUE${isOverdue ? ' · OVERDUE' : ''}', style: AppTypography.s10Bold(color: isOverdue ? AppColors.error : (isDark ? AppColors.textMuted : AppColors.textSecondary))),
-                            const SizedBox(height: 4),
-                            Text(_hw!.dueDate != null ? DateFormat('dd MMM yyyy').format(DateTime.parse(_hw!.dueDate!)) : '—', style: AppTypography.s14Bold(color: isOverdue ? AppColors.error : (isDark ? Colors.white : AppColors.textPrimary))),
-                          ],
-                        ),
+                        child: const Text('Save Changes',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700)),
                       ),
                     ),
                   ],
                 ),
-                if (_hw!.description?.isNotEmpty == true) ...[
-                  const SizedBox(height: 16),
-                  Text('DESCRIPTION', style: AppTypography.s10Bold(color: isDark ? AppColors.textMuted : AppColors.textSecondary)),
-                  const SizedBox(height: 4),
-                  Text(_hw!.description!, style: AppTypography.s14Regular(color: isDark ? Colors.white : AppColors.textPrimary)),
-                ]
+              ),
+            )
+          : null,
+    );
+  }
+
+  Widget _card(bool isDark, Widget child) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.cardDark : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: isDark ? AppColors.borderDark : AppColors.borderLight),
+          boxShadow: isDark ? [] : AppColors.shadowSm,
+        ),
+        child: child,
+      );
+
+  Widget _studentRow(int i, bool isDark) {
+    final st = _students[i];
+    final sub = _submissions.firstWhere((s) => s.student?.id == st.id,
+        orElse: () => HwSubmission(id: '', status: 'pending'));
+    final currentStatus =
+        _editMode ? (_localStatuses[st.id] ?? 'pending') : sub.status;
+
+    Color stColor;
+    if (currentStatus == 'completed') {
+      stColor = AppColors.success;
+    } else if (currentStatus == 'in_progress') {
+      stColor = AppColors.warning;
+    } else {
+      stColor = AppColors.error;
+    }
+
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 16,
+          backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+          child: Text(
+            st.name.isNotEmpty ? st.name[0].toUpperCase() : '?',
+            style: AppTypography.s12Bold(color: AppColors.primary),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(st.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.s14SemiBold(
+                      color: isDark ? Colors.white : AppColors.textPrimary)),
+              if (st.admissionNumber != null)
+                Text(st.admissionNumber!,
+                    style: AppTypography.s11Regular(
+                        color: isDark
+                            ? AppColors.textMuted
+                            : AppColors.textSecondary)),
+            ],
+          ),
+        ),
+        if (_editMode)
+          Row(
+            children: ['pending', 'in_progress', 'completed'].map((opt) {
+              final isSel = currentStatus == opt;
+              final optC = opt == 'completed'
+                  ? AppColors.success
+                  : (opt == 'in_progress'
+                      ? AppColors.warning
+                      : AppColors.error);
+              return GestureDetector(
+                onTap: () => setState(() => _localStatuses[st.id] = opt),
+                child: Container(
+                  margin: const EdgeInsets.only(left: 5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isSel ? optC : Colors.transparent,
+                    border: Border.all(
+                        color: isSel
+                            ? optC
+                            : (isDark
+                                ? AppColors.borderDark
+                                : AppColors.borderLight)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    opt == 'in_progress'
+                        ? 'Prog'
+                        : (opt == 'completed' ? 'Done' : 'Pend'),
+                    style: AppTypography.s10Bold(
+                        color: isSel
+                            ? Colors.white
+                            : (isDark
+                                ? AppColors.textMuted
+                                : AppColors.textSecondary)),
+                  ),
+                ),
+              );
+            }).toList(),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: stColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                    width: 6,
+                    height: 6,
+                    decoration:
+                        BoxDecoration(shape: BoxShape.circle, color: stColor)),
+                const SizedBox(width: 5),
+                Text(currentStatus.replaceAll('_', ' ').toUpperCase(),
+                    style: AppTypography.s10Bold(color: stColor)),
               ],
             ),
           ),
-          
-          const SizedBox(height: 12),
-          
-          // Students List
-          Expanded(
-            child: Container(
-              color: isDark ? AppColors.cardDark : Colors.white,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Students (${_students.length})', style: AppTypography.s16Bold(color: isDark ? Colors.white : AppColors.textPrimary)),
-                        if (p.canManage && _students.isNotEmpty)
-                          _editMode 
-                            ? Row(
-                                children: [
-                                  TextButton(onPressed: () => setState(() => _editMode = false), child: const Text('Cancel')),
-                                  ElevatedButton(
-                                    onPressed: _saveStatuses, 
-                                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, minimumSize: const Size(0, 36)),
-                                    child: const Text('Save'),
-                                  )
-                                ],
-                              )
-                            : TextButton.icon(
-                                onPressed: () {
-                                  Map<String, String> initMap = {};
-                                  for (var s in _students) {
-                                    initMap[s.id] = _getSubStatus(s.id);
-                                  }
-                                  setState(() {
-                                    _localStatuses = initMap;
-                                    _editMode = true;
-                                  });
-                                }, 
-                                icon: const Icon(Icons.edit, size: 16), 
-                                label: const Text('Edit Status')
-                              ),
-                      ],
-                    ),
-                  ),
-                  if (!_editMode)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                      child: Row(
-                        children: [
-                          _StatusIndicator(color: AppColors.success, label: '$completedCount Completed'),
-                          const SizedBox(width: 12),
-                          _StatusIndicator(color: AppColors.warning, label: '$inProgressCount In Progress'),
-                          const SizedBox(width: 12),
-                          _StatusIndicator(color: AppColors.error, label: '$pendingCount Pending'),
-                        ],
-                      ),
-                    ),
-                  const Divider(),
-                  Expanded(
-                    child: _students.isEmpty
-                        ? Center(child: Text('No students assigned', style: AppTypography.s14Regular(color: AppColors.textMuted)))
-                        : ListView.separated(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: _students.length,
-                            separatorBuilder: (c, i) => const Divider(),
-                            itemBuilder: (c, i) {
-                              final st = _students[i];
-                              final sub = _submissions.firstWhere((s) => s.student?.id == st.id, orElse: () => HwSubmission(id: '', status: 'pending'));
-                              final currentStatus = _editMode ? (_localStatuses[st.id] ?? 'pending') : sub.status;
-                              
-                              Color stColor;
-                              if (currentStatus == 'completed') stColor = AppColors.success;
-                              else if (currentStatus == 'in_progress') stColor = AppColors.warning;
-                              else stColor = AppColors.error;
+      ],
+    );
+  }
+}
 
-                              return Row(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 16,
-                                    backgroundColor: isDark ? AppColors.borderDark : AppColors.borderLight,
-                                    child: Text('${i+1}', style: AppTypography.s10Bold(color: isDark ? AppColors.textMuted : AppColors.textSecondary)),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(st.name, style: AppTypography.s14Bold(color: isDark ? Colors.white : AppColors.textPrimary)),
-                                        if (st.admissionNumber != null)
-                                          Text(st.admissionNumber!, style: AppTypography.s10Medium(color: isDark ? AppColors.textMuted : AppColors.textSecondary)),
-                                      ],
-                                    ),
-                                  ),
-                                  if (_editMode)
-                                    Row(
-                                      children: ['pending', 'in_progress', 'completed'].map((opt) {
-                                        final isSel = currentStatus == opt;
-                                        Color optC = opt == 'completed' ? AppColors.success : (opt == 'in_progress' ? AppColors.warning : AppColors.error);
-                                        return GestureDetector(
-                                          onTap: () => setState(() => _localStatuses[st.id] = opt),
-                                          child: Container(
-                                            margin: const EdgeInsets.only(left: 4),
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: isSel ? optC : Colors.transparent,
-                                              border: Border.all(color: isSel ? optC : (isDark ? AppColors.borderDark : AppColors.borderLight)),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              opt == 'in_progress' ? 'Prog' : (opt == 'completed' ? 'Done' : 'Pend'),
-                                              style: AppTypography.s10Bold(color: isSel ? Colors.white : (isDark ? AppColors.textMuted : AppColors.textSecondary)),
-                                            ),
-                                          ),
-                                        );
-                                      }).toList(),
-                                    )
-                                  else
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: stColor.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Container(width: 6, height: 6, decoration: BoxDecoration(shape: BoxShape.circle, color: stColor)),
-                                          const SizedBox(width: 4),
-                                          Text(currentStatus.replaceAll('_', ' ').toUpperCase(), style: AppTypography.s10Bold(color: stColor)),
-                                        ],
-                                      ),
-                                    ),
-                                ],
-                              );
-                            },
-                          ),
-                  ),
+class _ActionTile extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final bool isDark;
+  final bool destructive;
+  final VoidCallback onTap;
+
+  const _ActionTile({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.isDark,
+    required this.onTap,
+    this.destructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: AppTypography.s14SemiBold(
+                          color: destructive
+                              ? AppColors.error
+                              : (isDark
+                                  ? Colors.white
+                                  : AppColors.textPrimary))),
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: AppTypography.s11Regular(
+                          color: isDark
+                              ? AppColors.textMuted
+                              : AppColors.textSecondary)),
                 ],
               ),
             ),
+            Icon(Icons.chevron_right,
+                size: 18,
+                color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DateTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isDark;
+  final bool danger;
+  const _DateTile({
+    required this.label,
+    required this.value,
+    required this.isDark,
+    this.danger = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: danger
+            ? AppColors.error.withValues(alpha: 0.08)
+            : (isDark ? AppColors.bgDark : AppColors.bgLight),
+        borderRadius: BorderRadius.circular(10),
+        border: danger
+            ? Border.all(color: AppColors.error.withValues(alpha: 0.3))
+            : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: AppTypography.s10Bold(
+                  color: danger
+                      ? AppColors.error
+                      : (isDark
+                          ? AppColors.textMuted
+                          : AppColors.textSecondary))),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(Icons.event_outlined,
+                  size: 14,
+                  color: danger
+                      ? AppColors.error
+                      : (isDark ? Colors.white : AppColors.textPrimary)),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.s13Bold(
+                        color: danger
+                            ? AppColors.error
+                            : (isDark ? Colors.white : AppColors.textPrimary))),
+              ),
+            ],
           ),
         ],
       ),
@@ -853,32 +1511,74 @@ class _HomeworkDetailState extends State<_HomeworkDetail> {
   }
 }
 
-class _StatusIndicator extends StatelessWidget {
+class _ProgressBar extends StatelessWidget {
+  final int completed, inProgress, pending, total;
+  const _ProgressBar({
+    required this.completed,
+    required this.inProgress,
+    required this.pending,
+    required this.total,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (total == 0) return const SizedBox.shrink();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: SizedBox(
+        height: 10,
+        child: Row(
+          children: [
+            if (completed > 0)
+              Expanded(flex: completed, child: Container(color: AppColors.success)),
+            if (inProgress > 0)
+              Expanded(flex: inProgress, child: Container(color: AppColors.warning)),
+            if (pending > 0)
+              Expanded(
+                  flex: pending,
+                  child: Container(
+                      color: AppColors.error.withValues(alpha: 0.35))),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Legend extends StatelessWidget {
   final Color color;
   final String label;
-  const _StatusIndicator({required this.color, required this.label});
+  final int count;
+  const _Legend(
+      {required this.color, required this.label, required this.count});
+
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Container(width: 6, height: 6, decoration: BoxDecoration(shape: BoxShape.circle, color: color)),
-        const SizedBox(width: 4),
-        Text(label, style: AppTypography.s10Bold(color: color)),
+        Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: color)),
+        const SizedBox(width: 6),
+        Text('$count $label',
+            style: AppTypography.s11SemiBold(color: color)),
       ],
     );
   }
 }
 
 // ─── Add Edit Sheet ──────────────────────────────────────────────────────────
-class _AddEditSheet extends StatefulWidget {
+class _AddEditScreen extends StatefulWidget {
   final Homework? hw;
-  const _AddEditSheet({this.hw});
+  const _AddEditScreen({this.hw});
 
   @override
-  State<_AddEditSheet> createState() => _AddEditSheetState();
+  State<_AddEditScreen> createState() => _AddEditScreenState();
 }
 
-class _AddEditSheetState extends State<_AddEditSheet> {
+class _AddEditScreenState extends State<_AddEditScreen> {
   final _formKey = GlobalKey<FormState>();
   
   late String _classId;
@@ -960,198 +1660,497 @@ class _AddEditSheetState extends State<_AddEditSheet> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final p = context.watch<HomeworkProvider>();
-    final bottomSpace = MediaQuery.of(context).viewInsets.bottom;
-    
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomSpace),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.cardDark : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+
+    return Scaffold(
+      backgroundColor: isDark ? AppColors.bgDark : const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        backgroundColor: isDark ? AppColors.cardDark : Colors.white,
+        foregroundColor: isDark ? Colors.white : AppColors.textPrimary,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          widget.hw != null ? 'Edit Homework' : 'New Homework',
+          style: AppTypography.s18Bold(
+              color: isDark ? Colors.white : AppColors.textPrimary),
+        ),
       ),
-      child: Column(
+      body: Column(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(widget.hw != null ? 'Edit Homework' : 'Add Homework', style: AppTypography.s18Bold(color: isDark ? Colors.white : AppColors.textPrimary)),
-              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
-            ],
-          ),
-          const Divider(),
           Expanded(
             child: Form(
               key: _formKey,
               child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                 children: [
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: _classId.isEmpty ? null : _classId,
-                    decoration: _inputDeco('Class *', isDark),
-                    items: p.classes.map((c) => DropdownMenuItem(value: c.id, child: Text(c.fullName))).toList(),
-                    onChanged: (v) {
-                      setState(() {
-                        _classId = v ?? '';
-                        if (_assignedTo == 'selected') _loadStudents(_classId);
-                      });
-                    },
+                  _field(
+                    'Class',
+                    isDark,
+                    required: true,
+                    child: _dropdown(
+                      value: _classId.isEmpty ? null : _classId,
+                      hint: 'Select class',
+                      isDark: isDark,
+                      items: p.classes
+                          .map((c) => DropdownMenuItem(
+                              value: c.id, child: Text(c.fullName)))
+                          .toList(),
+                      onChanged: (v) {
+                        setState(() {
+                          _classId = v ?? '';
+                          if (_assignedTo == 'selected') {
+                            _loadStudents(_classId);
+                          }
+                        });
+                      },
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: _subjectId,
-                    decoration: _inputDeco('Subject', isDark),
-                    items: p.subjects.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
-                    onChanged: (v) => setState(() => _subjectId = v),
+                  _field(
+                    'Subject',
+                    isDark,
+                    child: _dropdown(
+                      value: _subjectId,
+                      hint: 'Select subject',
+                      isDark: isDark,
+                      items: p.subjects
+                          .map((s) => DropdownMenuItem(
+                              value: s.id, child: Text(s.name)))
+                          .toList(),
+                      onChanged: (v) => setState(() => _subjectId = v),
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    initialValue: _title,
-                    decoration: _inputDeco('Title *', isDark),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                    onSaved: (v) => _title = v!.trim(),
+                  _field(
+                    'Title',
+                    isDark,
+                    required: true,
+                    child: TextFormField(
+                      initialValue: _title,
+                      style: AppTypography.s14Regular(
+                          color:
+                              isDark ? Colors.white : AppColors.textPrimary),
+                      decoration:
+                          _boxDeco(isDark, hint: 'e.g. Chapter 5 exercises'),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Required' : null,
+                      onSaved: (v) => _title = v!.trim(),
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    initialValue: _desc,
-                    decoration: _inputDeco('Description', isDark),
-                    maxLines: 3,
-                    onSaved: (v) => _desc = v?.trim() ?? '',
+                  _field(
+                    'Description',
+                    isDark,
+                    child: TextFormField(
+                      initialValue: _desc,
+                      style: AppTypography.s14Regular(
+                          color:
+                              isDark ? Colors.white : AppColors.textPrimary),
+                      decoration: _boxDeco(isDark,
+                          hint: 'Optional notes for students'),
+                      maxLines: 3,
+                      onSaved: (v) => _desc = v?.trim() ?? '',
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
-                        child: InkWell(
-                          onTap: () async {
-                            final dt = await showDatePicker(context: context, initialDate: _assignedDate, firstDate: DateTime(2020), lastDate: DateTime(2100));
-                            if (dt != null) setState(() => _assignedDate = dt);
-                          },
-                          child: InputDecorator(
-                            decoration: _inputDeco('Assigned Date', isDark),
-                            child: Text(DateFormat('yyyy-MM-dd').format(_assignedDate)),
+                        child: _field(
+                          'Assigned',
+                          isDark,
+                          child: _dateBox(
+                            date: _assignedDate,
+                            isDark: isDark,
+                            onTap: () async {
+                              final dt = await showDatePicker(
+                                  context: context,
+                                  initialDate: _assignedDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2100));
+                              if (dt != null) {
+                                setState(() => _assignedDate = dt);
+                              }
+                            },
                           ),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: InkWell(
-                          onTap: () async {
-                            final dt = await showDatePicker(context: context, initialDate: _dueDate, firstDate: DateTime(2020), lastDate: DateTime(2100));
-                            if (dt != null) setState(() => _dueDate = dt);
-                          },
-                          child: InputDecorator(
-                            decoration: _inputDeco('Due Date *', isDark),
-                            child: Text(DateFormat('yyyy-MM-dd').format(_dueDate)),
+                        child: _field(
+                          'Due',
+                          isDark,
+                          required: true,
+                          child: _dateBox(
+                            date: _dueDate,
+                            isDark: isDark,
+                            danger: _dueDate.isBefore(DateTime.now()),
+                            onTap: () async {
+                              final dt = await showDatePicker(
+                                  context: context,
+                                  initialDate: _dueDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2100));
+                              if (dt != null) setState(() => _dueDate = dt);
+                            },
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
                   if (widget.hw != null) ...[
-                    DropdownButtonFormField<String>(
-                      value: _status,
-                      decoration: _inputDeco('Status', isDark),
-                      items: const [
-                        DropdownMenuItem(value: 'active', child: Text('Active')),
-                        DropdownMenuItem(value: 'completed', child: Text('Completed')),
-                        DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
-                      ],
-                      onChanged: (v) => setState(() => _status = v!),
-                    ),
                     const SizedBox(height: 16),
+                    _field(
+                      'Status',
+                      isDark,
+                      child: _dropdown(
+                        value: _status,
+                        hint: 'Status',
+                        isDark: isDark,
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'active', child: Text('Active')),
+                          DropdownMenuItem(
+                              value: 'completed', child: Text('Completed')),
+                          DropdownMenuItem(
+                              value: 'cancelled', child: Text('Cancelled')),
+                        ],
+                        onChanged: (v) =>
+                            setState(() => _status = v ?? 'active'),
+                      ),
+                    ),
                   ],
-                  
-                  Text('Assign To', style: AppTypography.s14Medium(color: isDark ? Colors.white : AppColors.textPrimary)),
+
+                  const SizedBox(height: 16),
+                  _fieldLabel('Assign to', isDark),
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: RadioListTile<String>(
-                          title: const Text('All Students'),
-                          value: 'all',
-                          groupValue: _assignedTo,
-                          onChanged: (v) => setState(() => _assignedTo = v!),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      Expanded(
-                        child: RadioListTile<String>(
-                          title: const Text('Selected'),
-                          value: 'selected',
-                          groupValue: _assignedTo,
-                          onChanged: (v) {
-                            setState(() {
-                              _assignedTo = v!;
-                              if (_classId.isNotEmpty && _classStudents.isEmpty) _loadStudents(_classId);
-                            });
-                          },
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ],
+                  RadioGroup<String>(
+                    groupValue: _assignedTo,
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() {
+                        _assignedTo = v;
+                        if (v == 'selected' &&
+                            _classId.isNotEmpty &&
+                            _classStudents.isEmpty) {
+                          _loadStudents(_classId);
+                        }
+                      });
+                    },
+                    child: Row(
+                      children: [
+                        Expanded(child: _assignOption('all', 'All Students', isDark)),
+                        const SizedBox(width: 10),
+                        Expanded(child: _assignOption('selected', 'Selected', isDark)),
+                      ],
+                    ),
                   ),
-                  
                   if (_assignedTo == 'selected' && _classId.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    _loadingStudents 
-                      ? const Center(child: CircularProgressIndicator())
-                      : Container(
-                          height: 150,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
-                            borderRadius: BorderRadius.circular(8),
+                    const SizedBox(height: 12),
+                    _loadingStudents
+                        ? const Center(
+                            child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: CircularProgressIndicator(),
+                          ))
+                        : Container(
+                            decoration: BoxDecoration(
+                              color: isDark ? AppColors.cardDark : Colors.white,
+                              border: Border.all(
+                                  color: isDark
+                                      ? AppColors.borderDark
+                                      : AppColors.borderLight),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(14, 10, 8, 6),
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        '${_selectedStudents.length} of ${_classStudents.length} selected',
+                                        style: AppTypography.s12SemiBold(
+                                            color: isDark
+                                                ? AppColors.textMuted
+                                                : AppColors.textSecondary),
+                                      ),
+                                      const Spacer(),
+                                      GestureDetector(
+                                        onTap: () => setState(() {
+                                          if (_selectedStudents.length ==
+                                              _classStudents.length) {
+                                            _selectedStudents.clear();
+                                          } else {
+                                            _selectedStudents = _classStudents
+                                                .map((s) => s.id)
+                                                .toList();
+                                          }
+                                        }),
+                                        child: Text(
+                                          _selectedStudents.length ==
+                                                  _classStudents.length
+                                              ? 'Clear all'
+                                              : 'Select all',
+                                          style: AppTypography.s12SemiBold(
+                                              color: AppColors.primary),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Divider(
+                                    height: 1,
+                                    color: isDark
+                                        ? AppColors.borderDark
+                                        : AppColors.borderLight),
+                                ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(maxHeight: 200),
+                                  child: ListView(
+                                    shrinkWrap: true,
+                                    padding: EdgeInsets.zero,
+                                    children: _classStudents.map((s) {
+                                      final sel =
+                                          _selectedStudents.contains(s.id);
+                                      return CheckboxListTile(
+                                        dense: true,
+                                        controlAffinity:
+                                            ListTileControlAffinity.leading,
+                                        activeColor: AppColors.primary,
+                                        title: Text(s.name,
+                                            style: AppTypography.s13Medium(
+                                                color: isDark
+                                                    ? Colors.white
+                                                    : AppColors.textPrimary)),
+                                        subtitle: s.admissionNumber != null
+                                            ? Text(s.admissionNumber!,
+                                                style: AppTypography.s11Regular(
+                                                    color: AppColors.textMuted))
+                                            : null,
+                                        value: sel,
+                                        onChanged: (val) {
+                                          setState(() {
+                                            if (val == true) {
+                                              _selectedStudents.add(s.id);
+                                            } else {
+                                              _selectedStudents.remove(s.id);
+                                            }
+                                          });
+                                        },
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          child: ListView(
-                            children: _classStudents.map((s) {
-                              return CheckboxListTile(
-                                title: Text(s.name, style: AppTypography.s12Medium(color: isDark ? Colors.white : AppColors.textPrimary)),
-                                subtitle: s.admissionNumber != null ? Text(s.admissionNumber!) : null,
-                                value: _selectedStudents.contains(s.id),
-                                onChanged: (val) {
-                                  setState(() {
-                                    if (val == true) _selectedStudents.add(s.id);
-                                    else _selectedStudents.remove(s.id);
-                                  });
-                                },
-                              );
-                            }).toList(),
-                          ),
-                        )
                   ],
-                  const SizedBox(height: 24),
                 ],
               ),
             ),
           ),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: p.isSaving ? null : _save,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          // Save bar
+          SafeArea(
+            top: false,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.cardDark : Colors.white,
+                border: Border(
+                    top: BorderSide(
+                        color: isDark
+                            ? AppColors.borderDark
+                            : AppColors.borderLight)),
               ),
-              child: p.isSaving 
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : Text('Save Homework', style: AppTypography.s16Bold(color: Colors.white)),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: p.isSaving ? null : _save,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: p.isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2))
+                      : Text(widget.hw != null ? 'Save Changes' : 'Create Homework',
+                          style: AppTypography.s15Bold(color: Colors.white)),
+                ),
+              ),
             ),
-          )
+          ),
         ],
       ),
     );
   }
 
-  InputDecoration _inputDeco(String label, bool isDark) {
+  Widget _fieldLabel(String text, bool isDark, {bool required = false}) => Row(
+        children: [
+          Text(text,
+              style: AppTypography.s12SemiBold(
+                  color: isDark ? Colors.white : AppColors.textPrimary)),
+          if (required)
+            Text(' *', style: AppTypography.s12SemiBold(color: AppColors.error)),
+        ],
+      );
+
+  Widget _field(String label, bool isDark,
+      {bool required = false, required Widget child}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _fieldLabel(label, isDark, required: required),
+        const SizedBox(height: 6),
+        child,
+      ],
+    );
+  }
+
+  Widget _dropdown({
+    required String? value,
+    required String hint,
+    required bool isDark,
+    required List<DropdownMenuItem<String>> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    // Guard: only pre-select if the value exists in items, otherwise the
+    // DropdownButtonFormField assertion fails and the form won't build.
+    final safeValue =
+        (value != null && items.any((it) => it.value == value)) ? value : null;
+    return DropdownButtonFormField<String>(
+      initialValue: safeValue,
+      isExpanded: true,
+      icon: Icon(Icons.keyboard_arrow_down_rounded,
+          color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+      hint: Text(hint,
+          style: AppTypography.s14Regular(color: AppColors.textMuted)),
+      style: AppTypography.s14Regular(
+          color: isDark ? Colors.white : AppColors.textPrimary),
+      dropdownColor: isDark ? AppColors.cardDark : Colors.white,
+      decoration: _boxDeco(isDark),
+      items: items,
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _assignOption(String value, String label, bool isDark) {
+    final selected = _assignedTo == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _assignedTo = value;
+          if (value == 'selected' &&
+              _classId.isNotEmpty &&
+              _classStudents.isEmpty) {
+            _loadStudents(_classId);
+          }
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.1)
+              : (isDark ? AppColors.cardDark : Colors.white),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: selected
+                  ? AppColors.primary
+                  : (isDark ? AppColors.borderDark : AppColors.borderLight),
+              width: selected ? 1.5 : 1),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              size: 16,
+              color: selected
+                  ? AppColors.primary
+                  : (isDark ? AppColors.textMuted : AppColors.textSecondary),
+            ),
+            const SizedBox(width: 8),
+            Text(label,
+                style: AppTypography.s13SemiBold(
+                    color: selected
+                        ? AppColors.primary
+                        : (isDark ? Colors.white : AppColors.textPrimary))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dateBox({
+    required DateTime date,
+    required bool isDark,
+    required VoidCallback onTap,
+    bool danger = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 50,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.cardDark : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: danger
+                  ? AppColors.error.withValues(alpha: 0.5)
+                  : (isDark ? AppColors.borderDark : AppColors.borderLight)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.calendar_today,
+                size: 15,
+                color: danger ? AppColors.error : AppColors.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                DateFormat('dd MMM yyyy').format(date),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.s14Medium(
+                    color: danger
+                        ? AppColors.error
+                        : (isDark ? Colors.white : AppColors.textPrimary)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _boxDeco(bool isDark, {String? hint}) {
+    OutlineInputBorder border(Color c, [double w = 1]) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: c, width: w),
+        );
+    final line = isDark ? AppColors.borderDark : AppColors.borderLight;
     return InputDecoration(
-      labelText: label,
-      labelStyle: AppTypography.s12Regular(color: isDark ? AppColors.textMuted : AppColors.textSecondary),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: isDark ? AppColors.borderDark : AppColors.borderLight)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: isDark ? AppColors.borderDark : AppColors.borderLight)),
+      hintText: hint,
+      hintStyle: AppTypography.s14Regular(color: AppColors.textMuted),
+      border: border(line),
+      enabledBorder: border(line),
+      focusedBorder: border(AppColors.primary, 1.5),
+      errorBorder: border(AppColors.error),
+      focusedErrorBorder: border(AppColors.error, 1.5),
       filled: true,
-      fillColor: isDark ? AppColors.bgDark : Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      fillColor: isDark ? AppColors.cardDark : Colors.white,
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     );
   }
 }

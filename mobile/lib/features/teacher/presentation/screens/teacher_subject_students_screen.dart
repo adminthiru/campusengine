@@ -40,6 +40,10 @@ class _TeacherSubjectStudentsScreenState
     return Scaffold(
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

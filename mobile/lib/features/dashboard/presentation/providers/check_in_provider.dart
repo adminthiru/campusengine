@@ -54,7 +54,7 @@ class CheckInProvider extends ChangeNotifier {
 
       // Fetch the location
       await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
 
       // Make the actual API call

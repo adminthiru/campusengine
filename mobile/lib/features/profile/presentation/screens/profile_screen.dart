@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_dimensions.dart';
-import 'package:skl_teacher/core/theme/theme_provider.dart';
 import 'package:skl_teacher/features/auth/presentation/providers/auth_provider.dart';
 import 'package:skl_teacher/core/models/teacher_profile.dart';
 import 'package:skl_teacher/features/profile/presentation/providers/profile_provider.dart';

@@ -22,11 +22,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
   void initState() {
     super.initState();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) {
-        setState(() {
-          _now = DateTime.now();
-        });
-      }
+      if (mounted) setState(() => _now = DateTime.now());
     });
   }
 
@@ -36,122 +32,201 @@ class _DashboardHeaderState extends State<DashboardHeader> {
     super.dispose();
   }
 
+  String get _greeting {
+    final h = _now.hour;
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final profileProvider = context.watch<ProfileProvider>();
-    final profile = profileProvider.profile;
+    final profile = context.watch<ProfileProvider>().profile;
     final name = profile?.employee.name ?? 'Teacher';
+    final firstName = name.split(' ').first;
+    final photo = profile?.employee.photo;
 
-    final checkInProvider = context.watch<CheckInProvider>();
-    final formattedDateTime = DateFormat('dd MMM yyyy, hh:mm a').format(_now);
+    // Role / class subtitle
+    String? subtitle;
+    if (profile != null) {
+      if (profile.classTeacher != null) {
+        subtitle = 'Class Teacher · ${profile.classTeacher!.classInfo.fullName}';
+      } else if (profile.isSubjectTeacher) {
+        subtitle = 'Subject Teacher';
+      } else if (profile.employee.designation != null) {
+        subtitle = profile.employee.designation;
+      }
+    }
 
-    final durationParts = checkInProvider.durationString.split(':');
-    final hours = durationParts.length == 3 ? durationParts[0] : '00';
-    final minutes = durationParts.length == 3 ? durationParts[1] : '00';
-    final seconds = durationParts.length == 3 ? durationParts[2] : '00';
+    final checkIn = context.watch<CheckInProvider>();
+    final isIn = checkIn.isCheckedIn;
 
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.cardDark : AppColors.primary,
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(32),
-          bottomRight: Radius.circular(32),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.primary, AppColors.primaryDark],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Good Morning,\n$name',
-            style: GoogleFonts.inter(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              height: 1.2,
-            ),
+          // ── Greeting row ────────────────────────────────────────────────
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _greeting,
+                      style: GoogleFonts.inter(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      firstName,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        height: 1.1,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: GoogleFonts.inter(
+                          color: Colors.white.withValues(alpha: 0.75),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.4), width: 2),
+                ),
+                child: CircleAvatar(
+                  radius: 24,
+                  backgroundColor: Colors.white.withValues(alpha: 0.2),
+                  backgroundImage:
+                      (photo != null && photo.isNotEmpty) ? NetworkImage(photo) : null,
+                  child: (photo == null || photo.isEmpty)
+                      ? Text(
+                          firstName.isNotEmpty ? firstName[0].toUpperCase() : '?',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-          // The new Check-In Container based on image
+          const SizedBox(height: 20),
+
+          // ── Check-in card ───────────────────────────────────────────────
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: isDark ? AppColors.bgDark : Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(18),
               boxShadow: isDark
                   ? []
                   : [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
                       )
                     ],
             ),
             child: Column(
               children: [
-                // Timer Blocks
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildTimeBox(hours, isDark),
-                    _buildTimeColon(isDark),
-                    _buildTimeBox(minutes, isDark),
-                    _buildTimeColon(isDark),
-                    _buildTimeBox(seconds, isDark),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                // Bottom Row: Avatar, Date/Time, Button
                 Row(
                   children: [
-                    if (profile?.employee.photo != null)
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundImage: NetworkImage(profile!.employee.photo!),
-                      )
-                    else
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: Colors.grey.shade300,
-                        child: const Icon(Icons.person, color: Colors.grey),
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: (isIn ? AppColors.success : AppColors.textMuted)
+                            .withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
                       ),
+                      child: Icon(
+                        isIn ? Icons.login_rounded : Icons.logout_rounded,
+                        color: isIn ? AppColors.success : AppColors.textMuted,
+                        size: 22,
+                      ),
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        formattedDateTime,
-                        style: GoogleFonts.inter(
-                          color: isDark
-                              ? AppColors.textMuted
-                              : AppColors.textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isIn ? 'Checked in' : 'Not checked in',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color:
+                                  isDark ? Colors.white : AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            isIn
+                                ? 'Working time · ${checkIn.durationString}'
+                                : 'Tap to start your day',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: isIn
+                                  ? AppColors.success
+                                  : (isDark
+                                      ? AppColors.textMuted
+                                      : AppColors.textSecondary),
+                              fontFeatures: const [],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     ElevatedButton(
-                      onPressed: checkInProvider.isLoading
+                      onPressed: checkIn.isLoading
                           ? null
-                          : () => checkInProvider.handleCheckInOut(),
+                          : () => checkIn.handleCheckInOut(),
                       style: ElevatedButton.styleFrom(
                         minimumSize: Size.zero,
-                        backgroundColor: checkInProvider.isCheckedIn
-                            ? AppColors.error
-                            : const Color(
-                                0xFF22C55E), // Green color matching image
+                        backgroundColor:
+                            isIn ? AppColors.error : AppColors.success,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 10),
+                            horizontal: 18, vertical: 11),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24), // Pill shape
+                          borderRadius: BorderRadius.circular(24),
                         ),
                       ),
-                      child: checkInProvider.isLoading
+                      child: checkIn.isLoading
                           ? const SizedBox(
                               width: 16,
                               height: 16,
@@ -159,14 +234,47 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                                   color: Colors.white, strokeWidth: 2),
                             )
                           : Text(
-                              checkInProvider.isCheckedIn
-                                  ? 'Check Out'
-                                  : 'Check In',
+                              isIn ? 'Check Out' : 'Check In',
                               style: GoogleFonts.inter(
                                 fontSize: 13,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Divider(
+                    height: 1,
+                    color:
+                        isDark ? AppColors.borderDark : AppColors.borderLight),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(Icons.calendar_today_rounded,
+                        size: 14,
+                        color: isDark
+                            ? AppColors.textMuted
+                            : AppColors.textSecondary),
+                    const SizedBox(width: 8),
+                    Text(
+                      DateFormat('EEEE, dd MMM yyyy').format(_now),
+                      style: GoogleFonts.inter(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? AppColors.textMuted
+                            : AppColors.textSecondary,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      DateFormat('hh:mm a').format(_now),
+                      style: GoogleFonts.inter(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : AppColors.textPrimary,
+                      ),
                     ),
                   ],
                 ),
@@ -174,40 +282,6 @@ class _DashboardHeaderState extends State<DashboardHeader> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTimeBox(String value, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: isDark
-            ? AppColors.cardDark
-            : const Color(0xFFEEF2FF), // Light indigo background
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        value,
-        style: GoogleFonts.inter(
-          color: isDark ? Colors.white : AppColors.textPrimary,
-          fontSize: 24,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTimeColon(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Text(
-        ':',
-        style: GoogleFonts.inter(
-          color: isDark ? Colors.white : AppColors.textPrimary,
-          fontSize: 24,
-          fontWeight: FontWeight.w600,
-        ),
       ),
     );
   }

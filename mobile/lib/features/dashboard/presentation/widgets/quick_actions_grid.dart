@@ -27,8 +27,7 @@ class QuickActionsGrid extends StatelessWidget {
     final canAssignHomework = (isClassTeacher && (ct?.assignHomework ?? true)) ||
         (isSubjectTeacher && (st?.assignHomework ?? true));
 
-    final canViewStudents = (isClassTeacher && (ct?.viewStudents ?? true)) ||
-        (isSubjectTeacher && (st?.viewSubjectStudents ?? true));
+    final canViewClassStudents = isClassTeacher && (ct?.viewStudents ?? true);
 
     final canViewTimetable = (isClassTeacher && (ct?.viewTimetable ?? true)) ||
         (isSubjectTeacher && (st?.viewTimetable ?? true));
@@ -53,9 +52,9 @@ class QuickActionsGrid extends StatelessWidget {
           AppColors.accentGreen,
           () => context.go('/homework'),
         ),
-      if (canViewStudents)
+      if (canViewClassStudents)
         _ActionItem(
-          'My\nStudents',
+          'My\nClass',
           Icons.people_rounded,
           AppColors.accentPurple,
           () => context.go('/students'),
@@ -92,19 +91,19 @@ class QuickActionsGrid extends StatelessWidget {
     if (actions.isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Quick Actions',
             style: GoogleFonts.inter(
-              fontSize: 18,
+              fontSize: 17,
               fontWeight: FontWeight.w700,
               color: isDark ? Colors.white : AppColors.textPrimary,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(

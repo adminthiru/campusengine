@@ -30,6 +30,10 @@ class _TeacherSubjectsScreenState extends State<TeacherSubjectsScreen> {
     return Scaffold(
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         title: const Text('My Subject Classes'),
         backgroundColor: isDark ? AppColors.cardDark : Colors.white,
         foregroundColor: isDark ? Colors.white : AppColors.textPrimary,
