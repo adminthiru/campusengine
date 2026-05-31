@@ -1,15 +1,11 @@
-import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../storage/secure_storage.dart';
 
 class ApiClient {
   static final Dio _dio = Dio(BaseOptions(
-    baseUrl: kIsWeb
-        ? 'http://localhost:5000/api'
-        : (Platform.isAndroid
-            ? 'http://10.0.2.2:5000/api'
-            : 'http://localhost:5000/api'),
+    // Use the PC's local IP address instead of localhost/10.0.2.2 for real devices
+    baseUrl: 'http://172.20.10.2:5000/api',
     connectTimeout: const Duration(seconds: 15),
     receiveTimeout: const Duration(seconds: 15),
     headers: {'Content-Type': 'application/json'},
@@ -58,14 +54,42 @@ class ApiClient {
 
   static String errorMessage(dynamic e) {
     if (e is DioException) {
-      final data = e.response?.data;
-      if (data is Map && data['message'] != null) return data['message'];
-      if (e.type == DioExceptionType.connectionTimeout ||
-          e.type == DioExceptionType.receiveTimeout) {
-        return 'Connection timed out';
+      final status = e.response?.statusCode;
+      final body   = e.response?.data;
+
+      // Log full details for debugging
+      debugPrint(
+        'DioException [${e.type.name}] '
+        'status=$status path=${e.requestOptions.path} '
+        'body=$body',
+      );
+
+      // Prefer the backend's own message
+      if (body is Map) {
+        final msg = body['message'] ?? body['error'];
+        if (msg != null) return msg.toString();
       }
-      if (e.type == DioExceptionType.connectionError) return 'Cannot connect to server';
+
+      switch (e.type) {
+        case DioExceptionType.connectionTimeout:
+        case DioExceptionType.sendTimeout:
+        case DioExceptionType.receiveTimeout:
+          return 'Connection timed out';
+        case DioExceptionType.connectionError:
+          return 'Cannot connect to server (${e.requestOptions.baseUrl})';
+        case DioExceptionType.badResponse:
+          return status != null
+              ? 'Server returned $status'
+              : 'Bad server response';
+        case DioExceptionType.cancel:
+          return 'Request cancelled';
+        case DioExceptionType.badCertificate:
+          return 'SSL certificate error';
+        default:
+          return status != null ? 'Error $status' : 'Network error';
+      }
     }
-    return 'Something went wrong';
+    debugPrint('Non-Dio error: ${e.runtimeType}: $e');
+    return e.toString();
   }
 }

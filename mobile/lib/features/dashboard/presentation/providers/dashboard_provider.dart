@@ -33,20 +33,23 @@ class DashboardProvider extends ChangeNotifier {
 
       if (classTeacher != null) {
         final classId = classTeacher.classInfo.id;
-        
+
         // 1. Fetch recent attendance
         final attRes = await ApiClient.get('/attendance', params: {
           'type': 'student',
           'classId': classId,
         });
-        
+
         final attData = attRes.data['attendance'] as List?;
         if (attData != null && attData.isNotEmpty) {
-          final latestRecord = attData.first; // Most recent due to sort({date: -1})
+          final latestRecord =
+              attData.first; // Most recent due to sort({date: -1})
           final records = latestRecord['records'] as List?;
           _todayTotal = records?.length ?? 0;
-          _todayPresent = records?.where((r) => r['status'] == 'present').length ?? 0;
-          _todayAbsent = records?.where((r) => r['status'] == 'absent').length ?? 0;
+          _todayPresent =
+              records?.where((r) => r['status'] == 'present').length ?? 0;
+          _todayAbsent =
+              records?.where((r) => r['status'] == 'absent').length ?? 0;
         }
       }
 
@@ -57,16 +60,16 @@ class DashboardProvider extends ChangeNotifier {
       final hwRes = await ApiClient.get('/homework', params: {
         'status': 'active', // only active homework
       });
-      
+
       final hwData = hwRes.data['homework'] as List?;
       if (hwData != null) {
         final allHomework = hwData.map((e) => Homework.fromJson(e)).toList();
-        
+
         // Filter homework for this teacher:
         // Either they created it, or it's for their class, or it's for their subjects.
         final myClassId = classTeacher?.classInfo.id;
         final mySubjectIds = subjectTeachers.map((s) => s.subject.id).toSet();
-        
+
         _activeHomework = allHomework.where((hw) {
           final isMyClass = hw.classRef?.id == myClassId;
           final isMySubject = mySubjectIds.contains(hw.subject?.id);
@@ -84,7 +87,6 @@ class DashboardProvider extends ChangeNotifier {
       if (ttData != null) {
         _timetables = ttData;
       }
-
     } catch (e) {
       _error = e.toString();
     } finally {

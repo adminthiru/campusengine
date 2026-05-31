@@ -25,7 +25,8 @@ class StudentAttendanceTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? AppColors.cardDark : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+        border: Border.all(
+            color: isDark ? AppColors.borderDark : AppColors.borderLight),
         boxShadow: isDark ? [] : AppColors.shadowSm,
       ),
       child: Column(
@@ -36,7 +37,8 @@ class StudentAttendanceTile extends StatelessWidget {
               CircleAvatar(
                 radius: 20,
                 backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                backgroundImage: student.photo != null ? NetworkImage(student.photo!) : null,
+                backgroundImage:
+                    student.photo != null ? NetworkImage(student.photo!) : null,
                 child: student.photo == null
                     ? Text(
                         student.name.substring(0, 1).toUpperCase(),
@@ -65,7 +67,9 @@ class StudentAttendanceTile extends StatelessWidget {
                       'Adm No: ${student.admissionNumber}',
                       style: GoogleFonts.inter(
                         fontSize: 12,
-                        color: isDark ? AppColors.textMuted : AppColors.textSecondary,
+                        color: isDark
+                            ? AppColors.textMuted
+                            : AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -162,7 +166,9 @@ class _StatusButton extends StatelessWidget {
 
     final selectedBg = isDark ? color.withValues(alpha: 0.2) : bg;
     final unselectedBg = isDark ? Colors.transparent : Colors.white;
-    final borderColor = isSelected ? color : (isDark ? AppColors.borderDark : AppColors.borderLight);
+    final borderColor = isSelected
+        ? color
+        : (isDark ? AppColors.borderDark : AppColors.borderLight);
 
     return InkWell(
       onTap: onTap,
@@ -182,7 +188,9 @@ class _StatusButton extends StatelessWidget {
               style: GoogleFonts.inter(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: isSelected ? color : (isDark ? AppColors.textMuted : AppColors.textSecondary),
+                color: isSelected
+                    ? color
+                    : (isDark ? AppColors.textMuted : AppColors.textSecondary),
               ),
             ),
           ],

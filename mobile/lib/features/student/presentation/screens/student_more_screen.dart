@@ -12,11 +12,11 @@ class StudentMoreScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final auth    = context.watch<AuthProvider>();
-    final perms   = context.watch<SchoolPermissionsProvider>();
-    final sp      = context.watch<StudentProfileProvider>();
+    final auth = context.watch<AuthProvider>();
+    final perms = context.watch<SchoolPermissionsProvider>();
+    final sp = context.watch<StudentProfileProvider>();
     final student = sp.profile;
-    final isDark  = Theme.of(context).brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -29,7 +29,8 @@ class StudentMoreScreen extends StatelessWidget {
             decoration: BoxDecoration(
               color: isDark ? AppColors.cardDark : Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+              border: Border.all(
+                  color: isDark ? AppColors.borderDark : AppColors.borderLight),
             ),
             child: Row(
               children: [
@@ -38,7 +39,10 @@ class StudentMoreScreen extends StatelessWidget {
                   backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                   child: Text(
                     (auth.user?.name ?? 'S').substring(0, 1).toUpperCase(),
-                    style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.primary),
+                    style: GoogleFonts.inter(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -46,9 +50,15 @@ class StudentMoreScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(auth.user?.name ?? '', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600)),
-                      Text(student?.classLabel ?? '', style: GoogleFonts.inter(fontSize: 13, color: AppColors.textMuted)),
-                      Text(student?.admissionNumber ?? '', style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
+                      Text(auth.user?.name ?? '',
+                          style: GoogleFonts.inter(
+                              fontSize: 15, fontWeight: FontWeight.w600)),
+                      Text(student?.classLabel ?? '',
+                          style: GoogleFonts.inter(
+                              fontSize: 13, color: AppColors.textMuted)),
+                      Text(student?.admissionNumber ?? '',
+                          style: GoogleFonts.inter(
+                              fontSize: 12, color: AppColors.textMuted)),
                     ],
                   ),
                 ),
@@ -56,18 +66,44 @@ class StudentMoreScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          Text('More Options', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600)),
+          Text('More Options',
+              style:
+                  GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600)),
           const SizedBox(height: 12),
           if (perms.studentCan('viewFees'))
-            _tile(context, Icons.receipt_outlined, 'My Fees', 'View fee records & payment status',
-                () => context.go('/student/fees'), isDark),
+            _tile(
+                context,
+                Icons.receipt_outlined,
+                'My Fees',
+                'View fee records & payment status',
+                () => context.go('/student/fees'),
+                isDark),
           if (perms.studentCan('submitLeaveRequest'))
-            _tile(context, Icons.event_note_outlined, 'Leave Requests', 'Apply for leave & view history',
-                () => context.go('/student/leave'), isDark),
+            _tile(
+                context,
+                Icons.event_note_outlined,
+                'Leave Requests',
+                'Apply for leave & view history',
+                () => context.go('/student/leave'),
+                isDark),
           if (perms.studentCan('viewTimetable'))
-            _tile(context, Icons.schedule_outlined, 'Timetable', 'View class timetable',
-                () => context.go('/student/timetable'), isDark),
-          _tile(context, Icons.logout, 'Logout', 'Sign out of your account', () {
+            _tile(
+                context,
+                Icons.schedule_outlined,
+                'Timetable',
+                'View class timetable',
+                () => context.go('/student/timetable'),
+                isDark),
+          _tile(
+              context,
+              Icons.calendar_month_outlined,
+              'School Calendar',
+              'Holidays, events, exam days and school dates',
+              () => context.go('/calendar'),
+              isDark,
+              color: AppColors.accentPurple),
+          _tile(context, Icons.logout, 'Logout', 'Sign out of your account',
+              () {
             context.read<AuthProvider>().logout();
           }, isDark, color: AppColors.accentRed),
         ],
@@ -76,7 +112,8 @@ class StudentMoreScreen extends StatelessWidget {
   }
 
   Widget _tile(BuildContext ctx, IconData icon, String title, String subtitle,
-      VoidCallback onTap, bool isDark, {Color? color}) {
+      VoidCallback onTap, bool isDark,
+      {Color? color}) {
     final c = color ?? AppColors.primary;
     return GestureDetector(
       onTap: onTap,
@@ -86,12 +123,14 @@ class StudentMoreScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: isDark ? AppColors.cardDark : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+          border: Border.all(
+              color: isDark ? AppColors.borderDark : AppColors.borderLight),
         ),
         child: Row(
           children: [
             Container(
-              width: 40, height: 40,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
                 color: c.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
@@ -103,8 +142,14 @@ class StudentMoreScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: c == AppColors.accentRed ? c : null)),
-                  Text(subtitle, style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
+                  Text(title,
+                      style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: c == AppColors.accentRed ? c : null)),
+                  Text(subtitle,
+                      style: GoogleFonts.inter(
+                          fontSize: 12, color: AppColors.textMuted)),
                 ],
               ),
             ),

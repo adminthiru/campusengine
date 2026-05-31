@@ -86,6 +86,30 @@ class SecureStorageService {
     await saveUserRole(role);
   }
 
+  // ── Remember Me ───────────────────────────────────────────────────────────
+  Future<void> saveRememberMe(bool value) =>
+      _safeWrite(AppConstants.keyRememberMe, value ? '1' : '0');
+
+  Future<bool> getRememberMe() async {
+    final v = await _safeRead(AppConstants.keyRememberMe);
+    return v == '1';
+  }
+
+  Future<void> saveSavedEmail(String email) =>
+      _safeWrite(AppConstants.keySavedEmail, email);
+
+  Future<String?> getSavedEmail() =>
+      _safeRead(AppConstants.keySavedEmail);
+
+  Future<void> clearRememberMe() async {
+    try {
+      await _storage.delete(key: AppConstants.keyRememberMe);
+      await _storage.delete(key: AppConstants.keySavedEmail);
+    } catch (e) {
+      debugPrint('SecureStorage clearRememberMe failed: $e');
+    }
+  }
+
   // ── Clear everything (logout) ────────────────────────────────────────────
   Future<void> clearAll() async {
     try {

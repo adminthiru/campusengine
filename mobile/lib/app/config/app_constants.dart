@@ -15,6 +15,8 @@ class AppConstants {
   static const String keySchoolId      = 'school_id';
   static const String keyThemeMode     = 'theme_mode';
   static const String keyOnboardingDone = 'onboarding_done';
+  static const String keyRememberMe    = 'remember_me';
+  static const String keySavedEmail    = 'saved_email';
 
   // ── Hive Box Names ────────────────────────────────────────────────────────
   static const String boxStudents     = 'students_box';

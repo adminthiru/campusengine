@@ -35,7 +35,6 @@ class SKLTeacherApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => StudentProfileProvider()),
         ChangeNotifierProvider(create: (_) => ParentDataProvider()),
       ],
-
       child: const _AppRouterContainer(),
     );
   }
@@ -69,9 +68,9 @@ class _AppRouterContainerState extends State<_AppRouterContainer> {
       debugShowCheckedModeBanner: false,
 
       // ── Theme — Inter applied globally via ThemeData.textTheme ───
-      theme:      AppTheme.light,
-      darkTheme:  AppTheme.dark,
-      themeMode:  themeProvider.themeMode,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: themeProvider.themeMode,
 
       // ── Router ────────────────────────────────────────────────────
       routerConfig: _router,

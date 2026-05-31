@@ -55,9 +55,17 @@ class AdminAndEvents extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    _StatusPill(label: 'Sick Leave (Nov 2)', status: 'Approved', color: AppColors.success, isDark: isDark),
+                    _StatusPill(
+                        label: 'Sick Leave (Nov 2)',
+                        status: 'Approved',
+                        color: AppColors.success,
+                        isDark: isDark),
                     const SizedBox(height: 8),
-                    _StatusPill(label: 'Casual Leave (Dec 1)', status: 'Pending', color: AppColors.warning, isDark: isDark),
+                    _StatusPill(
+                        label: 'Casual Leave (Dec 1)',
+                        status: 'Pending',
+                        color: AppColors.warning,
+                        isDark: isDark),
                   ],
                 ),
               ),
@@ -75,8 +83,10 @@ class AdminAndEvents extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    _HolidayTile(name: 'Thanksgiving', date: 'Nov 28', isDark: isDark),
-                    _HolidayTile(name: 'Winter Break', date: 'Dec 20', isDark: isDark),
+                    _HolidayTile(
+                        name: 'Thanksgiving', date: 'Nov 28', isDark: isDark),
+                    _HolidayTile(
+                        name: 'Winter Break', date: 'Dec 20', isDark: isDark),
                   ],
                 ),
               ),
@@ -140,7 +150,8 @@ class _NotificationCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? AppColors.cardDark : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+        border: Border.all(
+            color: isDark ? AppColors.borderDark : AppColors.borderLight),
         boxShadow: isDark ? [] : AppColors.shadowSm,
       ),
       child: Row(
@@ -166,7 +177,8 @@ class _NotificationCard extends StatelessWidget {
                   time,
                   style: GoogleFonts.inter(
                     fontSize: 12,
-                    color: isDark ? AppColors.textMuted : AppColors.textSecondary,
+                    color:
+                        isDark ? AppColors.textMuted : AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -198,7 +210,8 @@ class _StatusPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? AppColors.cardDark : AppColors.bgLight,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+        border: Border.all(
+            color: isDark ? AppColors.borderDark : AppColors.borderLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -255,7 +268,9 @@ class _HolidayTile extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Row(
         children: [
-          Icon(Icons.event, size: 16, color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+          Icon(Icons.event,
+              size: 16,
+              color: isDark ? AppColors.textMuted : AppColors.textSecondary),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -273,7 +288,8 @@ class _HolidayTile extends StatelessWidget {
                   date,
                   style: GoogleFonts.inter(
                     fontSize: 11,
-                    color: isDark ? AppColors.textMuted : AppColors.textSecondary,
+                    color:
+                        isDark ? AppColors.textMuted : AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -311,7 +327,9 @@ class _ActivityTimelineItem extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.primary,
                 shape: BoxShape.circle,
-                border: Border.all(color: isDark ? AppColors.bgDark : AppColors.bgLight, width: 2),
+                border: Border.all(
+                    color: isDark ? AppColors.bgDark : AppColors.bgLight,
+                    width: 2),
               ),
             ),
             if (!isLast)

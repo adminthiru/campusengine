@@ -30,7 +30,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       await profileProv.fetchProfile();
     }
     if (profileProv.profile != null && mounted) {
-      context.read<DashboardProvider>().fetchDashboardData(profileProv.profile!);
+      context
+          .read<DashboardProvider>()
+          .fetchDashboardData(profileProv.profile!);
     }
   }
 
@@ -38,19 +40,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final profileProvider = context.watch<ProfileProvider>();
-    
-    if (profileProvider.isLoading || (profileProvider.profile == null && profileProvider.errorMessage == null)) {
+
+    if (profileProvider.isLoading ||
+        (profileProvider.profile == null &&
+            profileProvider.errorMessage == null)) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    
+
     final profile = profileProvider.profile;
     if (profile == null) {
       return Scaffold(
         body: Center(
           child: Text(
-            'Error: ${profileProvider.errorMessage ?? "Failed to load profile"}', 
-            style: TextStyle(color: isDark ? Colors.white : Colors.black)
-          ),
+              'Error: ${profileProvider.errorMessage ?? "Failed to load profile"}',
+              style: TextStyle(color: isDark ? Colors.white : Colors.black)),
         ),
       );
     }
@@ -66,7 +69,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       tabs.add(const Tab(text: 'My Class'));
       views.add(const ClassTeacherView());
     }
-    if (isSubjectTeacher || !isClassTeacher) { // Fallback to subject view if not a class teacher
+    if (isSubjectTeacher || !isClassTeacher) {
+      // Fallback to subject view if not a class teacher
       tabs.add(const Tab(text: 'My Subjects'));
       views.add(const SubjectTeacherView());
     }
@@ -88,9 +92,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       indicatorColor: AppColors.primary,
                       indicatorWeight: 3,
                       labelColor: AppColors.primary,
-                      unselectedLabelColor: isDark ? AppColors.textMuted : AppColors.textSecondary,
-                      labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 15),
-                      unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 15),
+                      unselectedLabelColor: isDark
+                          ? AppColors.textMuted
+                          : AppColors.textSecondary,
+                      labelStyle: GoogleFonts.inter(
+                          fontWeight: FontWeight.w700, fontSize: 15),
+                      unselectedLabelStyle: GoogleFonts.inter(
+                          fontWeight: FontWeight.w500, fontSize: 15),
                       tabs: tabs,
                     ),
                     isDark ? AppColors.cardDark : Colors.white,

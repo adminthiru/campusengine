@@ -61,8 +61,11 @@ class ParentDataProvider extends ChangeNotifier {
     try {
       final res = await ApiClient.get('/parent/my-children');
       final data = res.data;
-      final list = (data['children'] ?? data['students']) as List<dynamic>? ?? [];
-      _children = list.map((c) => ChildInfo.fromJson(c as Map<String, dynamic>)).toList();
+      final list =
+          (data['children'] ?? data['students']) as List<dynamic>? ?? [];
+      _children = list
+          .map((c) => ChildInfo.fromJson(c as Map<String, dynamic>))
+          .toList();
     } catch (e) {
       _error = ApiClient.errorMessage(e);
       debugPrint('ParentDataProvider error: $e');

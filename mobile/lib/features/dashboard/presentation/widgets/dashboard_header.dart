@@ -82,13 +82,15 @@ class _DashboardHeaderState extends State<DashboardHeader> {
             decoration: BoxDecoration(
               color: isDark ? AppColors.bgDark : Colors.white,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: isDark ? [] : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                )
-              ],
+              boxShadow: isDark
+                  ? []
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      )
+                    ],
             ),
             child: Column(
               children: [
@@ -123,7 +125,9 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                       child: Text(
                         formattedDateTime,
                         style: GoogleFonts.inter(
-                          color: isDark ? AppColors.textMuted : AppColors.textSecondary,
+                          color: isDark
+                              ? AppColors.textMuted
+                              : AppColors.textSecondary,
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),
@@ -137,10 +141,12 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                         minimumSize: Size.zero,
                         backgroundColor: checkInProvider.isCheckedIn
                             ? AppColors.error
-                            : const Color(0xFF22C55E), // Green color matching image
+                            : const Color(
+                                0xFF22C55E), // Green color matching image
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(24), // Pill shape
                         ),
@@ -149,10 +155,13 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                           ? const SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2),
                             )
                           : Text(
-                              checkInProvider.isCheckedIn ? 'Check Out' : 'Check In',
+                              checkInProvider.isCheckedIn
+                                  ? 'Check Out'
+                                  : 'Check In',
                               style: GoogleFonts.inter(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
@@ -173,7 +182,9 @@ class _DashboardHeaderState extends State<DashboardHeader> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.cardDark : const Color(0xFFEEF2FF), // Light indigo background
+        color: isDark
+            ? AppColors.cardDark
+            : const Color(0xFFEEF2FF), // Light indigo background
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(

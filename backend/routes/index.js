@@ -601,13 +601,13 @@ router.get('/attendance/employee-summary', protect, checkSubscription, async (re
     docs.forEach(doc => {
       const rec = doc.records.find(r => r.employee?.toString() === employeeId);
       if (!rec) return;
-      if (rec.status === 'present')  present++;
-      else if (rec.status === 'absent')   absent++;
-      else if (rec.status === 'late')     late++;
+      if (rec.status === 'present') present++;
+      else if (rec.status === 'absent') absent++;
+      else if (rec.status === 'late') late++;
       else if (rec.status === 'half_day') halfDay++;
-      else if (rec.status === 'od')  od++;
-      else if (rec.status === 'cl')  cl++;
-      else if (rec.status === 'sl')  sl++;
+      else if (rec.status === 'od') od++;
+      else if (rec.status === 'cl') cl++;
+      else if (rec.status === 'sl') sl++;
     });
     const total = present + absent + late + halfDay + od + cl + sl;
     res.json({ success: true, summary: { present, absent, late, halfDay, od, cl, sl, total, percentage: total ? Math.round((present / total) * 100) : 0 } });
@@ -679,7 +679,7 @@ router.get('/timetable/substitutions', protect, checkSubscription, async (req, r
     const { date, absentTeacherId } = req.query;
     if (!date || !absentTeacherId) return res.status(400).json({ success: false, message: 'date and absentTeacherId required' });
     const start = new Date(date + 'T00:00:00.000Z');
-    const end   = new Date(date + 'T23:59:59.999Z');
+    const end = new Date(date + 'T23:59:59.999Z');
     const subs = await Substitution.find({ school: req.user.school, absentTeacher: absentTeacherId, date: { $gte: start, $lte: end } })
       .populate('substituteTeacher', 'name designation department')
       .populate('classRef', 'name section')
@@ -716,13 +716,13 @@ router.delete('/timetable/substitutions/:id', protect, checkSubscription, async 
 // ============== SCHOOL CALENDAR ==============
 const SchoolCalendar = require('../models/SchoolCalendar');
 
-router.get('/calendar', protect, authorize('admin','correspondent','principal','teacher','accountant','student','parent'), async (req, res) => {
+router.get('/calendar', protect, authorize('admin', 'correspondent', 'principal', 'teacher', 'accountant', 'student', 'parent'), async (req, res) => {
   try {
     const { year, month } = req.query;
     const query = { school: req.user.school };
     if (year && month) {
       const start = new Date(Number(year), Number(month) - 1, 1);
-      const end   = new Date(Number(year), Number(month), 0, 23, 59, 59);
+      const end = new Date(Number(year), Number(month), 0, 23, 59, 59);
       query.$or = [
         { date: { $gte: start, $lte: end } },
         { endDate: { $gte: start, $lte: end } },
@@ -730,7 +730,7 @@ router.get('/calendar', protect, authorize('admin','correspondent','principal','
       ];
     } else if (year) {
       const start = new Date(Number(year), 0, 1);
-      const end   = new Date(Number(year), 11, 31, 23, 59, 59);
+      const end = new Date(Number(year), 11, 31, 23, 59, 59);
       query.date = { $gte: start, $lte: end };
     }
     const events = await SchoolCalendar.find(query).sort({ date: 1 });
@@ -799,7 +799,7 @@ router.get('/expenses/report', protect, checkSubscription, async (req, res) => {
       if (endDate) { const e = new Date(endDate); e.setHours(23, 59, 59, 999); query.date.$lte = e; }
     }
     const expenses = await Expense.find(query).populate('createdBy', 'name').sort({ date: 1 });
-    const school   = await School.findById(req.user.school);
+    const school = await School.findById(req.user.school);
     const { generateExpensesReport } = require('../utils/pdf');
     const pdf = await generateExpensesReport(expenses.map(e => e.toObject()), school.toObject(), { startDate, endDate, category });
     const dateStr = new Date().toISOString().slice(0, 10);
@@ -939,7 +939,7 @@ router.post('/homework', protect, checkSubscription, authorize('admin', 'corresp
     // Notify parents after response (fire-and-forget)
     const dueLabel = hw.dueDate ? new Date(hw.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : null;
     const subjectName = hw.subject?.name || '';
-    const classLabel  = hw.class ? `${hw.class.name}${hw.class.section ? ` ${hw.class.section}` : ''}` : '';
+    const classLabel = hw.class ? `${hw.class.name}${hw.class.section ? ` ${hw.class.section}` : ''}` : '';
     const msg = `${hw.title}${subjectName ? ` (${subjectName})` : ''}${classLabel ? ` — ${classLabel}` : ''}${dueLabel ? `. Due: ${dueLabel}` : ''}.`;
     if (hw.assignedTo === 'selected' && hw.students?.length) {
       const ids = hw.students.map(s => s._id || s);
@@ -1143,7 +1143,7 @@ router.post('/homework/:id/notify', protect, checkSubscription, authorize('admin
           const msg = school.language === 'ta'
             ? `${hw.class.name} ${hw.class.section} வகுப்பிற்கு வீட்டுப்பாடம்: ${hw.title}. கடைசி தேதி: ${dueStr}.`
             : `Homework for ${hw.class.name} ${hw.class.section}: ${hw.title}. Due: ${dueStr}.`;
-          try { await sendSMS(req.user.school, guardian.phone, 'homework', [hw.title], school.language || 'en'); sent++; } catch {}
+          try { await sendSMS(req.user.school, guardian.phone, 'homework', [hw.title], school.language || 'en'); sent++; } catch { }
         }
       }
     }
