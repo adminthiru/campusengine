@@ -111,6 +111,25 @@ router.get('/school/dashboard', protect, checkSubscription, schoolCtrl.getDashbo
 router.get('/super-admin/schools', protect, authorize('super_admin'), schoolCtrl.getAllSchools);
 router.post('/school/upload-logo', protect, upload.single('logo'), schoolCtrl.uploadLogo);
 
+// PDF template preview — generates a sample PDF with current school branding
+router.get('/school/pdf-preview', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const { generatePaySlip } = require('../utils/pdf');
+    const school = await School.findById(req.user.school);
+    const sampleSalary = {
+      month: new Date().getMonth() + 1, year: new Date().getFullYear(),
+      slipNumber: 'SAMPLE-001', workingDays: 30, presentDays: 28, leaveDays: 2,
+      earnings: { basic: 25000, hra: 5000, da: 2000, otherAllowances: 1000, overtime: 0, bonus: 0 },
+      deductions: { pf: 3000, esi: 250, tax: 0, loan: 0, lossOfPay: 1667, other: 0 },
+      grossSalary: 33000, totalDeductions: 4917, netSalary: 28083,
+    };
+    const sampleEmployee = { name: 'Sample Employee', employeeId: 'EMP001', designation: 'Teacher', role: 'teacher' };
+    const pdfBuffer = await generatePaySlip(sampleSalary, sampleEmployee, school);
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'inline; filename="preview.pdf"' });
+    res.send(pdfBuffer);
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // Grade config
 router.put('/school/grade-config', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
   try {
@@ -540,6 +559,24 @@ router.post('/attendance/employee', protect, checkSubscription, authorize('admin
 router.get('/attendance', protect, checkSubscription, attCtrl.getAttendance);
 router.get('/attendance/summary', protect, checkSubscription, attCtrl.getStudentAttendanceSummary);
 
+// Working days calculator — returns actual working days for a month
+router.get('/attendance/working-days', protect, async (req, res) => {
+  try {
+    const { year, month, classId } = req.query;
+    if (!year || !month) return res.status(400).json({ success: false, message: 'year and month required' });
+    const schoolId = req.user.school;
+    const schoolDoc = await School.findById(schoolId).select('workingDays');
+    let satSchedule = 'school_default';
+    if (classId) {
+      const classDoc = await require('../models/Class').findById(classId).select('saturdaySchedule');
+      satSchedule = classDoc?.saturdaySchedule || 'school_default';
+    }
+    const { getWorkingDaysForMonth } = require('../utils/holidays');
+    const result = await getWorkingDaysForMonth(schoolId, Number(year), Number(month), schoolDoc?.workingDays || {}, satSchedule);
+    res.json({ success: true, ...result, year: Number(year), month: Number(month) });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // Student day-by-day attendance records for detail view
 router.get('/attendance/student-records', protect, checkSubscription, async (req, res) => {
   try {
@@ -842,7 +879,14 @@ router.delete('/expenses/:id', protect, authorize('admin', 'correspondent'), asy
 // ============== TRANSPORT ==============
 router.get('/transport', protect, async (req, res) => {
   try {
-    const routes = await Transport.find({ school: req.user.school });
+    // Backfill missing routeNumbers for vehicles added before auto-generation
+    const missing = await Transport.find({ school: req.user.school, routeNumber: { $in: [null, ''] } });
+    const allCount = await Transport.countDocuments({ school: req.user.school });
+    for (let i = 0; i < missing.length; i++) {
+      missing[i].routeNumber = String(allCount - missing.length + i + 1).padStart(2, '0');
+      await missing[i].save();
+    }
+    const routes = await Transport.find({ school: req.user.school }).sort({ routeNumber: 1 });
     // Count students via Student.transportRoute (the authoritative field)
     const studentCounts = await Student.aggregate([
       { $match: { school: req.user.school, transportRoute: { $in: routes.map(r => r._id) }, status: { $ne: 'dropped' } } },
@@ -864,7 +908,13 @@ router.get('/transport/:id/students', protect, async (req, res) => {
 });
 router.post('/transport', protect, authorize('admin', 'correspondent'), async (req, res) => {
   try {
-    const route = await Transport.create({ ...req.body, school: req.user.school });
+    let { routeNumber } = req.body;
+    if (!routeNumber?.trim()) {
+      // Auto-generate sequential assign number: 01, 02, 03...
+      const count = await Transport.countDocuments({ school: req.user.school });
+      routeNumber = String(count + 1).padStart(2, '0');
+    }
+    const route = await Transport.create({ ...req.body, routeNumber, school: req.user.school });
     res.status(201).json({ success: true, route });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
