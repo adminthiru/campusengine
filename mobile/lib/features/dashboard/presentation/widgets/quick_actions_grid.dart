@@ -1,23 +1,95 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
+import 'package:skl_teacher/features/profile/presentation/providers/profile_provider.dart';
 
 class QuickActionsGrid extends StatelessWidget {
   const QuickActionsGrid({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final profile = context.watch<ProfileProvider>().profile;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final actions = [
-      _ActionItem('Mark\nAttendance', Icons.fact_check, AppColors.primary, () => context.go('/attendance')),
-      _ActionItem('Add\nHomework', Icons.assignment, AppColors.accentGreen, () => context.go('/homework')),
-      _ActionItem('View\nStudents', Icons.people, AppColors.accentPurple, () => context.go('/students')),
-      _ActionItem('Apply\nLeave', Icons.event_note, AppColors.accentOrange, () {}),
-      _ActionItem('View\nTimetable', Icons.schedule, AppColors.info, () => context.go('/timetable')),
+    // Permission helpers — default true when profile not yet loaded (optimistic)
+    final ct = profile?.permissions.classTeacher;
+    final st = profile?.permissions.subjectTeacher;
+    final isClassTeacher = profile?.isClassTeacher ?? false;
+    final isSubjectTeacher = profile?.isSubjectTeacher ?? false;
+
+    // Each permission: OR of relevant class-teacher + subject-teacher flags
+    final canMarkAttendance =
+        isClassTeacher && (ct?.markStudentAttendance ?? true);
+
+    final canAssignHomework = (isClassTeacher && (ct?.assignHomework ?? true)) ||
+        (isSubjectTeacher && (st?.assignHomework ?? true));
+
+    final canViewStudents = (isClassTeacher && (ct?.viewStudents ?? true)) ||
+        (isSubjectTeacher && (st?.viewSubjectStudents ?? true));
+
+    final canViewTimetable = (isClassTeacher && (ct?.viewTimetable ?? true)) ||
+        (isSubjectTeacher && (st?.viewTimetable ?? true));
+
+    final canEnterExamMarks =
+        (isClassTeacher && (ct?.viewAndEnterExamMarks ?? true)) ||
+            (isSubjectTeacher && (st?.enterExamMarks ?? true));
+
+    // Build action list dynamically — Leave is always present
+    final actions = <_ActionItem>[
+      if (canMarkAttendance)
+        _ActionItem(
+          'Mark\nAttendance',
+          Icons.fact_check_rounded,
+          AppColors.primary,
+          () => context.go('/attendance'),
+        ),
+      if (canAssignHomework)
+        _ActionItem(
+          'Add\nHomework',
+          Icons.assignment_rounded,
+          AppColors.accentGreen,
+          () => context.go('/homework'),
+        ),
+      if (canViewStudents)
+        _ActionItem(
+          'My\nStudents',
+          Icons.people_rounded,
+          AppColors.accentPurple,
+          () => context.go('/students'),
+        ),
+      if (canEnterExamMarks)
+        _ActionItem(
+          'Enter\nMarks',
+          Icons.quiz_rounded,
+          const Color(0xFFE11D48), // rose-600
+          () => context.go('/exams'),
+        ),
+      if (canViewTimetable)
+        _ActionItem(
+          'View\nTimetable',
+          Icons.schedule_rounded,
+          AppColors.info,
+          () => context.go('/timetable'),
+        ),
+      if (isSubjectTeacher)
+        _ActionItem(
+          'My\nSubjects',
+          Icons.class_outlined,
+          AppColors.primaryDark,
+          () => context.go('/teacher/subjects'),
+        ),
+      _ActionItem(
+        'Apply\nLeave',
+        Icons.event_note_rounded,
+        AppColors.accentOrange,
+        () => context.go('/leave'),
+      ),
     ];
+
+    if (actions.isEmpty) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
@@ -49,7 +121,8 @@ class QuickActionsGrid extends StatelessWidget {
     );
   }
 
-  Widget _buildActionCard(BuildContext context, _ActionItem action, bool isDark) {
+  Widget _buildActionCard(
+      BuildContext context, _ActionItem action, bool isDark) {
     return GestureDetector(
       onTap: action.onTap,
       child: Column(

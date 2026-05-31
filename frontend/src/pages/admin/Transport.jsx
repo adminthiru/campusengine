@@ -91,12 +91,11 @@ export default function Transport() {
               <thead>
                 <tr>
                   <th><input type="checkbox" checked={allSelected} onChange={e => toggleAll(e.target.checked)} /></th>
-                  <th>Type</th>
-                  <th>Name / Route</th>
                   <th>Assign No.</th>
                   <th>Vehicle No.</th>
+                  <th>Type</th>
+                  <th>Name / Route</th>
                   <th>Driver</th>
-                  <th>Capacity</th>
                   <th>Students</th>
                   <th>Status</th>
                   <th>Actions</th>
@@ -104,7 +103,7 @@ export default function Transport() {
               </thead>
               <tbody>
                 {vehicles.length === 0 && (
-                  <tr><td colSpan={10}>
+                  <tr><td colSpan={9}>
                     <EmptyState icon={Bus} message='No vehicles added yet. Click "Add Vehicle" to get started.' />
                   </td></tr>
                 )}
@@ -113,17 +112,18 @@ export default function Transport() {
                     <td onClick={e => e.stopPropagation()}>
                       <input type="checkbox" checked={selected.includes(v._id)} onChange={e => toggleOne(v._id, e.target.checked)} />
                     </td>
-                    <td><TypeBadge type={v.vehicleType} /></td>
-                    <td className="text-14-semibold">{v.routeName}</td>
-                    <td className="text-14-regular" style={{ color: 'var(--text-secondary)' }}>
-                      {v.routeNumber ? `#${v.routeNumber}` : '—'}
+                    <td>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: '#1a56e8', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.5px' }}>
+                        {v.routeNumber ? `#${v.routeNumber}` : '—'}
+                      </span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}>
-                        <Hash size={12} style={{ color: 'var(--text-muted)' }} />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.03em' }}>
                         {v.vehicleNumber || '—'}
-                      </div>
+                      </span>
                     </td>
+                    <td><TypeBadge type={v.vehicleType} /></td>
+                    <td className="text-14-semibold">{v.routeName}</td>
                     <td>
                       {v.driverName ? (
                         <>
@@ -136,7 +136,6 @@ export default function Transport() {
                         </>
                       ) : <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>—</span>}
                     </td>
-                    <td className="text-14-regular">{v.capacity || '—'}</td>
                     <td>
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#1a56e8' }}>{v.studentCount || 0}</span>
                       {v.capacity > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}> / {v.capacity}</span>}
@@ -401,7 +400,8 @@ function VehicleModal({ vehicle, onClose, onSuccess }) {
         </div>
         <div className="form-group">
           <label className="form-label">Assign Number</label>
-          <input className="form-control" value={routeNumber} onChange={e => setRouteNumber(e.target.value)} placeholder="e.g. 01" />
+          <input className="form-control" value={routeNumber} onChange={e => setRouteNumber(e.target.value)} placeholder={isEdit ? '' : 'Auto-generated if blank'} />
+          {!isEdit && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Leave blank to auto-assign next number</div>}
         </div>
       </FormRow>
 

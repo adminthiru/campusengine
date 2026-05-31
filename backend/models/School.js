@@ -51,15 +51,30 @@ const schoolSchema = new mongoose.Schema({
     razorpaySubscriptionId: { type: String },
     amount: { type: Number, default: 20000 }
   },
+  pdfConfig: {
+    primaryColor:    { type: String, default: '#1a56e8' },
+    secondaryColor:  { type: String, default: '#0ea5e9' },
+    headerStyle:     { type: String, enum: ['solid', 'minimal', 'stripe'], default: 'solid' },
+    footerText:      { type: String, default: '' },
+    signatureLabel:  { type: String, default: 'Principal / Authorized Signatory' },
+    showBorderFrame: { type: Boolean, default: false },
+    pdfName:         { type: String, default: '' },
+    showLogo:        { type: Boolean, default: true },
+  },
   salaryConfig: {
     lopMethod: {
       type: String,
       enum: ['calendar_days', 'fixed_30', 'working_days'],
       default: 'calendar_days'
     },
-    workingDaysPerMonth: { type: Number, default: 26 },
-    halfDayEnabled: { type: Boolean, default: true },
-    halfDayDeductionFactor: { type: Number, default: 0.5 }
+    workingDaysPerMonth:    { type: Number, default: 26 },
+    halfDayEnabled:         { type: Boolean, default: true },
+    halfDayDeductionFactor: { type: Number, default: 0.5 },
+    empSaturdaySchedule: {
+      type: String,
+      enum: ['school_default', 'all_working', 'all_holiday', 'alternate', 'one_in_three'],
+      default: 'school_default'
+    },
   },
   gradeConfig: {
     system: { type: String, enum: ['percentage', 'gpa', 'letter', 'custom'], default: 'percentage' },

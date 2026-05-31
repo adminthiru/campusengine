@@ -20,7 +20,7 @@ export function Classes() {
   const [draggingIdx, setDraggingIdx] = useState(null);
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
-  const defaultClassValues = { name: '', section: '', capacity: 40, classTeacher: '', room: '', 'fees.feeType': 'yearly', 'fees.yearly': '', 'fees.lateFee': 0 };
+  const defaultClassValues = { name: '', section: '', capacity: 40, classTeacher: '', room: '', 'fees.feeType': 'yearly', 'fees.yearly': '', 'fees.lateFee': 0, saturdaySchedule: 'school_default' };
   const { register, handleSubmit, reset, formState: { errors } } = useForm({ defaultValues: defaultClassValues });
 
   const { data: empData } = useQuery({ queryKey: ['employees-teachers'], queryFn: () => api.get('/employees?role=teacher&limit=100') });
@@ -85,7 +85,8 @@ export function Classes() {
       name: cls.name, section: cls.section, capacity: cls.capacity,
       classTeacher: cls.classTeacher?._id || '', room: cls.room,
       'fees.yearly': cls.fees?.yearly, 'fees.monthly': cls.fees?.monthly,
-      'fees.feeType': cls.fees?.feeType || 'yearly', 'fees.lateFee': cls.fees?.lateFee
+      'fees.feeType': cls.fees?.feeType || 'yearly', 'fees.lateFee': cls.fees?.lateFee,
+      saturdaySchedule: cls.saturdaySchedule || 'school_default',
     });
     setSelectedSubjects(cls.subjects?.map(s => s._id || s) || []);
     const map = {};
@@ -165,6 +166,14 @@ export function Classes() {
                   <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>FEE AMT</div>
                   <div style={{ fontWeight: 600 }}>₹{(cls.fees?.yearly || cls.fees?.monthly || 0).toLocaleString('en-IN')}</div>
                 </div>
+                {cls.saturdaySchedule && cls.saturdaySchedule !== 'school_default' && (
+                  <div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>SAT</div>
+                    <div style={{ fontWeight: 600, fontSize: 12 }}>
+                      {{ all_working: 'All Working', all_holiday: 'All Holiday', alternate: 'Alternate', one_in_three: '1-in-3' }[cls.saturdaySchedule] || cls.saturdaySchedule}
+                    </div>
+                  </div>
+                )}
               </div>
               {cls.subjects?.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
@@ -321,7 +330,6 @@ export function Classes() {
               <input className="form-control" type="number" {...register('fees.lateFee')} />
             </div>
           </FormRow>
-
           <div className="form-group">
             <label className="form-label">
               Subjects

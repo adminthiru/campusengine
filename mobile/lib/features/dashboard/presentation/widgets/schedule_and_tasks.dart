@@ -19,16 +19,17 @@ class ScheduleAndTasks extends StatelessWidget {
 
     // Extract today's periods from all timetables assigned to this teacher
     final List<Map<String, dynamic>> todaysPeriods = [];
-    
+
     for (var tt in provider.timetables) {
       final className = tt['class']?['name'] ?? '';
       final section = tt['class']?['section'] ?? '';
       final classFullName = '$className $section'.trim();
-      
+
       final schedule = tt['schedule'] as List?;
       if (schedule != null) {
         for (var daySchedule in schedule) {
-          if (daySchedule['day']?.toString().toLowerCase() == todayStr.toLowerCase()) {
+          if (daySchedule['day']?.toString().toLowerCase() ==
+              todayStr.toLowerCase()) {
             final periods = daySchedule['periods'] as List?;
             if (periods != null) {
               for (var period in periods) {
@@ -38,7 +39,8 @@ class ScheduleAndTasks extends StatelessWidget {
                     'subject': period['subject']['name'] ?? 'Subject',
                     'class': classFullName,
                     'periodNumber': period['periodNumber'],
-                    'time': 'Period ${period['periodNumber']}', // We don't have absolute times easily available here
+                    'time':
+                        'Period ${period['periodNumber']}', // We don't have absolute times easily available here
                   });
                 }
               }
@@ -47,9 +49,10 @@ class ScheduleAndTasks extends StatelessWidget {
         }
       }
     }
-    
+
     // Sort by period number
-    todaysPeriods.sort((a, b) => (a['periodNumber'] as int).compareTo(b['periodNumber'] as int));
+    todaysPeriods.sort((a, b) =>
+        (a['periodNumber'] as int).compareTo(b['periodNumber'] as int));
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
@@ -71,7 +74,9 @@ class ScheduleAndTasks extends StatelessWidget {
           else if (todaysPeriods.isEmpty)
             Text(
               'No classes scheduled for today ($todayStr).',
-              style: GoogleFonts.inter(color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+              style: GoogleFonts.inter(
+                  color:
+                      isDark ? AppColors.textMuted : AppColors.textSecondary),
             )
           else
             SingleChildScrollView(
@@ -79,9 +84,13 @@ class ScheduleAndTasks extends StatelessWidget {
               child: Row(
                 children: todaysPeriods.map((period) {
                   final idx = todaysPeriods.indexOf(period);
-                  final colors = [AppColors.primary, AppColors.accentOrange, AppColors.accentPurple];
+                  final colors = [
+                    AppColors.primary,
+                    AppColors.accentOrange,
+                    AppColors.accentPurple
+                  ];
                   final color = colors[idx % colors.length];
-                  
+
                   return Padding(
                     padding: const EdgeInsets.only(right: 12.0),
                     child: _ClassCard(
@@ -106,9 +115,18 @@ class ScheduleAndTasks extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          _TaskTile(taskName: 'Grade 10-A Midterm Papers', isCompleted: false, isDark: isDark),
-          _TaskTile(taskName: 'Update Attendance for Friday', isCompleted: false, isDark: isDark),
-          _TaskTile(taskName: 'Prepare Chemistry Lab', isCompleted: true, isDark: isDark),
+          _TaskTile(
+              taskName: 'Grade 10-A Midterm Papers',
+              isCompleted: false,
+              isDark: isDark),
+          _TaskTile(
+              taskName: 'Update Attendance for Friday',
+              isCompleted: false,
+              isDark: isDark),
+          _TaskTile(
+              taskName: 'Prepare Chemistry Lab',
+              isCompleted: true,
+              isDark: isDark),
         ],
       ),
     );
@@ -138,12 +156,14 @@ class _ClassCard extends StatelessWidget {
       width: 200,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isActive 
-          ? color 
-          : (isDark ? AppColors.cardDark : Colors.white),
+        color: isActive ? color : (isDark ? AppColors.cardDark : Colors.white),
         borderRadius: BorderRadius.circular(16),
-        border: isActive ? null : Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
-        boxShadow: isActive ? AppColors.shadowMd : (isDark ? [] : AppColors.shadowSm),
+        border: isActive
+            ? null
+            : Border.all(
+                color: isDark ? AppColors.borderDark : AppColors.borderLight),
+        boxShadow:
+            isActive ? AppColors.shadowMd : (isDark ? [] : AppColors.shadowSm),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -156,12 +176,17 @@ class _ClassCard extends StatelessWidget {
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: isActive ? Colors.white70 : (isDark ? AppColors.textMuted : AppColors.textSecondary),
+                  color: isActive
+                      ? Colors.white70
+                      : (isDark
+                          ? AppColors.textMuted
+                          : AppColors.textSecondary),
                 ),
               ),
               if (isActive)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.white24,
                     borderRadius: BorderRadius.circular(8),
@@ -183,19 +208,27 @@ class _ClassCard extends StatelessWidget {
             style: GoogleFonts.inter(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: isActive ? Colors.white : (isDark ? Colors.white : AppColors.textPrimary),
+              color: isActive
+                  ? Colors.white
+                  : (isDark ? Colors.white : AppColors.textPrimary),
             ),
           ),
           const SizedBox(height: 8),
           Row(
             children: [
-              Icon(Icons.schedule, size: 14, color: isActive ? Colors.white70 : (isDark ? AppColors.textMuted : AppColors.textMuted)),
+              Icon(Icons.schedule,
+                  size: 14,
+                  color: isActive
+                      ? Colors.white70
+                      : (isDark ? AppColors.textMuted : AppColors.textMuted)),
               const SizedBox(width: 4),
               Text(
                 time,
                 style: GoogleFonts.inter(
                   fontSize: 12,
-                  color: isActive ? Colors.white70 : (isDark ? AppColors.textMuted : AppColors.textMuted),
+                  color: isActive
+                      ? Colors.white70
+                      : (isDark ? AppColors.textMuted : AppColors.textMuted),
                 ),
               ),
             ],
@@ -225,7 +258,9 @@ class _TaskTile extends StatelessWidget {
         children: [
           Icon(
             isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: isCompleted ? AppColors.success : (isDark ? AppColors.textMuted : AppColors.textMuted),
+            color: isCompleted
+                ? AppColors.success
+                : (isDark ? AppColors.textMuted : AppColors.textMuted),
             size: 20,
           ),
           const SizedBox(width: 12),
@@ -234,8 +269,8 @@ class _TaskTile extends StatelessWidget {
               taskName,
               style: GoogleFonts.inter(
                 fontSize: 14,
-                color: isCompleted 
-                    ? (isDark ? AppColors.textMuted : AppColors.textMuted) 
+                color: isCompleted
+                    ? (isDark ? AppColors.textMuted : AppColors.textMuted)
                     : (isDark ? Colors.white : AppColors.textPrimary),
                 decoration: isCompleted ? TextDecoration.lineThrough : null,
               ),

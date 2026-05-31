@@ -3,14 +3,32 @@ const Student = require('../models/Student');
 const Employee = require('../models/Employee');
 const Parent = require('../models/Parent');
 const Class = require('../models/Class');
+const School = require('../models/School');
 const { sendSMS } = require('../utils/sms');
 const { notifyParentUsers, notifyStudentUsers } = require('../utils/notify');
+const { getHolidaysForMonth, isSaturdayWorking, getWorkingDaysForMonth } = require('../utils/holidays');
 
 // Mark student attendance
 const markStudentAttendance = async (req, res) => {
   try {
     const { classId, date, records } = req.body;
     const schoolId = req.user.school;
+
+    // Check if this date is a holiday or a Saturday holiday for the class
+    const dateObj = new Date(date);
+    const year  = dateObj.getFullYear();
+    const month = dateObj.getMonth() + 1;
+    const holidays = await getHolidaysForMonth(schoolId, year, month);
+    const dateStr   = dateObj.toISOString().slice(0, 10);
+    const isHoliday = holidays.has(dateStr);
+
+    let isSaturdayHoliday = false;
+    if (!isHoliday && dateObj.getDay() === 6 && classId) {
+      const classDoc = await Class.findById(classId).select('saturdaySchedule');
+      const school   = await School.findById(schoolId).select('workingDays');
+      const schoolSatDefault = school?.workingDays?.saturday ?? false;
+      isSaturdayHoliday = !isSaturdayWorking(classDoc?.saturdaySchedule, dateObj, schoolSatDefault);
+    }
 
     // Check if already marked (one record per class per day)
     const existing = await Attendance.findOne({
@@ -82,7 +100,17 @@ const markStudentAttendance = async (req, res) => {
       notifyStudentUsers(schoolId, [rec.student], 'notifyOnAttendance', ntitle, nmsg, ntype);
     }
 
-    res.json({ success: true, message: 'Attendance marked' });
+    res.json({
+      success: true,
+      message: 'Attendance marked',
+      isHoliday,
+      isSaturdayHoliday,
+      holidayWarning: isHoliday
+        ? 'This date is marked as a school holiday. Attendance saved but will not affect salary LOP.'
+        : isSaturdayHoliday
+        ? 'This Saturday is a holiday for this class based on the Saturday schedule.'
+        : null,
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -93,6 +121,11 @@ const markEmployeeAttendance = async (req, res) => {
   try {
     const { date, records } = req.body;
     const schoolId = req.user.school;
+
+    // Holiday check
+    const dateObj = new Date(date);
+    const holidays = await getHolidaysForMonth(schoolId, dateObj.getFullYear(), dateObj.getMonth() + 1);
+    const isHoliday = holidays.has(dateObj.toISOString().slice(0, 10));
 
     const existing = await Attendance.findOne({
       school: schoolId, type: 'employee',
@@ -108,7 +141,14 @@ const markEmployeeAttendance = async (req, res) => {
         date: new Date(date), markedBy: req.user._id, records
       });
     }
-    res.json({ success: true, message: 'Attendance marked' });
+    res.json({
+      success: true,
+      message: 'Attendance marked',
+      isHoliday,
+      holidayWarning: isHoliday
+        ? 'This date is marked as a school holiday. Attendance saved but will not affect salary LOP.'
+        : null,
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -143,29 +183,46 @@ const getAttendance = async (req, res) => {
   }
 };
 
-// Get student attendance summary
+// Get student attendance summary (includes working days)
 const getStudentAttendanceSummary = async (req, res) => {
   try {
-    const { studentId, month, year } = req.query;
-    const query = { school: req.user.school, type: 'student', 'records.student': studentId };
+    const { studentId, month, year, classId } = req.query;
+    const schoolId = req.user.school;
+    const query = { school: schoolId, type: 'student', 'records.student': studentId };
     if (month && year) {
       query.date = { $gte: new Date(year, month - 1, 1), $lt: new Date(year, month, 1) };
     }
     const records = await Attendance.find(query);
-    let present = 0, absent = 0, late = 0;
+    let present = 0, absent = 0, late = 0, half_day = 0;
     records.forEach(a => {
       const rec = a.records.find(r => r.student?.toString() === studentId);
       if (rec) {
-        if (rec.status === 'present') present++;
-        else if (rec.status === 'absent') absent++;
-        else if (rec.status === 'late') late++;
+        if (rec.status === 'present')  present++;
+        else if (rec.status === 'absent')   absent++;
+        else if (rec.status === 'late')     late++;
+        else if (rec.status === 'half_day') half_day++;
       }
     });
-    const total = present + absent + late;
-    res.json({ success: true, summary: { present, absent, late, total, percentage: total ? Math.round((present / total) * 100) : 0 } });
+
+    // Calculate actual working days for the month
+    let workingDays = null;
+    if (month && year) {
+      const schoolDoc = await School.findById(schoolId).select('workingDays');
+      let satSchedule = 'school_default';
+      if (classId) {
+        const classDoc = await Class.findById(classId).select('saturdaySchedule');
+        satSchedule = classDoc?.saturdaySchedule || 'school_default';
+      }
+      const result = await getWorkingDaysForMonth(schoolId, Number(year), Number(month), schoolDoc?.workingDays || {}, satSchedule);
+      workingDays = result.workingDays;
+    }
+
+    const total = present + absent + late + half_day;
+    const percentage = workingDays ? Math.round(((present + half_day * 0.5) / workingDays) * 100) : (total ? Math.round((present / total) * 100) : 0);
+    res.json({ success: true, summary: { present, absent, late, half_day, total, workingDays, percentage } });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-module.exports = { markStudentAttendance, markEmployeeAttendance, getAttendance, getStudentAttendanceSummary };
+module.exports = { markStudentAttendance, markEmployeeAttendance, getAttendance, getStudentAttendanceSummary, getWorkingDaysForMonth };

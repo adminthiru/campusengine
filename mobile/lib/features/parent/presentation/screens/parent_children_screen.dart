@@ -82,7 +82,8 @@ class _ChildSelector extends StatelessWidget {
               decoration: BoxDecoration(
                 color: sel ? AppColors.primary : Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: sel ? AppColors.primary : AppColors.borderLight),
+                border: Border.all(
+                    color: sel ? AppColors.primary : AppColors.borderLight),
               ),
               child: Text(
                 children[i].name,
@@ -133,9 +134,9 @@ class _ChildDetailViewState extends State<_ChildDetailView>
     _tabLabels.clear();
     _tabLabels.add('Info');
     if (widget.perms.parentCan('viewAttendance')) _tabLabels.add('Attendance');
-    if (widget.perms.parentCan('viewHomework'))   _tabLabels.add('Homework');
-    if (widget.perms.parentCan('viewExams'))      _tabLabels.add('Exams');
-    if (widget.perms.parentCan('viewFees'))       _tabLabels.add('Fees');
+    if (widget.perms.parentCan('viewHomework')) _tabLabels.add('Homework');
+    if (widget.perms.parentCan('viewExams')) _tabLabels.add('Exams');
+    if (widget.perms.parentCan('viewFees')) _tabLabels.add('Fees');
     _tab = TabController(length: _tabLabels.length, vsync: this);
   }
 
@@ -159,12 +160,18 @@ class _ChildDetailViewState extends State<_ChildDetailView>
             controller: _tab,
             children: _tabLabels.map((label) {
               switch (label) {
-                case 'Info':       return _InfoTab(child: widget.child);
-                case 'Attendance': return _AttendanceTab(childId: widget.child.id);
-                case 'Homework':   return _HomeworkTab(classId: widget.child.classId ?? '');
-                case 'Exams':      return _ExamsTab(classId: widget.child.classId ?? '');
-                case 'Fees':       return _FeesTab(studentId: widget.child.id);
-                default:           return const SizedBox();
+                case 'Info':
+                  return _InfoTab(child: widget.child);
+                case 'Attendance':
+                  return _AttendanceTab(childId: widget.child.id);
+                case 'Homework':
+                  return _HomeworkTab(classId: widget.child.classId ?? '');
+                case 'Exams':
+                  return _ExamsTab(classId: widget.child.classId ?? '');
+                case 'Fees':
+                  return _FeesTab(studentId: widget.child.id);
+                default:
+                  return const SizedBox();
               }
             }).toList(),
           ),
@@ -190,7 +197,8 @@ class _InfoTab extends StatelessWidget {
         decoration: BoxDecoration(
           color: isDark ? AppColors.cardDark : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+          border: Border.all(
+              color: isDark ? AppColors.borderDark : AppColors.borderLight),
         ),
         child: Column(
           children: [
@@ -199,15 +207,23 @@ class _InfoTab extends StatelessWidget {
               backgroundColor: AppColors.primary.withValues(alpha: 0.1),
               child: Text(
                 child.name.substring(0, 1).toUpperCase(),
-                style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.primary),
+                style: GoogleFonts.inter(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary),
               ),
             ),
             const SizedBox(height: 12),
-            Text(child.name, style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.w700)),
-            Text(child.classLabel, style: GoogleFonts.inter(fontSize: 13, color: AppColors.textMuted)),
+            Text(child.name,
+                style: GoogleFonts.inter(
+                    fontSize: 17, fontWeight: FontWeight.w700)),
+            Text(child.classLabel,
+                style: GoogleFonts.inter(
+                    fontSize: 13, color: AppColors.textMuted)),
             const SizedBox(height: 16),
             _infoRow('Admission No.', child.admissionNumber),
-            if (child.bloodGroup != null) _infoRow('Blood Group', child.bloodGroup!),
+            if (child.bloodGroup != null)
+              _infoRow('Blood Group', child.bloodGroup!),
             if (child.phone != null) _infoRow('Phone', child.phone!),
           ],
         ),
@@ -216,17 +232,22 @@ class _InfoTab extends StatelessWidget {
   }
 
   Widget _infoRow(String label, String value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
-    child: Row(
-      children: [
-        SizedBox(
-          width: 120,
-          child: Text(label, style: GoogleFonts.inter(fontSize: 13, color: AppColors.textMuted)),
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 120,
+              child: Text(label,
+                  style: GoogleFonts.inter(
+                      fontSize: 13, color: AppColors.textMuted)),
+            ),
+            Expanded(
+                child: Text(value,
+                    style: GoogleFonts.inter(
+                        fontSize: 13, fontWeight: FontWeight.w500))),
+          ],
         ),
-        Expanded(child: Text(value, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500))),
-      ],
-    ),
-  );
+      );
 }
 
 // ─── Attendance Tab ──────────────────────────────────────────────────────────
@@ -286,8 +307,8 @@ class _AttendanceTabState extends State<_AttendanceTab> {
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
     final firstWeekday = DateTime(_month.year, _month.month, 1).weekday;
     final present = dayStatus.values.where((s) => s == 'P').length;
-    final absent  = dayStatus.values.where((s) => s == 'A').length;
-    final leave   = dayStatus.values.where((s) => s == 'L').length;
+    final absent = dayStatus.values.where((s) => s == 'A').length;
+    final leave = dayStatus.values.where((s) => s == 'L').length;
 
     return Column(
       children: [
@@ -296,12 +317,17 @@ class _AttendanceTabState extends State<_AttendanceTab> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              IconButton(onPressed: () => _changeMonth(-1), icon: const Icon(Icons.chevron_left)),
+              IconButton(
+                  onPressed: () => _changeMonth(-1),
+                  icon: const Icon(Icons.chevron_left)),
               Text(
                 '${_monthName(_month.month)} ${_month.year}',
-                style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600),
+                style: GoogleFonts.inter(
+                    fontSize: 15, fontWeight: FontWeight.w600),
               ),
-              IconButton(onPressed: () => _changeMonth(1), icon: const Icon(Icons.chevron_right)),
+              IconButton(
+                  onPressed: () => _changeMonth(1),
+                  icon: const Icon(Icons.chevron_right)),
             ],
           ),
         ),
@@ -326,16 +352,21 @@ class _AttendanceTabState extends State<_AttendanceTab> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: GridView.builder(
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 7, mainAxisSpacing: 6, crossAxisSpacing: 6,
+                  crossAxisCount: 7,
+                  mainAxisSpacing: 6,
+                  crossAxisSpacing: 6,
                 ),
                 itemCount: daysInMonth + (firstWeekday - 1),
                 itemBuilder: (_, i) {
                   if (i < firstWeekday - 1) return const SizedBox();
                   final day = i - (firstWeekday - 2);
                   final status = dayStatus[day];
-                  final color = status == 'P' ? AppColors.accentGreen
-                              : status == 'A' ? AppColors.accentRed
-                              : status == 'L' ? AppColors.warning
+                  final color = status == 'P'
+                      ? AppColors.accentGreen
+                      : status == 'A'
+                          ? AppColors.accentRed
+                          : status == 'L'
+                              ? AppColors.warning
                               : null;
                   return Container(
                     decoration: BoxDecoration(
@@ -344,7 +375,10 @@ class _AttendanceTabState extends State<_AttendanceTab> {
                           : (isDark ? AppColors.cardDark : Colors.white),
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(
-                        color: color ?? (isDark ? AppColors.borderDark : AppColors.borderLight),
+                        color: color ??
+                            (isDark
+                                ? AppColors.borderDark
+                                : AppColors.borderLight),
                       ),
                     ),
                     child: Center(
@@ -367,18 +401,31 @@ class _AttendanceTabState extends State<_AttendanceTab> {
   }
 
   Widget _statChip(String label, Color color) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Text(label, style: GoogleFonts.inter(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(label,
+            style: GoogleFonts.inter(
+                fontSize: 12, color: color, fontWeight: FontWeight.w600)),
+      );
 
   String _monthName(int m) => const [
-    '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-  ][m];
+        '',
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
+      ][m];
 }
 
 // ─── Homework Tab ────────────────────────────────────────────────────────────
@@ -401,9 +448,13 @@ class _HomeworkTabState extends State<_HomeworkTab> {
   }
 
   Future<void> _load() async {
-    if (widget.classId.isEmpty) { setState(() => _loading = false); return; }
+    if (widget.classId.isEmpty) {
+      setState(() => _loading = false);
+      return;
+    }
     try {
-      final res = await ApiClient.get('/homework', params: {'classId': widget.classId});
+      final res =
+          await ApiClient.get('/homework', params: {'classId': widget.classId});
       setState(() {
         _items = res.data['homework'] as List<dynamic>? ?? [];
         _loading = false;
@@ -417,7 +468,9 @@ class _HomeworkTabState extends State<_HomeworkTab> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_items.isEmpty) {
-      return Center(child: Text('No homework', style: GoogleFonts.inter(color: AppColors.textMuted)));
+      return Center(
+          child: Text('No homework',
+              style: GoogleFonts.inter(color: AppColors.textMuted)));
     }
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return ListView.builder(
@@ -432,19 +485,23 @@ class _HomeworkTabState extends State<_HomeworkTab> {
           decoration: BoxDecoration(
             color: isDark ? AppColors.cardDark : Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+            border: Border.all(
+                color: isDark ? AppColors.borderDark : AppColors.borderLight),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(h['title'] ?? 'Homework',
-                  style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+                  style: GoogleFonts.inter(
+                      fontSize: 14, fontWeight: FontWeight.w600)),
               if (h['subject']?['name'] != null)
                 Text(h['subject']['name'],
-                    style: GoogleFonts.inter(fontSize: 12, color: AppColors.primary)),
+                    style: GoogleFonts.inter(
+                        fontSize: 12, color: AppColors.primary)),
               if (due.isNotEmpty)
                 Text('Due: $due',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
+                    style: GoogleFonts.inter(
+                        fontSize: 12, color: AppColors.textMuted)),
             ],
           ),
         );
@@ -482,9 +539,13 @@ class _ExamsTabState extends State<_ExamsTab> {
   }
 
   Future<void> _load() async {
-    if (widget.classId.isEmpty) { setState(() => _loading = false); return; }
+    if (widget.classId.isEmpty) {
+      setState(() => _loading = false);
+      return;
+    }
     try {
-      final res = await ApiClient.get('/exams', params: {'classId': widget.classId});
+      final res =
+          await ApiClient.get('/exams', params: {'classId': widget.classId});
       setState(() {
         _exams = res.data['exams'] as List<dynamic>? ?? [];
         _loading = false;
@@ -498,7 +559,9 @@ class _ExamsTabState extends State<_ExamsTab> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_exams.isEmpty) {
-      return Center(child: Text('No exams', style: GoogleFonts.inter(color: AppColors.textMuted)));
+      return Center(
+          child: Text('No exams',
+              style: GoogleFonts.inter(color: AppColors.textMuted)));
     }
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return ListView.builder(
@@ -513,7 +576,8 @@ class _ExamsTabState extends State<_ExamsTab> {
           decoration: BoxDecoration(
             color: isDark ? AppColors.cardDark : Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+            border: Border.all(
+                color: isDark ? AppColors.borderDark : AppColors.borderLight),
           ),
           child: Row(
             children: [
@@ -522,17 +586,21 @@ class _ExamsTabState extends State<_ExamsTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(e['name'] ?? 'Exam',
-                        style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+                        style: GoogleFonts.inter(
+                            fontSize: 14, fontWeight: FontWeight.w600)),
                     Text(_fmtDate(e['date']),
-                        style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
+                        style: GoogleFonts.inter(
+                            fontSize: 12, color: AppColors.textMuted)),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: (isPublished ? AppColors.accentGreen : AppColors.warning)
-                      .withValues(alpha: 0.1),
+                  color:
+                      (isPublished ? AppColors.accentGreen : AppColors.warning)
+                          .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -540,7 +608,8 @@ class _ExamsTabState extends State<_ExamsTab> {
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: isPublished ? AppColors.accentGreen : AppColors.warning,
+                    color:
+                        isPublished ? AppColors.accentGreen : AppColors.warning,
                   ),
                 ),
               ),
@@ -582,7 +651,8 @@ class _FeesTabState extends State<_FeesTab> {
 
   Future<void> _load() async {
     try {
-      final res = await ApiClient.get('/fees', params: {'studentId': widget.studentId});
+      final res =
+          await ApiClient.get('/fees', params: {'studentId': widget.studentId});
       setState(() {
         _fees = res.data['fees'] as List<dynamic>? ?? [];
         _loading = false;
@@ -596,12 +666,14 @@ class _FeesTabState extends State<_FeesTab> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_fees.isEmpty) {
-      return Center(child: Text('No fee records', style: GoogleFonts.inter(color: AppColors.textMuted)));
+      return Center(
+          child: Text('No fee records',
+              style: GoogleFonts.inter(color: AppColors.textMuted)));
     }
     final isDark = Theme.of(context).brightness == Brightness.dark;
     int totalDue = 0, totalPaid = 0;
     for (final f in _fees) {
-      totalDue  += (f['netAmount']  as num? ?? 0).toInt();
+      totalDue += (f['netAmount'] as num? ?? 0).toInt();
       totalPaid += (f['paidAmount'] as num? ?? 0).toInt();
     }
     final pending = totalDue - totalPaid;
@@ -612,9 +684,9 @@ class _FeesTabState extends State<_FeesTab> {
         children: [
           Row(
             children: [
-              _summaryCard('Total',   '₹$totalDue',  AppColors.textPrimary),
+              _summaryCard('Total', '₹$totalDue', AppColors.textPrimary),
               const SizedBox(width: 12),
-              _summaryCard('Paid',    '₹$totalPaid', AppColors.accentGreen),
+              _summaryCard('Paid', '₹$totalPaid', AppColors.accentGreen),
               const SizedBox(width: 12),
               _summaryCard('Pending', '₹$pending',
                   pending > 0 ? AppColors.accentRed : AppColors.accentGreen),
@@ -625,7 +697,7 @@ class _FeesTabState extends State<_FeesTab> {
             final f = _fees[i];
             final status = f['status'] as String? ?? '';
             final sColor = _statusColor(status);
-            final net  = (f['netAmount']  as num? ?? 0).toInt();
+            final net = (f['netAmount'] as num? ?? 0).toInt();
             final paid = (f['paidAmount'] as num? ?? 0).toInt();
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
@@ -633,7 +705,9 @@ class _FeesTabState extends State<_FeesTab> {
               decoration: BoxDecoration(
                 color: isDark ? AppColors.cardDark : Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+                border: Border.all(
+                    color:
+                        isDark ? AppColors.borderDark : AppColors.borderLight),
               ),
               child: Row(
                 children: [
@@ -642,21 +716,29 @@ class _FeesTabState extends State<_FeesTab> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(f['feeType']?['name'] ?? f['description'] ?? 'Fee',
-                            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+                            style: GoogleFonts.inter(
+                                fontSize: 14, fontWeight: FontWeight.w600)),
                         Text('₹$paid / ₹$net',
-                            style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
+                            style: GoogleFonts.inter(
+                                fontSize: 12, color: AppColors.textMuted)),
                       ],
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: sColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      status.isEmpty ? '' : status[0].toUpperCase() + status.substring(1),
-                      style: GoogleFonts.inter(fontSize: 12, color: sColor, fontWeight: FontWeight.w600),
+                      status.isEmpty
+                          ? ''
+                          : status[0].toUpperCase() + status.substring(1),
+                      style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: sColor,
+                          fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -669,25 +751,33 @@ class _FeesTabState extends State<_FeesTab> {
   }
 
   Widget _summaryCard(String label, String val, Color color) => Expanded(
-    child: Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(children: [
-        Text(val,   style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: color)),
-        Text(label, style: GoogleFonts.inter(fontSize: 11, color: AppColors.textMuted)),
-      ]),
-    ),
-  );
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(children: [
+            Text(val,
+                style: GoogleFonts.inter(
+                    fontSize: 14, fontWeight: FontWeight.w700, color: color)),
+            Text(label,
+                style: GoogleFonts.inter(
+                    fontSize: 11, color: AppColors.textMuted)),
+          ]),
+        ),
+      );
 
   Color _statusColor(String s) {
     switch (s) {
-      case 'paid':    return AppColors.accentGreen;
-      case 'partial': return AppColors.warning;
-      case 'overdue': return AppColors.accentRed;
-      default:        return AppColors.textMuted;
+      case 'paid':
+        return AppColors.accentGreen;
+      case 'partial':
+        return AppColors.warning;
+      case 'overdue':
+        return AppColors.accentRed;
+      default:
+        return AppColors.textMuted;
     }
   }
 }

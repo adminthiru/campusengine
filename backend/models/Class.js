@@ -25,6 +25,14 @@ const classSchema = new mongoose.Schema({
     subject: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject' },
     teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }
   }],
+  saturdaySchedule: {
+    type: String,
+    enum: ['school_default', 'all_working', 'all_holiday', 'alternate', 'one_in_three'],
+    default: 'school_default',
+    // school_default  = use school.workingDays.saturday
+    // alternate       = 1st & 3rd Saturdays working, 2nd & 4th holiday
+    // one_in_three    = 1st Saturday working, 2nd & 3rd holiday (repeating)
+  },
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 

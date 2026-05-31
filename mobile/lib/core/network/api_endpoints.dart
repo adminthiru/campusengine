@@ -40,14 +40,18 @@ class ApiEndpoints {
   static const String homework      = '$_api/homework';
   static String homeworkById(String id)        => '$_api/homework/$id';
   static String homeworkSubmissions(String id) => '$_api/homework/$id/submissions';
+  static String submissionUpdate(String hwId, String studentId) => '$_api/homework/$hwId/submissions/$studentId';
+  static String homeworkNotify(String id) => '$_api/homework/$id/notify';
 
   // ── Timetable ─────────────────────────────────────────────────────────────
   static const String timetable     = '$_api/timetable';
 
   // ── Exams ─────────────────────────────────────────────────────────────────
-  static const String exams         = '$_api/exams';
-  static String examById(String id) => '$_api/exams/$id';
-  static String examResults(String id) => '$_api/exams/$id/results';
+  static const String exams          = '$_api/exams';
+  static String examById(String id)  => '$_api/exams/$id';
+  static String examPublish(String id) => '$_api/exams/$id/publish';
+  static const String examResults    = '$_api/exams/results';
+  static const String examMarks      = '$_api/exams/marks';
 
   // ── Fees (view-only for teacher) ──────────────────────────────────────────
   static const String fees          = '$_api/fees';
@@ -60,11 +64,8 @@ class ApiEndpoints {
   static const String notifications = '$_api/notifications';
   static const String markAllRead   = '$_api/notifications/mark-all-read';
 
-  // ── Events ────────────────────────────────────────────────────────────────
-  static const String events        = '$_api/events';
-
-  // ── Holidays ─────────────────────────────────────────────────────────────
-  static const String holidays      = '$_api/holidays';
+  // ── School Calendar (holidays, events, exam days, meetings) ──────────────
+  static const String calendar      = '$_api/calendar';
 
   // ── Reports ───────────────────────────────────────────────────────────────
   static const String reportsTeacher = '$_api/reports/teacher';

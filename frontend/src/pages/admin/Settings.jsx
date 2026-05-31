@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Settings as SettingsIcon, School, Key, CreditCard, Bell, Plus, Trash2, Check, Upload, CalendarCheck, ListOrdered, ShieldCheck, GraduationCap, BookOpen, UsersRound, UserCheck, KeyRound, Banknote } from 'lucide-react';
+import { Settings as SettingsIcon, School, Key, CreditCard, Bell, Plus, Trash2, Check, Upload, CalendarCheck, ListOrdered, ShieldCheck, GraduationCap, BookOpen, UsersRound, UserCheck, KeyRound, Banknote, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useAuth } from '../../store/AuthContext';
@@ -16,6 +16,7 @@ const TABS = [
   { id: 'teacherroles',  label: 'Teacher Roles',    icon: ShieldCheck },
   { id: 'parentroles',   label: 'Parent Roles',     icon: UsersRound },
   { id: 'studentroles',  label: 'Student Roles',    icon: UserCheck },
+  { id: 'pdftemplates', label: 'PDF Templates',     icon: FileText },
   { id: 'salaryconfig',  label: 'Salary & LOP',      icon: Banknote },
   { id: 'credentials',   label: 'Login Credentials', icon: KeyRound },
   { id: 'subscription',  label: 'Subscription',     icon: CreditCard },
@@ -70,6 +71,7 @@ export default function Settings() {
           {activeTab === 'teacherroles' && isAdmin && <TeacherRolesSettings />}
           {activeTab === 'parentroles'  && isAdmin && <ParentRolesSettings />}
           {activeTab === 'studentroles' && isAdmin && <StudentRolesSettings />}
+          {activeTab === 'pdftemplates' && isAdmin && <PdfTemplateSettings />}
           {activeTab === 'salaryconfig' && isAdmin && <SalaryConfigSettings />}
           {activeTab === 'credentials'  && isAdmin && <CredentialsSettings />}
           {activeTab === 'subscription' && isAdmin && <SubscriptionSettings />}
@@ -540,6 +542,245 @@ function FeeTermsSettings() {
       <button className="btn btn-primary" onClick={save} disabled={saving}>
         {saving ? 'Saving...' : 'Save Fee Terms'}
       </button>
+    </div>
+  );
+}
+
+function PdfTemplateSettings() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
+  const cfg = data?.school?.pdfConfig || {};
+
+  const [primaryColor,   setPrimaryColor]   = useState('');
+  const [headerStyle,    setHeaderStyle]    = useState('solid');
+  const [footerText,     setFooterText]     = useState('');
+  const [signatureLabel, setSignatureLabel] = useState('');
+  const [showBorderFrame,setShowBorderFrame]= useState(false);
+  const [pdfName,        setPdfName]        = useState('');
+  const [showLogo,       setShowLogo]       = useState(true);
+  const [logoUploading,  setLogoUploading]  = useState(false);
+  const [previewing,     setPreviewing]     = useState(false);
+  const [initialized,    setInitialized]    = useState(false);
+
+  const school = data?.school || {};
+  const currentLogo = school.logo;
+
+  if (!isLoading && !initialized) {
+    setPrimaryColor(cfg.primaryColor     || '#1a56e8');
+    setHeaderStyle(cfg.headerStyle       || 'solid');
+    setFooterText(cfg.footerText         || '');
+    setSignatureLabel(cfg.signatureLabel || 'Principal / Authorized Signatory');
+    setShowBorderFrame(cfg.showBorderFrame || false);
+    setPdfName(cfg.pdfName               || '');
+    setShowLogo(cfg.showLogo             !== false);
+    setInitialized(true);
+  }
+
+  const saveMut = useMutation({
+    mutationFn: (body) => api.put('/school', { pdfConfig: body }),
+    onSuccess: () => { toast.success('PDF template settings saved'); qc.invalidateQueries({ queryKey: ['school'] }); },
+    onError: () => toast.error('Failed to save'),
+  });
+
+  const handleSave = () => saveMut.mutate({ primaryColor, headerStyle, footerText, signatureLabel, showBorderFrame, pdfName, showLogo });
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('logo', file);
+      await api.post('/school/upload-logo', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      toast.success('Logo uploaded');
+      qc.invalidateQueries({ queryKey: ['school'] });
+    } catch { toast.error('Logo upload failed'); }
+    setLogoUploading(false);
+  };
+
+  const handlePreview = async () => {
+    setPreviewing(true);
+    try {
+      const res = await fetch('/api/school/pdf-preview', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (!res.ok) throw new Error('Failed');
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch { toast.error('Failed to generate preview'); }
+    setPreviewing(false);
+  };
+
+  const HEADER_STYLES = [
+    {
+      id: 'solid',
+      label: 'Solid Header',
+      desc: 'Full-width colored header band with white text',
+      preview: (color) => (
+        <div style={{ borderRadius: 6, overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+          <div style={{ background: color, padding: '8px 12px', color: '#fff', fontSize: 11, fontWeight: 700 }}>School Name</div>
+          <div style={{ background: '#f0f4ff', padding: '3px 12px', fontSize: 9, color: color, fontWeight: 600 }}>DOCUMENT TITLE</div>
+          <div style={{ background: '#fff', padding: '6px 12px', fontSize: 8, color: '#666' }}>Document content...</div>
+        </div>
+      )
+    },
+    {
+      id: 'stripe',
+      label: 'Stripe Header',
+      desc: 'Thin colored top stripe with light gray header area',
+      preview: (color) => (
+        <div style={{ borderRadius: 6, overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+          <div style={{ background: color, height: 4 }} />
+          <div style={{ background: '#f8fafc', padding: '8px 12px' }}>
+            <div style={{ color: color, fontSize: 11, fontWeight: 700 }}>School Name</div>
+            <div style={{ fontSize: 8, color: '#64748b' }}>Address · Phone</div>
+          </div>
+          <div style={{ background: '#fff', padding: '6px 12px', fontSize: 8, color: '#666' }}>Document content...</div>
+        </div>
+      )
+    },
+    {
+      id: 'minimal',
+      label: 'Minimal Header',
+      desc: 'Left accent bar with clean text layout',
+      preview: (color) => (
+        <div style={{ borderRadius: 6, overflow: 'hidden', border: '1px solid #e2e8f0', padding: '8px 12px', background: '#fff' }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+            <div style={{ width: 3, background: color, borderRadius: 2 }} />
+            <div style={{ color: color, fontSize: 11, fontWeight: 700 }}>School Name</div>
+          </div>
+          <div style={{ borderTop: `2px solid ${color}`, paddingTop: 4, textAlign: 'right', fontSize: 9, color: color, fontWeight: 600 }}>DOCUMENT TITLE</div>
+        </div>
+      )
+    },
+  ];
+
+  const PRESET_COLORS = ['#1a56e8','#7c3aed','#0891b2','#059669','#dc2626','#d97706','#0f172a','#be185d'];
+
+  if (isLoading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>;
+
+  return (
+    <div>
+      <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 600 }}>PDF Template Settings</h3>
+      <p style={{ margin: '0 0 24px', fontSize: 13, color: 'var(--text-muted)' }}>
+        Customize the look of all generated PDFs — payslips, fee receipts, result cards and letters.
+      </p>
+
+      {/* Logo + School Name */}
+      <div style={{ padding: 16, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-card,#fff)', marginBottom: 28, display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+        {/* Logo */}
+        <div style={{ textAlign: 'center', flexShrink: 0 }}>
+          <div style={{ width: 80, height: 80, borderRadius: 10, border: '2px dashed var(--border)', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: 8 }}>
+            {currentLogo
+              ? <img src={currentLogo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              : <span style={{ fontSize: 28 }}>🏫</span>}
+          </div>
+          <label style={{ cursor: 'pointer' }}>
+            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLogoUpload} />
+            <span className="btn btn-secondary btn-sm" style={{ fontSize: 11 }}>
+              {logoUploading ? 'Uploading...' : currentLogo ? 'Change Logo' : 'Upload Logo'}
+            </span>
+          </label>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>PNG, JPG · Max 5MB</div>
+        </div>
+
+        {/* School name + logo toggle */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label className="form-label">School Name on PDFs</label>
+            <input className="form-control" value={pdfName} onChange={e => setPdfName(e.target.value)}
+              placeholder={school.name || 'Same as school name'} />
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              Leave blank to use the default school name
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>Show Logo on PDFs</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Display school logo in PDF headers</div>
+            </div>
+            <label style={{ position: 'relative', display: 'inline-block', width: 44, height: 24, cursor: 'pointer' }}>
+              <input type="checkbox" checked={showLogo} onChange={e => setShowLogo(e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
+              <span style={{ position: 'absolute', inset: 0, borderRadius: 24, background: showLogo ? 'var(--primary)' : '#cbd5e1', transition: '0.2s' }}>
+                <span style={{ position: 'absolute', left: showLogo ? 22 : 2, top: 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
+              </span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* Header Style */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Header Style</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+          {HEADER_STYLES.map(s => (
+            <label key={s.id} onClick={() => setHeaderStyle(s.id)} style={{ cursor: 'pointer', borderRadius: 10, border: `2px solid ${headerStyle === s.id ? 'var(--primary)' : 'var(--border)'}`, background: headerStyle === s.id ? '#eff6ff' : 'var(--bg-card,#fff)', padding: 12, transition: 'all 0.15s' }}>
+              <div style={{ marginBottom: 8 }}>{s.preview(primaryColor || '#1a56e8')}</div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{s.label}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{s.desc}</div>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Colors */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Brand Color</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          {PRESET_COLORS.map(c => (
+            <button key={c} onClick={() => setPrimaryColor(c)} style={{ width: 32, height: 32, borderRadius: '50%', background: c, border: primaryColor === c ? '3px solid var(--primary)' : '3px solid transparent', outline: primaryColor === c ? '2px solid white' : 'none', cursor: 'pointer', transition: 'all 0.15s' }} title={c} />
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div>
+            <label className="form-label" style={{ display: 'block', marginBottom: 4 }}>Custom color</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="color" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)} style={{ width: 44, height: 36, borderRadius: 6, border: '1px solid var(--border)', padding: 2, cursor: 'pointer' }} />
+              <input className="form-control" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)} style={{ width: 110, fontFamily: 'monospace' }} placeholder="#1a56e8" />
+            </div>
+          </div>
+          <div style={{ padding: '8px 16px', borderRadius: 8, background: primaryColor, color: '#fff', fontSize: 12, fontWeight: 600 }}>Preview</div>
+        </div>
+      </div>
+
+      {/* Footer text + Signature */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+        <div>
+          <label className="form-label">Footer Text</label>
+          <input className="form-control" value={footerText} onChange={e => setFooterText(e.target.value)} placeholder="This is a computer generated document." />
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Shown at the bottom of every PDF</div>
+        </div>
+        <div>
+          <label className="form-label">Signature Label</label>
+          <input className="form-control" value={signatureLabel} onChange={e => setSignatureLabel(e.target.value)} placeholder="Principal / Authorized Signatory" />
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Shown above the signature line</div>
+        </div>
+      </div>
+
+      {/* Border frame toggle */}
+      <div style={{ padding: 16, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg-card,#fff)', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>Border Frame on Result Cards</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Adds a decorative double-border frame around result cards (classic exam card style)</div>
+        </div>
+        <label style={{ position: 'relative', display: 'inline-block', width: 44, height: 24, cursor: 'pointer', flexShrink: 0 }}>
+          <input type="checkbox" checked={showBorderFrame} onChange={e => setShowBorderFrame(e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
+          <span style={{ position: 'absolute', inset: 0, borderRadius: 24, background: showBorderFrame ? 'var(--primary)' : '#cbd5e1', transition: '0.2s' }}>
+            <span style={{ position: 'absolute', left: showBorderFrame ? 22 : 2, top: 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
+          </span>
+        </label>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <button className="btn btn-primary" onClick={handleSave} disabled={saveMut.isPending} style={{ minWidth: 160 }}>
+          {saveMut.isPending ? 'Saving...' : 'Save Template Settings'}
+        </button>
+        <button className="btn btn-secondary" onClick={handlePreview} disabled={previewing} style={{ minWidth: 140 }}>
+          {previewing ? 'Generating...' : '👁 Preview PDF'}
+        </button>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Opens a sample payslip PDF in a new tab</span>
+      </div>
     </div>
   );
 }

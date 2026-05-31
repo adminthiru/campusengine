@@ -67,17 +67,41 @@ class AppTypography {
     );
   }
 
+  // Size 10
+  static TextStyle s10Regular({Color? color}) => _base(10, FontWeight.w400, 16, color);
+  static TextStyle s10Medium({Color? color}) => _base(10, FontWeight.w500, 16, color);
+  static TextStyle s10SemiBold({Color? color}) => _base(10, FontWeight.w600, 16, color);
+  static TextStyle s10Bold({Color? color}) => _base(10, FontWeight.w700, 16, color);
+
+  // Size 11
+  static TextStyle s11Regular({Color? color}) => _base(11, FontWeight.w400, 17, color);
+  static TextStyle s11Medium({Color? color}) => _base(11, FontWeight.w500, 17, color);
+  static TextStyle s11SemiBold({Color? color}) => _base(11, FontWeight.w600, 17, color);
+  static TextStyle s11Bold({Color? color}) => _base(11, FontWeight.w700, 17, color);
+
   // Size 12
   static TextStyle s12Regular({Color? color}) => _base(12, FontWeight.w400, 18, color);
   static TextStyle s12Medium({Color? color}) => _base(12, FontWeight.w500, 18, color);
   static TextStyle s12SemiBold({Color? color}) => _base(12, FontWeight.w600, 18, color);
   static TextStyle s12Bold({Color? color}) => _base(12, FontWeight.w700, 18, color);
 
+  // Size 13
+  static TextStyle s13Regular({Color? color}) => _base(13, FontWeight.w400, 19, color);
+  static TextStyle s13Medium({Color? color}) => _base(13, FontWeight.w500, 19, color);
+  static TextStyle s13SemiBold({Color? color}) => _base(13, FontWeight.w600, 19, color);
+  static TextStyle s13Bold({Color? color}) => _base(13, FontWeight.w700, 19, color);
+
   // Size 14
   static TextStyle s14Regular({Color? color}) => _base(14, FontWeight.w400, 20, color);
   static TextStyle s14Medium({Color? color}) => _base(14, FontWeight.w500, 20, color);
   static TextStyle s14SemiBold({Color? color}) => _base(14, FontWeight.w600, 20, color);
   static TextStyle s14Bold({Color? color}) => _base(14, FontWeight.w700, 20, color);
+
+  // Size 15
+  static TextStyle s15Regular({Color? color}) => _base(15, FontWeight.w400, 22, color);
+  static TextStyle s15Medium({Color? color}) => _base(15, FontWeight.w500, 22, color);
+  static TextStyle s15SemiBold({Color? color}) => _base(15, FontWeight.w600, 22, color);
+  static TextStyle s15Bold({Color? color}) => _base(15, FontWeight.w700, 22, color);
 
   // Size 16
   static TextStyle s16Regular({Color? color}) => _base(16, FontWeight.w400, 24, color);

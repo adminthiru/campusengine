@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
-import 'package:skl_teacher/features/auth/presentation/providers/school_permissions_provider.dart';
+import 'package:skl_teacher/core/theme/app_typography.dart';
 import 'package:skl_teacher/features/student/presentation/providers/student_profile_provider.dart';
 
 class StudentHomeworkScreen extends StatefulWidget {
@@ -14,16 +14,15 @@ class StudentHomeworkScreen extends StatefulWidget {
 
 class _StudentHomeworkScreenState extends State<StudentHomeworkScreen>
     with SingleTickerProviderStateMixin {
-  late TabController _tab;
-  List<dynamic> _hw = [];
+  late final TabController _tab;
+  List<dynamic> _all = [];
   bool _loading = true;
-  final Set<String> _submitting = {};
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 2, vsync: this);
-    _loadHomework();
+    _tab = TabController(length: 3, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
@@ -32,14 +31,18 @@ class _StudentHomeworkScreenState extends State<StudentHomeworkScreen>
     super.dispose();
   }
 
-  Future<void> _loadHomework() async {
-    final sp = context.read<StudentProfileProvider>();
-    final classId = sp.profile?.classId;
-    if (classId == null) { setState(() => _loading = false); return; }
+  Future<void> _load() async {
+    final studentId = context.read<StudentProfileProvider>().profile?.id;
+    if (studentId == null) {
+      setState(() => _loading = false);
+      return;
+    }
+    setState(() => _loading = true);
     try {
-      final res = await ApiClient.get('/homework', params: {'classId': classId});
+      final res = await ApiClient.get('/homework/student-summary',
+          params: {'studentId': studentId});
       setState(() {
-        _hw = (res.data['homework'] as List<dynamic>? ?? []);
+        _all = res.data['homework'] as List<dynamic>? ?? [];
         _loading = false;
       });
     } catch (_) {
@@ -47,135 +50,264 @@ class _StudentHomeworkScreenState extends State<StudentHomeworkScreen>
     }
   }
 
-  Future<void> _markDone(String hwId) async {
-    setState(() => _submitting.add(hwId));
-    try {
-      await ApiClient.put('/homework/$hwId/complete', data: {'studentId': 'me'});
-      await _loadHomework();
-    } catch (_) {}
-    setState(() => _submitting.remove(hwId));
-  }
+  List<dynamic> get _pending => _all.where((h) {
+        final sub = h['submission'];
+        return h['status'] == 'active' && sub?['status'] != 'completed';
+      }).toList();
+
+  List<dynamic> get _completed => _all.where((h) {
+        final sub = h['submission'];
+        return sub?['status'] == 'completed';
+      }).toList();
 
   @override
   Widget build(BuildContext context) {
-    final perms = context.watch<SchoolPermissionsProvider>();
-    final pending = _hw.where((h) => !(h['completed'] == true)).toList();
-    final done = _hw.where((h) => h['completed'] == true).toList();
-
-    return Column(
-      children: [
-        TabBar(
-          controller: _tab,
-          tabs: [
-            Tab(text: 'Pending (${pending.length})'),
-            Tab(text: 'Done (${done.length})'),
-          ],
-        ),
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : TabBarView(
-                  controller: _tab,
-                  children: [
-                    _HwList(pending, perms.studentCan('submitHomework'), _markDone, _submitting, false),
-                    _HwList(done, false, _markDone, _submitting, true),
-                  ],
-                ),
-        ),
-      ],
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Scaffold(
+      backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
+      body: Column(
+        children: [
+          Container(
+            color: isDark ? AppColors.cardDark : Colors.white,
+            child: TabBar(
+              controller: _tab,
+              tabs: [
+                Tab(text: 'All (${_all.length})'),
+                Tab(text: 'Pending (${_pending.length})'),
+                Tab(text: 'Done (${_completed.length})'),
+              ],
+              indicatorColor: AppColors.primary,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: AppColors.textMuted,
+              labelStyle: AppTypography.s13SemiBold(),
+            ),
+          ),
+          Expanded(
+            child: _loading
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary))
+                : TabBarView(
+                    controller: _tab,
+                    children: [
+                      _HomeworkList(
+                          items: _all, onRefresh: _load, isDark: isDark),
+                      _HomeworkList(
+                          items: _pending, onRefresh: _load, isDark: isDark),
+                      _HomeworkList(
+                          items: _completed, onRefresh: _load, isDark: isDark),
+                    ],
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _HwList extends StatelessWidget {
+class _HomeworkList extends StatelessWidget {
   final List<dynamic> items;
-  final bool canSubmit;
-  final Future<void> Function(String) onDone;
-  final Set<String> submitting;
-  final bool isDone;
-
-  const _HwList(this.items, this.canSubmit, this.onDone, this.submitting, this.isDone);
+  final Future<void> Function() onRefresh;
+  final bool isDark;
+  const _HomeworkList(
+      {required this.items, required this.onRefresh, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
       return Center(
-        child: Text(
-          isDone ? 'No completed homework yet' : 'No pending homework',
-          style: GoogleFonts.inter(color: AppColors.textMuted),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.assignment_outlined,
+                size: 56, color: AppColors.textMuted),
+            const SizedBox(height: 12),
+            Text('No homework here',
+                style: AppTypography.s16SemiBold(color: AppColors.textMuted)),
+          ],
         ),
       );
     }
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: items.length,
-      itemBuilder: (_, i) {
-        final hw = items[i];
-        final id = hw['_id'] as String? ?? '';
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.cardDark : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isDark ? AppColors.borderDark : AppColors.borderLight,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: items.length,
+        itemBuilder: (_, i) => _HwCard(hw: items[i], isDark: isDark),
+      ),
+    );
+  }
+}
+
+class _HwCard extends StatelessWidget {
+  final dynamic hw;
+  final bool isDark;
+  const _HwCard({required this.hw, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final title = hw['title'] as String? ?? 'Homework';
+    final desc = hw['description'] as String? ?? '';
+    final subject = hw['subject']?['name'] as String? ?? '';
+    final subjectColor = hw['subject']?['color'] as String?;
+    final dueDate = hw['dueDate'];
+    final status = hw['status'] as String? ?? 'active';
+    final sub = hw['submission'];
+    final isDone = sub?['status'] == 'completed';
+    final isOverdue = status == 'active' &&
+        !isDone &&
+        dueDate != null &&
+        DateTime.tryParse(dueDate.toString())?.isBefore(DateTime.now()) == true;
+
+    Color accentColor;
+    try {
+      accentColor = Color(
+          int.parse((subjectColor ?? '#1A56E8').replaceFirst('#', '0xFF')));
+    } catch (_) {
+      accentColor = AppColors.primary;
+    }
+
+    String dueLabel = '';
+    try {
+      dueLabel =
+          DateFormat('dd MMM yyyy').format(DateTime.parse(dueDate.toString()));
+    } catch (_) {}
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: isOverdue
+                ? AppColors.accentRed.withValues(alpha: 0.4)
+                : (isDark ? AppColors.borderDark : AppColors.borderLight)),
+        boxShadow: isDark ? [] : AppColors.shadowSm,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: IntrinsicHeight(
+          child: Row(
             children: [
-              Text(hw['title'] ?? '',
-                  style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600)),
-              if (hw['description'] != null) ...[
-                const SizedBox(height: 4),
-                Text(hw['description'],
-                    style: GoogleFonts.inter(fontSize: 13, color: AppColors.textSecondary)),
-              ],
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _chip(hw['subject']?['name'] ?? 'Subject', AppColors.primary),
-                  const SizedBox(width: 8),
-                  if (hw['dueDate'] != null)
-                    _chip('Due: ${_fmt(hw['dueDate'])}', AppColors.accentOrange),
-                  const Spacer(),
-                  if (canSubmit)
-                    submitting.contains(id)
-                        ? const SizedBox(
-                            width: 20, height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : TextButton(
-                            onPressed: () => onDone(id),
-                            child: Text('Mark Done',
-                                style: GoogleFonts.inter(
-                                    color: AppColors.accentGreen,
-                                    fontWeight: FontWeight.w600)),
-                          ),
-                ],
+              Container(width: 5, color: accentColor),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          if (subject.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: accentColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(subject,
+                                  style: AppTypography.s11SemiBold(
+                                      color: accentColor)),
+                            ),
+                          const Spacer(),
+                          _StatusBadge(isDone: isDone, isOverdue: isOverdue),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(title,
+                          style: AppTypography.s14SemiBold(
+                              color: isDark
+                                  ? Colors.white
+                                  : AppColors.textPrimary),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                      if (desc.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(desc,
+                            style: AppTypography.s12Regular(
+                                color: AppColors.textMuted),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
+                      ],
+                      if (dueLabel.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(Icons.calendar_today_outlined,
+                                size: 13,
+                                color: isOverdue
+                                    ? AppColors.accentRed
+                                    : AppColors.textMuted),
+                            const SizedBox(width: 4),
+                            Text('Due: $dueLabel',
+                                style: AppTypography.s12Regular(
+                                    color: isOverdue
+                                        ? AppColors.accentRed
+                                        : AppColors.textMuted)),
+                          ],
+                        ),
+                      ],
+                      if (isDone && sub?['submittedAt'] != null) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.check_circle_outline,
+                                size: 13, color: AppColors.accentGreen),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Submitted on ${_fmtDate(sub!['submittedAt'])}',
+                              style: AppTypography.s12Regular(
+                                  color: AppColors.accentGreen),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
-  Widget _chip(String label, Color color) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
-        child: Text(label,
-            style: GoogleFonts.inter(fontSize: 11, color: color, fontWeight: FontWeight.w500)),
-      );
-
-  String _fmt(dynamic d) {
+  String _fmtDate(dynamic d) {
     try {
-      final dt = DateTime.parse(d.toString());
-      return '${dt.day}/${dt.month}/${dt.year}';
+      return DateFormat('dd MMM').format(DateTime.parse(d.toString()));
     } catch (_) {
-      return d.toString();
+      return '';
     }
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final bool isDone, isOverdue;
+  const _StatusBadge({required this.isDone, required this.isOverdue});
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color;
+    final String label;
+    if (isDone) {
+      color = AppColors.accentGreen;
+      label = 'Completed';
+    } else if (isOverdue) {
+      color = AppColors.accentRed;
+      label = 'Overdue';
+    } else {
+      color = AppColors.warning;
+      label = 'Pending';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(label, style: AppTypography.s11SemiBold(color: color)),
+    );
   }
 }

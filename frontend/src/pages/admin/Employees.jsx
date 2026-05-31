@@ -702,7 +702,7 @@ function AddEditEmployeeModal({
               </div>
               <div className="form-group">
                 <label className="form-label">Phone Number <span style={{ color: '#ef4444' }}>*</span></label>
-                <input className="form-control" {...register('phone', { required: 'Required' })} placeholder="9876543210" />
+                <input className="form-control" type="tel" maxLength={10} {...register('phone', { required: 'Required', pattern: { value: /^[0-9]{10}$/, message: 'Enter valid 10-digit number' } })} placeholder="9876543210" onInput={e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10); }} />
                 {errors.phone && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.phone.message}</p>}
               </div>
             </FormRow>

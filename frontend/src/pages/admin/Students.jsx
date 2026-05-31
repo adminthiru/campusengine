@@ -400,7 +400,7 @@ export default function Students() {
                     {col('alternateMobile')    && <td style={{ fontSize: 13 }}>{stu.alternativeMobile || '—'}</td>}
                     {col('admissionNumber')    && <td style={{ fontSize: 13 }}><span className="badge badge-info">{stu.admissionNumber || '—'}</span></td>}
                     {col('admissionDate')      && <td style={{ fontSize: 13 }}>{stu.admissionDate ? format(new Date(stu.admissionDate), 'dd MMM yyyy') : '—'}</td>}
-                    {col('transport')          && <td style={{ fontSize: 13 }}>{stu.transportRoute ? `${stu.transportRoute.vehicleType ? stu.transportRoute.vehicleType.charAt(0).toUpperCase() + stu.transportRoute.vehicleType.slice(1) + ' — ' : ''}${stu.transportRoute.routeName}` : '—'}</td>}
+                    {col('transport')          && <td style={{ fontSize: 13 }}>{stu.transportRoute ? `${stu.transportRoute.routeNumber ? '#' + stu.transportRoute.routeNumber + ' · ' : ''}${stu.transportRoute.vehicleNumber || stu.transportRoute.routeName}` : '—'}</td>}
                     {col('address')            && <td style={{ fontSize: 13, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stu.address?.street || '—'}</td>}
                     <td style={{ position: 'sticky', right: 0, zIndex: 2, background: 'white', boxShadow: '-2px 0 5px rgba(0,0,0,0.08)' }} onClick={e => e.stopPropagation()}>
                       <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openEdit(stu)}>
@@ -661,12 +661,12 @@ function AddEditModal({
             <FormRow>
               <div className="form-group">
                 <label className="form-label">Parent Mobile Number <span style={{ color: '#ef4444' }}>*</span></label>
-                <input className="form-control" {...register('mobile', { required: 'Required' })} placeholder="9876543210" />
+                <input className="form-control" type="tel" maxLength={10} {...register('mobile', { required: 'Required', pattern: { value: /^[0-9]{10}$/, message: 'Enter valid 10-digit number' } })} placeholder="9876543210" onInput={e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10); }} />
                 {errors.mobile && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.mobile.message}</p>}
               </div>
               <div className="form-group">
                 <label className="form-label">Alternate Mobile Number</label>
-                <input className="form-control" {...register('alternativeMobile')} placeholder="9876543210" />
+                <input className="form-control" type="tel" maxLength={10} {...register('alternativeMobile', { pattern: { value: /^[0-9]{10}$/, message: 'Enter valid 10-digit number' } })} placeholder="9876543210" onInput={e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10); }} />
               </div>
             </FormRow>
             <FormRow>
@@ -675,7 +675,7 @@ function AddEditModal({
                 <select className="form-control" value={selectedTransport} onChange={e => setSelectedTransport(e.target.value)}>
                   <option value="">No transport</option>
                   {(transports || []).map(t => (
-                    <option key={t._id} value={t._id}>{t.vehicleType ? t.vehicleType.charAt(0).toUpperCase() + t.vehicleType.slice(1) + ' — ' : ''}{t.routeName}{t.vehicleNumber ? ' (' + t.vehicleNumber + ')' : ''}</option>
+                    <option key={t._id} value={t._id}>{t.routeNumber ? `#${t.routeNumber}` : ''}{t.vehicleNumber ? ` · ${t.vehicleNumber}` : ''}{t.routeName ? ` — ${t.routeName}` : ''}</option>
                   ))}
                 </select>
               </div>
@@ -878,11 +878,11 @@ function ParentFormInline({ draft, setDraft, onSave, onCancel }) {
       <FormRow>
         <div className="form-group" style={{ marginBottom: 10 }}>
           <label className="form-label">Mobile Number <span style={{ color: '#ef4444' }}>*</span></label>
-          <input className="form-control" value={draft.mobile} onChange={e => setDraft(d => ({ ...d, mobile: e.target.value }))} placeholder="9876543210" />
+          <input className="form-control" type="tel" maxLength={10} value={draft.mobile} onChange={e => setDraft(d => ({ ...d, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) }))} placeholder="9876543210" />
         </div>
         <div className="form-group" style={{ marginBottom: 10 }}>
           <label className="form-label">Alternative Mobile</label>
-          <input className="form-control" value={draft.alternativeMobile} onChange={e => setDraft(d => ({ ...d, alternativeMobile: e.target.value }))} placeholder="9876543210" />
+          <input className="form-control" type="tel" maxLength={10} value={draft.alternativeMobile} onChange={e => setDraft(d => ({ ...d, alternativeMobile: e.target.value.replace(/\D/g, '').slice(0, 10) }))} placeholder="9876543210" />
         </div>
       </FormRow>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -1081,10 +1081,7 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
                       background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0',
                       padding: '4px 10px', borderRadius: 20, fontSize: 12, display: 'inline-block'
                     }}>
-                      🚌 {student.transportRoute.vehicleType
-                        ? student.transportRoute.vehicleType.charAt(0).toUpperCase() + student.transportRoute.vehicleType.slice(1) + ' — '
-                        : ''}{student.transportRoute.routeName}
-                      {student.transportRoute.vehicleNumber ? ` · ${student.transportRoute.vehicleNumber}` : ''}
+                      🚌 {student.transportRoute.routeNumber ? `#${student.transportRoute.routeNumber} · ` : ''}{student.transportRoute.vehicleNumber || student.transportRoute.routeName}
                     </span>
                   </div>
                 )}

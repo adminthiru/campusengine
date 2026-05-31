@@ -3,6 +3,7 @@ const Employee = require('../models/Employee');
 const Attendance = require('../models/Attendance');
 const School = require('../models/School');
 const { Expense } = require('../models/Expense');
+const { getHolidaysForMonth, getWorkingDaysForMonth } = require('../utils/holidays');
 const { generatePaySlip } = require('../utils/pdf');
 const { sendSMS } = require('../utils/sms');
 
@@ -59,12 +60,18 @@ const generateSalary = async (req, res) => {
       const halfDayEnabled      = cfg.halfDayEnabled       !== false;
       const halfDayFactor       = cfg.halfDayDeductionFactor ?? 0.5;
 
-      const daysInMonth = new Date(year, month, 0).getDate();
+      // Calculate actual working days using employee-specific Saturday schedule
+      const empSatSchedule = cfg.empSaturdaySchedule || 'school_default';
+      const { workingDays: actualWorkingDays, holidayCount } =
+        await getWorkingDaysForMonth(schoolId, year, month, school?.workingDays || {}, empSatSchedule);
 
-      // Divisor based on selected method
-      const divisor = lopMethod === 'fixed_30'      ? 30
-                    : lopMethod === 'working_days'   ? workingDaysPerMonth
-                    : daysInMonth; // calendar_days
+      const holidays = await getHolidaysForMonth(schoolId, year, month);
+
+      // Divisor: calendar_days now uses actual working days (not raw daysInMonth)
+      const baseDivisor = lopMethod === 'fixed_30'    ? 30
+                        : lopMethod === 'working_days' ? workingDaysPerMonth
+                        : actualWorkingDays; // calendar_days = actual working days
+      const divisor = Math.max(1, baseDivisor);
 
       const attendanceRecords = await Attendance.find({
         school: schoolId, type: 'employee',
@@ -72,9 +79,12 @@ const generateSalary = async (req, res) => {
         'records.employee': emp._id
       });
 
-      // Count only explicitly marked statuses — days with no record are NOT counted as absent
+      // Count only explicitly marked statuses — days with no record are NOT absent
+      // Holiday dates are skipped entirely (no LOP regardless of attendance status)
       let presentDays = 0, lopDays = 0;
       attendanceRecords.forEach(a => {
+        const dateStr = new Date(a.date).toISOString().slice(0, 10);
+        if (holidays.has(dateStr)) return; // holiday — never counts as LOP
         const rec = a.records.find(r => r.employee?.toString() === emp._id.toString());
         if (!rec) return;
         if (rec.status === 'present') {
@@ -378,7 +388,14 @@ const recalculateSalary = async (req, res) => {
     const halfDayFactor       = cfg.halfDayDeductionFactor ?? 0.5;
 
     const daysInMonth = new Date(year, month, 0).getDate();
-    const divisor = lopMethod === 'fixed_30' ? 30 : lopMethod === 'working_days' ? workingDaysPerMonth : daysInMonth;
+
+    // Calculate actual working days using employee Saturday schedule
+    const empSatSchedule2 = cfg.empSaturdaySchedule || 'school_default';
+    const { workingDays: actualWorkingDays } =
+      await getWorkingDaysForMonth(schoolId, year, month, school?.workingDays || {}, empSatSchedule2);
+    const holidays  = await getHolidaysForMonth(schoolId, year, month);
+    const baseDivisor = lopMethod === 'fixed_30' ? 30 : lopMethod === 'working_days' ? workingDaysPerMonth : actualWorkingDays;
+    const divisor = Math.max(1, baseDivisor);
 
     const attendanceRecords = await Attendance.find({
       school: schoolId, type: 'employee',
@@ -386,9 +403,11 @@ const recalculateSalary = async (req, res) => {
       'records.employee': empId
     });
 
-    // Count only explicitly marked days — days with no record are NOT counted as absent
+    // Skip holiday dates; count only explicitly marked present/absent/half_day
     let presentDays = 0, lopDays = 0;
     attendanceRecords.forEach(a => {
+      const dateStr = new Date(a.date).toISOString().slice(0, 10);
+      if (holidays.has(dateStr)) return;
       const rec = a.records.find(r => r.employee?.toString() === empId.toString());
       if (!rec) return;
       if (rec.status === 'present') {

@@ -58,59 +58,132 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
 
   Widget _header(BuildContext context, TimetableProvider provider,
       String teacherId, bool isDark) {
+    final today = DateTime.now();
+    final selDate = provider.selectedDate;
+    // Monday of the selected week
+    final startOfWeek = selDate.subtract(Duration(days: selDate.weekday - 1));
+    // Monday of today's week
+    final startOfThisWeek = today.subtract(Duration(days: today.weekday - 1));
+    // Earliest allowed: 12 weeks back
+    final earliestWeek = startOfThisWeek.subtract(const Duration(days: 7 * 12));
+    final canGoPrev = startOfWeek.isAfter(earliestWeek);
+    // Can't go forward past current week
+    final canGoNext = startOfWeek.isBefore(startOfThisWeek);
+
+    void goToPrevWeek() {
+      if (!canGoPrev) return;
+      final prevMonday = startOfWeek.subtract(const Duration(days: 7));
+      // Select the same weekday in the prev week, clamped to today
+      final candidate = prevMonday.add(Duration(days: selDate.weekday - 1));
+      provider.selectDate(
+          candidate.isAfter(today) ? today : candidate, teacherId);
+    }
+
+    void goToNextWeek() {
+      if (!canGoNext) return;
+      final nextMonday = startOfWeek.add(const Duration(days: 7));
+      final candidate = nextMonday.add(Duration(days: selDate.weekday - 1));
+      provider.selectDate(
+          candidate.isAfter(today) ? today : candidate, teacherId);
+    }
+
+    final endOfWeek = startOfWeek.add(const Duration(days: 6));
+    final weekLabel =
+        '${DateFormat('d MMM').format(startOfWeek)} – ${DateFormat('d MMM').format(endOfWeek)}';
+
     return Container(
       color: isDark ? AppColors.cardDark : Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                DateFormat('MMMM yyyy').format(provider.selectedDate),
-                style: AppTypography.s20Bold(
-                    color: isDark ? Colors.white : AppColors.textPrimary),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Weekly Schedule',
-                style: AppTypography.s12Regular(
-                    color:
-                        isDark ? AppColors.textMuted : AppColors.textSecondary),
-              ),
-            ],
+          // ── Row 1: subtitle ────────────────────────────────────────────────
+          Text(
+            'Weekly Schedule',
+            style: AppTypography.s12Regular(
+                color: isDark ? AppColors.textMuted : AppColors.textSecondary),
           ),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.calendar_month, color: AppColors.primary),
-            onPressed: () async {
-              final picked = await showDatePicker(
-                context: context,
-                initialDate: provider.selectedDate,
-                firstDate: DateTime.now().subtract(const Duration(days: 90)),
-                lastDate: DateTime.now().add(const Duration(days: 90)),
-                builder: (ctx, child) => Theme(
-                  data: Theme.of(ctx).copyWith(
-                    colorScheme:
-                        const ColorScheme.light(primary: AppColors.primary),
-                  ),
-                  child: child!,
+          const SizedBox(height: 10),
+          // ── Row 2: ← Week of DD MMM – DD MMM → pill ─────────────────────
+          Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? AppColors.borderDark.withValues(alpha: 0.4)
+                  : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Row(
+              children: [
+                // ← button
+                _weekNavBtn(
+                  icon: Icons.chevron_left_rounded,
+                  enabled: canGoPrev,
+                  isDark: isDark,
+                  onTap: goToPrevWeek,
                 ),
-              );
-              if (picked != null) {
-                provider.selectDate(picked, teacherId);
-              }
-            },
+                // Week range label
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      weekLabel,
+                      style: AppTypography.s14Bold(
+                        color: isDark ? Colors.white : AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+                // → button
+                _weekNavBtn(
+                  icon: Icons.chevron_right_rounded,
+                  enabled: canGoNext,
+                  isDark: isDark,
+                  onTap: goToNextWeek,
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
+  // ── Week navigation arrow helper ────────────────────────────────────────────────
+  Widget _weekNavBtn({
+    required IconData icon,
+    required bool enabled,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: Icon(
+          icon,
+          size: 24,
+          color: enabled
+              ? (isDark ? Colors.white : AppColors.textPrimary)
+              : (isDark
+                  ? AppColors.textMuted.withValues(alpha: 0.35)
+                  : Colors.grey.shade300),
+        ),
+      ),
+    );
+  }
+
+  // ── Day-strip calendar (uses selectedDate's week) ──────────────────────────
   Widget _calendarStrip(BuildContext context, TimetableProvider provider,
       String teacherId, bool isDark) {
     final today = DateTime.now();
-    final startOfWeek = today.subtract(Duration(days: today.weekday - 1));
+    final selDate = provider.selectedDate;
+    // Monday of the SELECTED week (not today's week)
+    final startOfWeek = selDate.subtract(Duration(days: selDate.weekday - 1));
     final dates = List.generate(7, (i) => startOfWeek.add(Duration(days: i)));
 
     return Container(
@@ -123,12 +196,14 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
           children: dates.map((date) {
             final isSelected = DateUtils.isSameDay(date, provider.selectedDate);
             final isToday = DateUtils.isSameDay(date, today);
+            final isFuture = date.isAfter(today);
 
             final dayName = DateFormat('E').format(date);
             final dayNum = DateFormat('d').format(date);
 
             return GestureDetector(
-              onTap: () => provider.selectDate(date, teacherId),
+              onTap:
+                  isFuture ? null : () => provider.selectDate(date, teacherId),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 margin: const EdgeInsets.only(right: 12),
@@ -153,9 +228,15 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                         ? Colors.transparent
                         : (isToday
                             ? AppColors.primary.withValues(alpha: 0.4)
-                            : (isDark
-                                ? AppColors.borderDark
-                                : AppColors.borderLight)),
+                            : (isFuture
+                                ? (isDark
+                                    ? AppColors.borderDark
+                                        .withValues(alpha: 0.4)
+                                    : AppColors.borderLight
+                                        .withValues(alpha: 0.5))
+                                : (isDark
+                                    ? AppColors.borderDark
+                                    : AppColors.borderLight))),
                     width: 1.5,
                   ),
                 ),
@@ -168,9 +249,14 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                             ? Colors.white
                             : (isToday
                                 ? AppColors.primary
-                                : (isDark
-                                    ? AppColors.textMuted
-                                    : AppColors.textSecondary)),
+                                : (isFuture
+                                    ? (isDark
+                                        ? AppColors.textMuted
+                                            .withValues(alpha: 0.4)
+                                        : Colors.grey.shade300)
+                                    : (isDark
+                                        ? AppColors.textMuted
+                                        : AppColors.textSecondary))),
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -181,9 +267,14 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                             ? Colors.white
                             : (isToday
                                 ? AppColors.primary
-                                : (isDark
-                                    ? Colors.white
-                                    : AppColors.textPrimary)),
+                                : (isFuture
+                                    ? (isDark
+                                        ? AppColors.textMuted
+                                            .withValues(alpha: 0.4)
+                                        : Colors.grey.shade300)
+                                    : (isDark
+                                        ? Colors.white
+                                        : AppColors.textPrimary))),
                       ),
                     ),
                   ],
@@ -575,77 +666,17 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
       ),
       child: Row(
         children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged(false),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: !isGridView
-                      ? (isDark ? AppColors.cardDark : Colors.white)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: !isGridView
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          )
-                        ]
-                      : [],
-                ),
-                child: Center(
-                  child: Text(
-                    'Daily View',
-                    style: AppTypography.s12SemiBold(
-                      color: !isGridView
-                          ? (isDark ? Colors.white : AppColors.textPrimary)
-                          : (isDark
-                              ? AppColors.textMuted
-                              : AppColors.textSecondary),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+          _ToggleTab(
+            label: 'Daily View',
+            selected: !isGridView,
+            isDark: isDark,
+            onTap: () => onChanged(false),
           ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged(true),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: isGridView
-                      ? (isDark ? AppColors.cardDark : Colors.white)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: isGridView
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          )
-                        ]
-                      : [],
-                ),
-                child: Center(
-                  child: Text(
-                    'Weekly Grid',
-                    style: AppTypography.s12SemiBold(
-                      color: isGridView
-                          ? (isDark ? Colors.white : AppColors.textPrimary)
-                          : (isDark
-                              ? AppColors.textMuted
-                              : AppColors.textSecondary),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+          _ToggleTab(
+            label: 'Weekly Grid',
+            selected: isGridView,
+            isDark: isDark,
+            onTap: () => onChanged(true),
           ),
         ],
       ),
@@ -928,6 +959,45 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
       );
     }
 
+    // Permission guard — respect viewTimetable setting for both roles
+    final ct = profile.permissions.classTeacher;
+    final st = profile.permissions.subjectTeacher;
+    final canViewTimetable =
+        (profile.isClassTeacher && ct.viewTimetable) ||
+        (profile.isSubjectTeacher && st.viewTimetable);
+
+    if (!canViewTimetable) {
+      return Scaffold(
+        backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.lock_outline,
+                    size: 64,
+                    color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                const SizedBox(height: 16),
+                Text(
+                  'Timetable Access Restricted',
+                  style: AppTypography.s18Bold(
+                      color: isDark ? Colors.white : AppColors.textPrimary),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Your administrator has not granted timetable view permission.',
+                  style: AppTypography.s14Regular(
+                      color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final teacherId = profile.employee.id;
 
     if (provider.isLoading) {
@@ -1029,6 +1099,61 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Animated toggle tab (shared by daily/grid toggle) ─────────────────────────
+class _ToggleTab extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _ToggleTab({
+    required this.label,
+    required this.selected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final shadow = BoxShadow(
+      color:
+          selected ? Colors.black.withValues(alpha: 0.07) : Colors.transparent,
+      blurRadius: selected ? 4 : 0,
+      offset: const Offset(0, 2),
+    );
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: selected
+                ? (isDark ? AppColors.cardDark : Colors.white)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [shadow],
+          ),
+          child: Center(
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeInOut,
+              style: AppTypography.s12SemiBold(
+                color: selected
+                    ? (isDark ? Colors.white : AppColors.textPrimary)
+                    : (isDark ? AppColors.textMuted : AppColors.textSecondary),
+              ),
+              child: Text(label),
+            ),
+          ),
         ),
       ),
     );

@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
+import 'package:skl_teacher/core/theme/app_typography.dart';
 import 'package:skl_teacher/features/student/presentation/providers/student_profile_provider.dart';
 
 class StudentAttendanceScreen extends StatefulWidget {
   const StudentAttendanceScreen({super.key});
   @override
-  State<StudentAttendanceScreen> createState() => _StudentAttendanceScreenState();
+  State<StudentAttendanceScreen> createState() =>
+      _StudentAttendanceScreenState();
 }
 
 class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
@@ -19,24 +21,24 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   Future<void> _load() async {
-    final sp = context.read<StudentProfileProvider>();
-    final studentId = sp.profile?.id;
-    if (studentId == null) { setState(() => _loading = false); return; }
+    final studentId = context.read<StudentProfileProvider>().profile?.id;
+    if (studentId == null) {
+      setState(() => _loading = false);
+      return;
+    }
     setState(() => _loading = true);
     try {
-      final from = DateTime(_month.year, _month.month, 1);
-      final to   = DateTime(_month.year, _month.month + 1, 0);
-      final res  = await ApiClient.get('/attendance', params: {
+      final res = await ApiClient.get('/attendance/student-records', params: {
         'studentId': studentId,
-        'from': from.toIso8601String(),
-        'to': to.toIso8601String(),
+        'month': _month.month.toString(),
+        'year': _month.year.toString(),
       });
       setState(() {
-        _records = res.data['attendance'] as List<dynamic>? ?? [];
+        _records = res.data['records'] as List<dynamic>? ?? [];
         _loading = false;
       });
     } catch (_) {
@@ -49,131 +51,278 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
     _load();
   }
 
-  Map<int, String> get _dayMap {
-    final m = <int, String>{};
-    for (final r in _records) {
-      try {
-        final d = DateTime.parse(r['date'].toString());
-        m[d.day] = r['status'] as String? ?? '';
-      } catch (_) {}
-    }
-    return m;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
-    final firstWeekday = DateTime(_month.year, _month.month, 1).weekday % 7;
-    final dayMap = _dayMap;
-    final present = _records.where((r) => r['status'] == 'present').length;
-    final total   = _records.length;
-    final pct     = total > 0 ? (present * 100 / total).round() : 0;
-    final months  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        child: Column(
+    // Build day→status map
+    final Map<int, String> dayStatus = {};
+    for (final r in _records) {
+      try {
+        final d = DateTime.parse(r['date'].toString()).toLocal();
+        final s = r['status'] as String? ?? '';
+        // Map backend status to display key
+        final key = s == 'present'
+            ? 'P'
+            : s == 'absent'
+                ? 'A'
+                : s == 'late'
+                    ? 'L'
+                    : s == 'half_day'
+                        ? 'H'
+                        : s == 'excused'
+                            ? 'E'
+                            : s;
+        if (key.isNotEmpty) dayStatus[d.day] = key;
+      } catch (_) {}
+    }
+
+    final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
+    final firstWeekday =
+        DateTime(_month.year, _month.month, 1).weekday; // 1=Mon
+
+    final present = dayStatus.values.where((s) => s == 'P').length;
+    final absent = dayStatus.values.where((s) => s == 'A').length;
+    final late = dayStatus.values.where((s) => s == 'L').length;
+    final half = dayStatus.values.where((s) => s == 'H').length;
+    final total = present + absent + late + half;
+    final pct = total > 0 ? (present / total * 100).round() : 0;
+
+    return Scaffold(
+      backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
           children: [
-            // Month selector
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // ── Month Navigator ──────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.cardDark : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                    color:
+                        isDark ? AppColors.borderDark : AppColors.borderLight),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left),
+                    onPressed: () => _changeMonth(-1),
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                  Text(
+                    DateFormat('MMMM yyyy').format(_month),
+                    style: AppTypography.s16SemiBold(
+                        color: isDark ? Colors.white : AppColors.textPrimary),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right),
+                    onPressed: _month.month == DateTime.now().month &&
+                            _month.year == DateTime.now().year
+                        ? null
+                        : () => _changeMonth(1),
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // ── Summary Chips ────────────────────────────────────────────
+            Row(children: [
+              _Chip('$pct%', 'Attendance', AppColors.primary, isDark),
+              const SizedBox(width: 8),
+              _Chip('$present', 'Present', AppColors.accentGreen, isDark),
+              const SizedBox(width: 8),
+              _Chip('$absent', 'Absent', AppColors.accentRed, isDark),
+              const SizedBox(width: 8),
+              _Chip('$late', 'Late', AppColors.warning, isDark),
+            ]),
+            const SizedBox(height: 16),
+
+            // ── Calendar Grid ────────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.cardDark : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color:
+                        isDark ? AppColors.borderDark : AppColors.borderLight),
+              ),
+              child: Column(
+                children: [
+                  // Weekday headers
+                  Row(
+                    children: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
+                        .map((d) => Expanded(
+                              child: Center(
+                                child: Text(d,
+                                    style: AppTypography.s12SemiBold(
+                                        color: AppColors.textMuted)),
+                              ),
+                            ))
+                        .toList(),
+                  ),
+                  const SizedBox(height: 8),
+                  if (_loading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                          child: CircularProgressIndicator(
+                              color: AppColors.primary)),
+                    )
+                  else
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 7,
+                        mainAxisSpacing: 6,
+                        crossAxisSpacing: 6,
+                        childAspectRatio: 1,
+                      ),
+                      itemCount: daysInMonth + (firstWeekday - 1),
+                      itemBuilder: (_, i) {
+                        if (i < firstWeekday - 1) return const SizedBox();
+                        final day = i - (firstWeekday - 2);
+                        final status = dayStatus[day];
+                        final color = _colorFor(status);
+                        final isToday = DateTime.now().day == day &&
+                            DateTime.now().month == _month.month &&
+                            DateTime.now().year == _month.year;
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: color != null
+                                ? color.withValues(alpha: 0.15)
+                                : (isDark
+                                    ? AppColors.bgDark
+                                    : const Color(0xFFF8FAFC)),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isToday
+                                  ? AppColors.primary
+                                  : (color != null
+                                      ? color.withValues(alpha: 0.3)
+                                      : (isDark
+                                          ? AppColors.borderDark
+                                          : AppColors.borderLight)),
+                              width: isToday ? 2 : 1,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text('$day',
+                                  style: AppTypography.s12SemiBold(
+                                      color: color ??
+                                          (isDark
+                                              ? Colors.white70
+                                              : AppColors.textSecondary))),
+                              if (status != null)
+                                Text(status,
+                                    style: AppTypography.s10Bold(color: color)),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // ── Legend ───────────────────────────────────────────────────
+            Wrap(
+              spacing: 12,
+              runSpacing: 6,
               children: [
-                IconButton(onPressed: () => _changeMonth(-1), icon: const Icon(Icons.chevron_left)),
-                Text(
-                  '${months[_month.month - 1]} ${_month.year}',
-                  style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                IconButton(onPressed: () => _changeMonth(1), icon: const Icon(Icons.chevron_right)),
+                _Legend('P', 'Present', AppColors.accentGreen),
+                _Legend('A', 'Absent', AppColors.accentRed),
+                _Legend('L', 'Late', AppColors.warning),
+                _Legend('H', 'Half Day', AppColors.accentOrange),
+                _Legend('E', 'Excused', AppColors.primary),
               ],
             ),
-            // Stats
-            if (!_loading) ...[
-              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                _stat('Present', present.toString(), AppColors.accentGreen),
-                const SizedBox(width: 24),
-                _stat('Total',   total.toString(),   AppColors.primary),
-                const SizedBox(width: 24),
-                _stat('%',       '$pct%',            _pctColor(pct)),
-              ]),
-              const SizedBox(height: 16),
-            ],
-            // Calendar grid
-            if (_loading)
-              const Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator())
-            else
-              _buildCalendar(daysInMonth, firstWeekday, dayMap),
-            const SizedBox(height: 16),
-            // Legend
-            Wrap(spacing: 16, children: [
-              _legend('Present', AppColors.accentGreen),
-              _legend('Absent',  AppColors.accentRed),
-              _legend('Late',    AppColors.warning),
-              _legend('Leave',   AppColors.textMuted),
-            ]),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildCalendar(int days, int firstDay, Map<int, String> map) {
-    final cells = <Widget>[];
-    for (final d in ['S','M','T','W','T','F','S']) {
-      cells.add(Center(child: Text(d, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMuted))));
+  Color? _colorFor(String? s) {
+    switch (s) {
+      case 'P':
+        return AppColors.accentGreen;
+      case 'A':
+        return AppColors.accentRed;
+      case 'L':
+        return AppColors.warning;
+      case 'H':
+        return AppColors.accentOrange;
+      case 'E':
+        return AppColors.primary;
+      default:
+        return null;
     }
-    for (int i = 0; i < firstDay; i++) {
-      cells.add(const SizedBox());
-    }
-    for (int d = 1; d <= days; d++) {
-      final status = map[d];
-      final color  = _statusColor(status);
-      cells.add(Container(
-        margin: const EdgeInsets.all(3),
-        decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
-        child: Center(
-          child: Text(
-            '$d',
-            style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500,
-                color: status != null ? color : AppColors.textPrimary),
+  }
+}
+
+class _Chip extends StatelessWidget {
+  final String value, label;
+  final Color color;
+  final bool isDark;
+  const _Chip(this.value, this.label, this.color, this.isDark);
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              Text(value, style: AppTypography.s16Bold(color: color)),
+              const SizedBox(height: 2),
+              Text(label,
+                  style: AppTypography.s11Regular(color: color),
+                  textAlign: TextAlign.center),
+            ],
           ),
         ),
-      ));
-    }
-    return GridView.count(
-      crossAxisCount: 7,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      children: cells,
-    );
-  }
+      );
+}
 
-  Widget _stat(String label, String value, Color color) => Column(children: [
-    Text(value, style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w700, color: color)),
-    Text(label,  style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted)),
-  ]);
+class _Legend extends StatelessWidget {
+  final String code, label;
+  final Color color;
+  const _Legend(this.code, this.label, this.color);
 
-  Widget _legend(String label, Color color) => Row(mainAxisSize: MainAxisSize.min, children: [
-    Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-    const SizedBox(width: 4),
-    Text(label, style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
-  ]);
-
-  Color _statusColor(String? s) {
-    switch (s) {
-      case 'present': return AppColors.accentGreen;
-      case 'absent':  return AppColors.accentRed;
-      case 'late':    return AppColors.warning;
-      case 'cl': case 'sl': case 'od': case 'excused': return AppColors.textMuted;
-      default: return Colors.transparent;
-    }
-  }
-
-  Color _pctColor(int p) {
-    if (p >= 75) return AppColors.accentGreen;
-    if (p >= 50) return AppColors.warning;
-    return AppColors.accentRed;
-  }
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: color.withValues(alpha: 0.4)),
+            ),
+            child: Center(
+              child: Text(code, style: AppTypography.s10Bold(color: color)),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(label,
+              style: AppTypography.s12Regular(color: AppColors.textMuted)),
+        ],
+      );
 }

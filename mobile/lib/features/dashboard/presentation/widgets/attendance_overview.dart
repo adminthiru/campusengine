@@ -22,25 +22,29 @@ class _AttendanceOverviewState extends State<AttendanceOverview> {
     final provider = context.watch<DashboardProvider>();
 
     if (provider.isLoading) {
-      return const Center(child: Padding(
+      return const Center(
+          child: Padding(
         padding: EdgeInsets.all(32.0),
         child: CircularProgressIndicator(),
       ));
     }
 
     if (provider.error != null) {
-      return Center(child: Padding(
+      return Center(
+          child: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Text('Error: ${provider.error}', style: TextStyle(color: Colors.red)),
+        child: Text('Error: ${provider.error}',
+            style: TextStyle(color: Colors.red)),
       ));
     }
 
     final todayPresent = provider.todayPresent;
     final todayAbsent = provider.todayAbsent;
     final todayTotal = provider.todayTotal;
-    
+
     // We can calculate percentage based on total
-    final attendancePercentage = todayTotal > 0 ? ((todayPresent / todayTotal) * 100).round() : 0;
+    final attendancePercentage =
+        todayTotal > 0 ? ((todayPresent / todayTotal) * 100).round() : 0;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
@@ -79,7 +83,8 @@ class _AttendanceOverviewState extends State<AttendanceOverview> {
                   onTap: () => setState(() => _selectedDayIndex = index),
                   child: Container(
                     margin: const EdgeInsets.only(right: 8.0),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: isSelected
                           ? AppColors.primary
@@ -88,17 +93,22 @@ class _AttendanceOverviewState extends State<AttendanceOverview> {
                       border: Border.all(
                         color: isSelected
                             ? AppColors.primary
-                            : (isDark ? AppColors.borderDark : AppColors.borderLight),
+                            : (isDark
+                                ? AppColors.borderDark
+                                : AppColors.borderLight),
                       ),
                     ),
                     child: Text(
                       _days[index],
                       style: GoogleFonts.inter(
                         fontSize: 14,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w500,
                         color: isSelected
                             ? Colors.white
-                            : (isDark ? AppColors.textSecondary : AppColors.textSecondary),
+                            : (isDark
+                                ? AppColors.textSecondary
+                                : AppColors.textSecondary),
                       ),
                     ),
                   ),
@@ -163,7 +173,8 @@ class _MetricCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? AppColors.cardDark : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+        border: Border.all(
+            color: isDark ? AppColors.borderDark : AppColors.borderLight),
         boxShadow: isDark ? [] : AppColors.shadowSm,
       ),
       child: Column(
@@ -178,7 +189,9 @@ class _MetricCard extends StatelessWidget {
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: isDark ? AppColors.textSecondary : AppColors.textSecondary,
+                  color: isDark
+                      ? AppColors.textSecondary
+                      : AppColors.textSecondary,
                 ),
               ),
             ],
@@ -228,7 +241,7 @@ class _ClassAttendanceBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double percentage = presentCount / totalCount;
-    
+
     return Row(
       children: [
         SizedBox(

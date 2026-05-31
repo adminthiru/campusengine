@@ -31,9 +31,19 @@ export default function Attendance() {
   const [attendance, setAttendance] = useState({}); // { [personId]: { status, remarks } }
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [holidayWarning, setHolidayWarning] = useState(null);
 
   const { data: schoolData } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
   const school = schoolData?.school;
+
+  // Working days for the selected month
+  const [yearStr, monthStr] = date.split('-');
+  const { data: wdData } = useQuery({
+    queryKey: ['working-days', yearStr, monthStr, classId, tab],
+    queryFn: () => api.get(`/attendance/working-days?year=${yearStr}&month=${monthStr}${tab === 'student' && classId ? '&classId=' + classId : ''}`),
+    enabled: !!(yearStr && monthStr),
+  });
+  const workingDaysInfo = wdData || null;
 
   // Build employee status config — fully driven by school leave settings (no hardcoded extras)
   const empStatusConfig = (() => {
@@ -80,7 +90,6 @@ export default function Attendance() {
   const employees = empRole ? allEmployees.filter(e => e.role === empRole) : allEmployees;
 
   // Parse month/year from selected date for leave balance tracking
-  const [yearStr, monthStr] = date.split('-');
   const yearNum = Number(yearStr), monthNum = Number(monthStr);
 
   // Monthly leave usage per employee — auto-resets each month naturally
@@ -165,14 +174,21 @@ export default function Attendance() {
         status: attendance[p._id]?.status || 'present',
         remarks: attendance[p._id]?.remarks || ''
       }));
+      let res;
       if (tab === 'student') {
-        await api.post('/attendance/student', { classId, date, records });
+        res = await api.post('/attendance/student', { classId, date, records });
       } else {
-        await api.post('/attendance/employee', { date, records });
+        res = await api.post('/attendance/employee', { date, records });
       }
       toast.success('Attendance saved!');
       qc.invalidateQueries(['attendance-existing']);
       setEditMode(false);
+      // Show holiday or Saturday warning if returned by backend
+      if (res?.holidayWarning || res?.isHoliday || res?.isSaturdayHoliday) {
+        setHolidayWarning(res.holidayWarning || 'This date is a holiday. Attendance saved but will not affect salary LOP.');
+      } else {
+        setHolidayWarning(null);
+      }
     } catch (err) {
       toast.error(err.message || 'Failed to save');
     } finally {
@@ -198,6 +214,13 @@ export default function Attendance() {
 
   return (
     <div>
+      {holidayWarning && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 16px', marginBottom: 16 }}>
+          <span style={{ fontSize: 18 }}>⚠️</span>
+          <span style={{ fontSize: 13, color: '#92400e', flex: 1 }}>{holidayWarning}</span>
+          <button onClick={() => setHolidayWarning(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#92400e', fontSize: 16, lineHeight: 1 }}>×</button>
+        </div>
+      )}
       <div className="page-header">
         <div>
           <h1 className="page-title">Attendance</h1>
@@ -288,6 +311,28 @@ export default function Attendance() {
           )}
         </div>
       </div>
+
+      {/* Working days info bar */}
+      {workingDaysInfo?.workingDays != null && (
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '8px 16px', marginBottom: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, color: '#1d4ed8', fontWeight: 600 }}>
+            📅 {new Date(date).toLocaleString('default', { month: 'long', year: 'numeric' })}
+          </span>
+          <span style={{ fontSize: 13, color: '#1e293b' }}>
+            <b style={{ color: '#1d4ed8' }}>{workingDaysInfo.workingDays}</b> working days
+          </span>
+          {workingDaysInfo.holidayCount > 0 && (
+            <span style={{ fontSize: 12, color: '#64748b' }}>
+              🎌 {workingDaysInfo.holidayCount} holiday{workingDaysInfo.holidayCount !== 1 ? 's' : ''}
+            </span>
+          )}
+          {workingDaysInfo.weekendCount > 0 && (
+            <span style={{ fontSize: 12, color: '#64748b' }}>
+              🗓 {workingDaysInfo.weekendCount} weekend day{workingDaysInfo.weekendCount !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Stats cards — full width equal columns */}
       {people.length > 0 && (

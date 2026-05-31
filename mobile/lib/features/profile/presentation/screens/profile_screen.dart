@@ -123,8 +123,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         authProvider.user?.phone ?? '',
                         isPhone: true),
                     if (''.isNotEmpty)
-                      _buildInfoRow(Icons.phone_callback_outlined,
-                          'Alternate Phone', ''),
+                      _buildInfoRow(
+                          Icons.phone_callback_outlined, 'Alternate Phone', ''),
                     _buildInfoRow(
                       Icons.map_outlined,
                       'Address',
@@ -194,43 +194,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
                 const SizedBox(height: AppDimensions.xl2),
-
-                // ── Logout Button ────────────────────────────────────────────
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.accentRed,
-                      side: const BorderSide(
-                          color: AppColors.accentRed, width: 1.5),
-                      padding: const EdgeInsets.symmetric(
-                          vertical: AppDimensions.md),
-                      shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppDimensions.radiusMd),
-                      ),
-                    ),
-                    onPressed: () =>
-                        _showLogoutBottomSheet(context, authProvider),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.logout_outlined, size: 20),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Log Out Account',
-                          style: TextStyle(
-                              color: AppColors.accentRed,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
-                              inherit: false),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppDimensions.xl),
               ],
             ),
           ),
@@ -587,104 +550,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             },
           ),
         ],
-      ),
-    );
-  }
-
-  void _showLogoutBottomSheet(BuildContext context, AuthProvider authProvider) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Consumer<ThemeProvider>(
-        builder: (context, themeProvider, child) {
-          final isDark = themeProvider.isDark;
-          return Container(
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.cardDark : Colors.white,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(AppDimensions.radiusLg),
-                topRight: Radius.circular(AppDimensions.radiusLg),
-              ),
-            ),
-            padding: const EdgeInsets.all(AppDimensions.base),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Handle bar
-                Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color:
-                        isDark ? AppColors.borderDark : AppColors.borderLight,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: AppDimensions.lg),
-                Text(
-                  'Log Out',
-                  style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 18,
-                      color: AppColors.accentRed),
-                ),
-                const SizedBox(height: AppDimensions.sm),
-                Text(
-                  'Are you sure you want to log out of your teacher account?',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
-                      fontSize: 14, color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: AppDimensions.xl),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: AppDimensions.md),
-                          shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(AppDimensions.radiusMd),
-                          ),
-                        ),
-                        onPressed: () => Navigator.pop(context),
-                        child: Text('Cancel',
-                            style: TextStyle(
-                                color: AppColors.textMuted,
-                                fontWeight: FontWeight.w600,
-                                inherit: false)),
-                      ),
-                    ),
-                    const SizedBox(width: AppDimensions.base),
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.accentRed,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              vertical: AppDimensions.md),
-                          shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(AppDimensions.radiusMd),
-                          ),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          authProvider.logout();
-                        },
-                        child: const Text('Log Out',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w600, inherit: false)),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppDimensions.sm),
-              ],
-            ),
-          );
-        },
       ),
     );
   }

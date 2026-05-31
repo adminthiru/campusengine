@@ -63,102 +63,114 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
     ));
   }
 
-  // ── Header (matches timetable screen design exactly) ──────────────────────
+  // ── Header ──────────────────────────────────────────────────────────────────
   Widget _header(BuildContext context, AttendanceProvider provider,
       String className, bool isDark) {
-    final displayClass = className.replaceAll(' ', '');
-    final studentCount = provider.students.length;
+    final today = DateTime.now();
+    final viewYear = provider.selectedDate.year;
+    final viewMonth = provider.selectedDate.month;
+    final firstOfMonth = DateTime(viewYear, viewMonth, 1);
+    final isCurrentMonth = viewYear == today.year && viewMonth == today.month;
+    final earliestMonth = DateTime(today.year - 1, today.month, 1);
+    final canGoPrev = firstOfMonth.isAfter(earliestMonth);
+    final canGoNext = !isCurrentMonth;
+
+    void goToPrevMonth() {
+      if (!canGoPrev) return;
+      final prev = DateTime(viewYear, viewMonth - 1, 1);
+      final lastOfPrev = DateTime(prev.year, prev.month + 1, 0).day;
+      provider.setDate(DateTime(prev.year, prev.month, lastOfPrev));
+    }
+
+    void goToNextMonth() {
+      if (!canGoNext) return;
+      final next = DateTime(viewYear, viewMonth + 1, 1);
+      final nextIsCurrent =
+          next.year == today.year && next.month == today.month;
+      provider
+          .setDate(nextIsCurrent ? today : DateTime(next.year, next.month, 1));
+    }
 
     return Container(
       color: isDark ? AppColors.cardDark : Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 16, 8, 4),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  DateFormat('MMMM yyyy').format(provider.selectedDate),
-                  style: AppTypography.s20Bold(
-                      color: isDark ? Colors.white : AppColors.textPrimary),
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Text(
-                      'Class Attendance',
-                      style: AppTypography.s12Regular(
-                          color: isDark
-                              ? AppColors.textMuted
-                              : AppColors.textSecondary),
-                    ),
-                    if (displayClass.isNotEmpty) ...[
-                      Text(
-                        '  ·  ',
-                        style: AppTypography.s12Regular(
-                            color: isDark
-                                ? AppColors.textMuted
-                                : AppColors.textSecondary),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 7, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          displayClass,
-                          style: AppTypography.s12Bold(
-                              color: AppColors.primary),
-                        ),
-                      ),
-                      if (studentCount > 0) ...[
-                        const SizedBox(width: 6),
-                        Text(
-                          '$studentCount students',
-                          style: AppTypography.s12Regular(
-                              color: isDark
-                                  ? AppColors.textMuted
-                                  : AppColors.textSecondary),
-                        ),
-                      ],
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-          // Calendar picker icon button (like timetable)
-          IconButton(
-            icon: const Icon(Icons.calendar_month, color: AppColors.primary),
-            onPressed: () async {
-              final picked = await showDatePicker(
-                context: context,
-                initialDate: provider.selectedDate,
-                firstDate: DateTime.now().subtract(const Duration(days: 90)),
-                lastDate: DateTime.now(),
-                builder: (ctx, child) => Theme(
-                  data: Theme.of(ctx).copyWith(
-                    colorScheme:
-                        const ColorScheme.light(primary: AppColors.primary),
+          // ── Row 1: label + class badge ───────────────────────────────────
+          Row(
+            children: [
+              Text(
+                'Mark Attendance',
+                style: AppTypography.s12Regular(
+                    color:
+                        isDark ? AppColors.textMuted : AppColors.textSecondary),
+              ),
+              const Spacer(),
+              if (className.isNotEmpty)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  child: child!,
+                  child: Text(
+                    className,
+                    style: AppTypography.s12SemiBold(color: AppColors.primary),
+                  ),
                 ),
-              );
-              if (picked != null && picked != provider.selectedDate) {
-                provider.setDate(picked);
-              }
-            },
+            ],
+          ),
+          const SizedBox(height: 10),
+          // ── Row 2: ← Month Year → (plain icons, no containers) ──────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_left_rounded,
+                  color: canGoPrev
+                      ? (isDark ? Colors.white : AppColors.textPrimary)
+                      : (isDark
+                          ? AppColors.textMuted.withValues(alpha: 0.3)
+                          : Colors.grey.shade300),
+                ),
+                onPressed: canGoPrev ? goToPrevMonth : null,
+                splashRadius: 20,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                DateFormat('MMMM yyyy').format(firstOfMonth),
+                style: AppTypography.s16Bold(
+                  color: isDark ? Colors.white : AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_right_rounded,
+                  color: canGoNext
+                      ? (isDark ? Colors.white : AppColors.textPrimary)
+                      : (isDark
+                          ? AppColors.textMuted.withValues(alpha: 0.3)
+                          : Colors.grey.shade300),
+                ),
+                onPressed: canGoNext ? goToNextMonth : null,
+                splashRadius: 20,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // ── View toggle (Daily List / Summary) — same pill as timetable ───────────
+  // ── View toggle (Daily List / Summary) ───────────────────────────────────
   Widget _viewToggle(bool showSummary, bool isDark) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -171,110 +183,50 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
       ),
       child: Row(
         children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => _showSummary = false),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: !showSummary
-                      ? (isDark ? AppColors.cardDark : Colors.white)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: !showSummary
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          )
-                        ]
-                      : [],
-                ),
-                child: Center(
-                  child: Text(
-                    'Daily List',
-                    style: AppTypography.s12SemiBold(
-                      color: !showSummary
-                          ? (isDark ? Colors.white : AppColors.textPrimary)
-                          : (isDark
-                              ? AppColors.textMuted
-                              : AppColors.textSecondary),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+          _ToggleTab(
+            label: 'Daily List',
+            selected: !showSummary,
+            isDark: isDark,
+            onTap: () => setState(() => _showSummary = false),
           ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => _showSummary = true),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: showSummary
-                      ? (isDark ? AppColors.cardDark : Colors.white)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: showSummary
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          )
-                        ]
-                      : [],
-                ),
-                child: Center(
-                  child: Text(
-                    'Summary',
-                    style: AppTypography.s12SemiBold(
-                      color: showSummary
-                          ? (isDark ? Colors.white : AppColors.textPrimary)
-                          : (isDark
-                              ? AppColors.textMuted
-                              : AppColors.textSecondary),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+          _ToggleTab(
+            label: 'Summary',
+            selected: showSummary,
+            isDark: isDark,
+            onTap: () => setState(() => _showSummary = true),
           ),
         ],
       ),
     );
   }
 
-  // ── Full-month calendar strip ─────────────────────────────────────────────
+  // ── Day-strip calendar (no navigator — header owns it) ─────────────────────
   Widget _calendarStrip(
       BuildContext context, AttendanceProvider provider, bool isDark) {
     final today = DateTime.now();
     final selectedDate = provider.selectedDate;
+    final viewYear = selectedDate.year;
+    final viewMonth = selectedDate.month;
+    final firstOfMonth = DateTime(viewYear, viewMonth, 1);
+    final isCurrentMonth = viewYear == today.year && viewMonth == today.month;
+    final lastDay =
+        isCurrentMonth ? today.day : DateTime(viewYear, viewMonth + 1, 0).day;
 
-    final firstOfMonth = DateTime(today.year, today.month, 1);
-    final totalDays = today.day;
-    final dates = List.generate(
-      totalDays,
-      (i) => firstOfMonth.add(Duration(days: i)),
-    );
+    final dates =
+        List.generate(lastDay, (i) => firstOfMonth.add(Duration(days: i)));
+
+    final scrollOffset = ((selectedDate.day - 1).clamp(0, lastDay - 1)) * 56.0;
 
     return Container(
       color: isDark ? AppColors.cardDark : Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 12),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        controller: ScrollController(
-            initialScrollOffset:
-                ((selectedDate.day - 1).clamp(0, totalDays - 1)) * 56.0),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        controller: ScrollController(initialScrollOffset: scrollOffset),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
         child: Row(
           children: dates.map((date) {
             final isSelected = DateUtils.isSameDay(date, provider.selectedDate);
             final isToday = DateUtils.isSameDay(date, today);
-
             final dayName = DateFormat('E').format(date);
             final dayNum = DateFormat('d').format(date);
 
@@ -349,147 +301,202 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
 
   // ── Summary grid view ─────────────────────────────────────────────────────
   Widget _summaryView(AttendanceProvider provider, bool isDark) {
-    Map<String, int> counts = {};
+    final Map<String, int> counts = {};
     for (final v in provider.attendanceMap.values) {
       final s = v['status'] ?? 'present';
       counts[s] = (counts[s] ?? 0) + 1;
     }
     final total = provider.students.length;
+    final presentCount = counts['present'] ?? 0;
+    final absentCount = counts['absent'] ?? 0;
+    final pct = total > 0 ? (presentCount / total * 100).round() : 0;
 
     return Expanded(
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 80),
         children: [
-          // Total count card
+          // ── Hero card ───────────────────────────────────────────────────
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [AppColors.primary, AppColors.primaryDark],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                  blurRadius: 14,
+                  offset: const Offset(0, 5),
+                ),
+              ],
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.groups_rounded,
-                    color: Colors.white, size: 28),
-                const SizedBox(width: 14),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                // ── top row: text left, ring right ──────────────────────
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text(
-                      '$total',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
+                    // text block — Expanded so it never overflows
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$total',
+                            style: AppTypography.s32Bold(color: Colors.white),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Total Students',
+                            style: AppTypography.s14Regular(
+                                color: Colors.white.withValues(alpha: 0.85)),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '$presentCount present · $absentCount absent',
+                            style: AppTypography.s12Regular(
+                                color: Colors.white.withValues(alpha: 0.7)),
+                          ),
+                        ],
                       ),
                     ),
-                    Text(
-                      'Total Students',
-                      style: AppTypography.s12Regular(
-                          color: Colors.white.withValues(alpha: 0.8)),
+                    const SizedBox(width: 16),
+                    // Ring chart — fixed 80×80 so layout is stable
+                    SizedBox(
+                      width: 80,
+                      height: 80,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          CircularProgressIndicator(
+                            value: total > 0 ? presentCount / total : 0,
+                            strokeWidth: 7,
+                            backgroundColor:
+                                Colors.white.withValues(alpha: 0.25),
+                            valueColor:
+                                const AlwaysStoppedAnimation(Colors.white),
+                          ),
+                          Center(
+                            child: Text(
+                              '$pct%',
+                              style: AppTypography.s16Bold(color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 16),
+                // ── progress bar ─────────────────────────────────────────
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: total > 0 ? presentCount / total : 0,
+                    backgroundColor: Colors.white.withValues(alpha: 0.25),
+                    valueColor: const AlwaysStoppedAnimation(Colors.white),
+                    minHeight: 5,
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          // Status breakdown cards
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.6,
-            children: _studentStatuses.map((o) {
-              final count = counts[o.key] ?? 0;
-              final pct = total > 0 ? (count / total * 100).round() : 0;
-              return Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.cardDark : Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: o.color.withValues(alpha: 0.25),
-                    width: 1.5,
-                  ),
-                  boxShadow: isDark
-                      ? []
-                      : [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          )
-                        ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: o.color,
-                            shape: BoxShape.circle,
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            o.label,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '$pct%',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: o.color,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '$count',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: isDark ? Colors.white : AppColors.textPrimary,
-                          ),
-                        ),
-                        Text(
-                          o.fullLabel,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: isDark
-                                ? AppColors.textMuted
-                                : AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
+          const SizedBox(height: 20),
+
+          // ── Section label ───────────────────────────────────────────────
+          Text(
+            'BREAKDOWN',
+            style: AppTypography.s12SemiBold(
+                color: isDark ? AppColors.textMuted : AppColors.textSecondary),
           ),
+          const SizedBox(height: 10),
+
+          // ── Status breakdown — plain list, no Spacer() ─────────────────
+          ..._studentStatuses.map((o) {
+            final count = counts[o.key] ?? 0;
+            final barPct = total > 0 ? count / total : 0.0;
+            final labelPct = total > 0 ? (count / total * 100).round() : 0;
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.cardDark : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isDark ? AppColors.borderDark : AppColors.borderLight,
+                ),
+                boxShadow: isDark ? [] : AppColors.shadowSm,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // top row: icon + label + count + %
+                  Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: o.color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          o.label,
+                          style: TextStyle(
+                            color: o.color,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          o.fullLabel,
+                          style: AppTypography.s14SemiBold(
+                            color:
+                                isDark ? Colors.white : AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '$count',
+                        style: AppTypography.s20Bold(
+                          color: isDark ? Colors.white : AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 38,
+                        child: Text(
+                          '$labelPct%',
+                          style: AppTypography.s13SemiBold(color: o.color),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // progress bar
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: barPct.toDouble(),
+                      backgroundColor: o.color.withValues(alpha: 0.12),
+                      valueColor: AlwaysStoppedAnimation(o.color),
+                      minHeight: 5,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -686,8 +693,7 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide:
-                            const BorderSide(color: AppColors.primary),
+                        borderSide: const BorderSide(color: AppColors.primary),
                       ),
                     ),
                   ),
@@ -721,8 +727,7 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
                         child: ElevatedButton(
                           onPressed: () {
                             provider.setStatus(s.id, tempStatus);
-                            provider.setRemarks(
-                                s.id, remarksController.text);
+                            provider.setRemarks(s.id, remarksController.text);
                             Navigator.pop(ctx);
                           },
                           style: ElevatedButton.styleFrom(
@@ -798,16 +803,15 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
                         CircleAvatar(
                           radius: 18,
                           backgroundColor: opt.color.withValues(alpha: 0.15),
-                          backgroundImage: s.photo != null
-                              ? NetworkImage(s.photo!)
-                              : null,
+                          backgroundImage:
+                              s.photo != null ? NetworkImage(s.photo!) : null,
                           child: s.photo == null
                               ? Text(
                                   s.name.isNotEmpty
                                       ? s.name.substring(0, 1).toUpperCase()
                                       : 'S',
-                                  style: AppTypography.s14Bold(
-                                      color: opt.color),
+                                  style:
+                                      AppTypography.s14Bold(color: opt.color),
                                 )
                               : null,
                         ),
@@ -883,8 +887,7 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
               InkWell(
                 onTap: provider.isSaved
                     ? null
-                    : () =>
-                        _showEditBottomSheet(context, provider, s, isDark),
+                    : () => _showEditBottomSheet(context, provider, s, isDark),
                 child: Container(
                   width: 46,
                   color: opt.color,
@@ -912,9 +915,11 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
     if (provider.isLoadingStudents || provider.students.isEmpty) return null;
 
     if (provider.isSaved) {
+      // Edit button — amber/orange to distinguish from Save
       return FloatingActionButton.extended(
         onPressed: () => provider.setIsSaved(false),
-        backgroundColor: AppColors.primary,
+        backgroundColor: const Color(0xFFF59E0B), // amber
+        elevation: 4,
         icon: const Icon(Icons.edit_rounded, color: Colors.white, size: 20),
         label: const Text(
           'Edit Attendance',
@@ -923,6 +928,7 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
         ),
       );
     } else {
+      // Save button — green to signal a positive action
       return FloatingActionButton.extended(
         onPressed: provider.isSaving
             ? null
@@ -940,7 +946,8 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
                   }
                 }
               },
-        backgroundColor: AppColors.primary,
+        backgroundColor: const Color(0xFF16A34A), // green-600
+        elevation: 4,
         icon: provider.isSaving
             ? const SizedBox(
                 width: 18,
@@ -948,7 +955,8 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
                 child: CircularProgressIndicator(
                     strokeWidth: 2, color: Colors.white),
               )
-            : const Icon(Icons.check_rounded, color: Colors.white, size: 20),
+            : const Icon(Icons.check_circle_rounded,
+                color: Colors.white, size: 20),
         label: Text(
           provider.isSaving ? 'Saving...' : 'Save Attendance',
           style: const TextStyle(
@@ -975,7 +983,8 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
             children: [
               Icon(Icons.groups_rounded,
                   size: 52,
-                  color: isDark ? AppColors.textMuted : AppColors.textSecondary),
+                  color:
+                      isDark ? AppColors.textMuted : AppColors.textSecondary),
               const SizedBox(height: 14),
               Text(
                 'No students found',
@@ -1035,13 +1044,12 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
           if (provider.isSaved)
             Container(
               margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: isDark ? AppColors.cardDark : AppColors.badgeSuccessBg,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                    color: AppColors.success.withValues(alpha: 0.3)),
+                border:
+                    Border.all(color: AppColors.success.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
@@ -1055,8 +1063,7 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
                       children: counts.entries.map((e) {
                         final opt = _optFor(e.key);
                         return Text('${opt.fullLabel}: ${e.value}',
-                            style: AppTypography.s12SemiBold(
-                                color: opt.color));
+                            style: AppTypography.s12SemiBold(color: opt.color));
                       }).toList(),
                     ),
                   ),
@@ -1087,9 +1094,8 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
         false;
     final showStudentTab = isClassTeacher && markStudentAttendance;
 
-    final className = provider.classes.isNotEmpty
-        ? provider.classes.first.fullName
-        : '';
+    final className =
+        provider.classes.isNotEmpty ? provider.classes.first.fullName : '';
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
@@ -1116,16 +1122,75 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
                 child: Text(
                   'You are not authorized to mark student attendance.',
                   style: AppTypography.s16Regular(
-                    color: isDark
-                        ? AppColors.textMuted
-                        : AppColors.textSecondary,
+                    color:
+                        isDark ? AppColors.textMuted : AppColors.textSecondary,
                   ),
                   textAlign: TextAlign.center,
                 ),
               ),
       ),
       floatingActionButton:
-          showStudentTab ? _buildFAB(context, provider, isDark) : null,
+          // Only show FAB in Daily List view, never in Summary
+          (showStudentTab && !_showSummary)
+              ? _buildFAB(context, provider, isDark)
+              : null,
+    );
+  }
+}
+
+// ── Shared animated toggle tab ────────────────────────────────────────────────
+class _ToggleTab extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _ToggleTab({
+    required this.label,
+    required this.selected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Use a consistent BoxShadow in both states so AnimatedContainer can
+    // interpolate smoothly — only the color changes, never the list length.
+    final shadow = BoxShadow(
+      color:
+          selected ? Colors.black.withValues(alpha: 0.07) : Colors.transparent,
+      blurRadius: selected ? 4 : 0,
+      offset: const Offset(0, 2),
+    );
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: selected
+                ? (isDark ? AppColors.cardDark : Colors.white)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [shadow],
+          ),
+          child: Center(
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeInOut,
+              style: AppTypography.s12SemiBold(
+                color: selected
+                    ? (isDark ? Colors.white : AppColors.textPrimary)
+                    : (isDark ? AppColors.textMuted : AppColors.textSecondary),
+              ),
+              child: Text(label),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

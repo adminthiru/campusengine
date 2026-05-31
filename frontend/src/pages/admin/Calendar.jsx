@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, CalendarDays, List, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, CalendarDays, List, X, Settings2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 
@@ -37,6 +37,7 @@ export default function Calendar() {
   const [modal, setModal] = useState(null); // null | { mode:'add'|'edit', event?, date? }
   const [form,  setForm]  = useState({});
   const [selectedDay, setSelectedDay] = useState(null);
+  const [scheduleModal, setScheduleModal] = useState(false);
 
   // ── Data ──────────────────────────────────────────────────────────────────
   const { data, isLoading } = useQuery({
@@ -148,29 +149,33 @@ export default function Calendar() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {/* View toggle */}
-          <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-            <button onClick={() => setView('calendar')} style={{ padding: '7px 14px', border: 'none', background: view === 'calendar' ? 'var(--primary)' : 'transparent', color: view === 'calendar' ? '#fff' : 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}>
-              <CalendarDays size={15} /> Month
-            </button>
-            <button onClick={() => setView('list')} style={{ padding: '7px 14px', border: 'none', background: view === 'list' ? 'var(--primary)' : 'transparent', color: view === 'list' ? '#fff' : 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}>
-              <List size={15} /> List
-            </button>
-          </div>
+          <button className="btn btn-secondary" onClick={() => setScheduleModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Settings2 size={16} /> Work Schedule
+          </button>
           <button className="btn btn-primary" onClick={() => openAdd(today.getDate())} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Plus size={16} /> Add Event
           </button>
         </div>
       </div>
 
-      {/* Legend */}
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        {Object.entries(TYPE_CONFIG).map(([k, v]) => (
-          <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: v.color }} />
-            <span style={{ color: 'var(--text-secondary)' }}>{v.label}</span>
-          </div>
-        ))}
+      {/* Legend + View toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          {Object.entries(TYPE_CONFIG).map(([k, v]) => (
+            <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: v.color }} />
+              <span style={{ color: 'var(--text-secondary)' }}>{v.label}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', flexShrink: 0 }}>
+          <button onClick={() => setView('calendar')} style={{ padding: '7px 14px', border: 'none', background: view === 'calendar' ? 'var(--primary)' : 'transparent', color: view === 'calendar' ? '#fff' : 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}>
+            <CalendarDays size={15} /> Month
+          </button>
+          <button onClick={() => setView('list')} style={{ padding: '7px 14px', border: 'none', background: view === 'list' ? 'var(--primary)' : 'transparent', color: view === 'list' ? '#fff' : 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}>
+            <List size={15} /> List
+          </button>
+        </div>
       </div>
 
       {view === 'calendar' ? (
@@ -185,6 +190,9 @@ export default function Calendar() {
       ) : (
         <ListView year={year} setYear={setYear} groupedList={groupedList} onEdit={openEdit} onDelete={handleDelete} onAdd={() => openAdd(1)} />
       )}
+
+      {/* Work Schedule Modal */}
+      {scheduleModal && <WorkScheduleModal onClose={() => setScheduleModal(false)} />}
 
       {/* Add/Edit Modal */}
       {modal && (
@@ -231,6 +239,191 @@ export default function Calendar() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Work Schedule Modal ───────────────────────────────────────────────────────
+
+const SAT_OPTIONS = [
+  { value: 'school_default', label: 'Follow school default' },
+  { value: 'all_working',    label: 'All Saturdays — Working' },
+  { value: 'all_holiday',    label: 'All Saturdays — Holiday' },
+  { value: 'alternate',      label: 'Alternate (1st & 3rd working, 2nd & 4th off)' },
+  { value: 'one_in_three',   label: '1-in-3 (1st working, 2nd & 3rd off)' },
+];
+
+const DAYS_OF_WEEK = [
+  { key: 'monday',    label: 'Mon' },
+  { key: 'tuesday',   label: 'Tue' },
+  { key: 'wednesday', label: 'Wed' },
+  { key: 'thursday',  label: 'Thu' },
+  { key: 'friday',    label: 'Fri' },
+  { key: 'saturday',  label: 'Sat' },
+  { key: 'sunday',    label: 'Sun' },
+];
+
+function WorkScheduleModal({ onClose }) {
+  const qc = useQueryClient();
+
+  // Fetch school config
+  const { data: schoolData, isLoading: schoolLoading } = useQuery({
+    queryKey: ['school'], queryFn: () => api.get('/school'),
+  });
+  const school = schoolData?.school || {};
+
+  // Fetch all classes
+  const { data: classData, isLoading: classLoading } = useQuery({
+    queryKey: ['classes'], queryFn: () => api.get('/classes'),
+  });
+  const classes = classData?.classes || [];
+
+  // Local state
+  const [workingDays, setWorkingDays] = useState(null);         // school.workingDays
+  const [empSatSchedule, setEmpSatSchedule] = useState('');     // for employees specifically
+  const [classSchedules, setClassSchedules] = useState({});     // { classId: saturdaySchedule }
+  const [saving, setSaving] = useState(false);
+  const [initialized, setInitialized] = useState(false);
+
+  if (!schoolLoading && !classLoading && !initialized) {
+    setWorkingDays({ ...{ monday:true, tuesday:true, wednesday:true, thursday:true, friday:true, saturday:false, sunday:false }, ...(school.workingDays || {}) });
+    setEmpSatSchedule(school.salaryConfig?.empSaturdaySchedule || 'school_default');
+    const map = {};
+    classes.forEach(c => { map[c._id] = c.saturdaySchedule || 'school_default'; });
+    setClassSchedules(map);
+    setInitialized(true);
+  }
+
+  const toggleDay = (key) => setWorkingDays(prev => ({ ...prev, [key]: !prev[key] }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // 1. Save school working days + employee saturday schedule
+      await api.put('/school', {
+        workingDays,
+        salaryConfig: { ...school.salaryConfig, empSaturdaySchedule: empSatSchedule },
+      });
+
+      // 2. Save each class's saturday schedule (only changed ones)
+      const classUpdates = classes
+        .filter(c => classSchedules[c._id] !== (c.saturdaySchedule || 'school_default'))
+        .map(c => api.put(`/classes/${c._id}`, { saturdaySchedule: classSchedules[c._id] }));
+      await Promise.all(classUpdates);
+
+      qc.invalidateQueries({ queryKey: ['school'] });
+      qc.invalidateQueries({ queryKey: ['classes'] });
+      qc.invalidateQueries({ queryKey: ['working-days'] });
+      toast.success('Work schedule saved');
+      onClose();
+    } catch {
+      toast.error('Failed to save');
+    }
+    setSaving(false);
+  };
+
+  const isLoading = schoolLoading || classLoading || !initialized;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ background: 'var(--bg-card,#fff)', borderRadius: 14, width: '100%', maxWidth: 640, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Work Schedule</h3>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>Configure working days and Saturday schedules for salary & attendance calculation</p>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={20} /></button>
+        </div>
+
+        {/* Body */}
+        <div style={{ overflowY: 'auto', padding: '20px 22px', flex: 1 }}>
+          {isLoading ? <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading...</div> : (
+            <>
+              {/* School working days */}
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>School Working Days</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+                  Days marked as working apply to all employees and classes (unless overridden below).
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {DAYS_OF_WEEK.map(d => {
+                    const on = workingDays?.[d.key] ?? (d.key !== 'saturday' && d.key !== 'sunday');
+                    return (
+                      <button key={d.key} type="button" onClick={() => toggleDay(d.key)}
+                        style={{ padding: '8px 16px', borderRadius: 20, fontWeight: 600, fontSize: 13, cursor: 'pointer', border: '2px solid', transition: 'all 0.15s',
+                          borderColor: on ? 'var(--primary)' : 'var(--border)',
+                          background:  on ? '#eff6ff' : 'transparent',
+                          color:       on ? 'var(--primary)' : 'var(--text-muted)',
+                        }}>
+                        {d.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Employee Saturday schedule */}
+              <div style={{ marginBottom: 24, padding: 16, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg-secondary,#f8fafc)' }}>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Employee Saturday Schedule</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                  Used for calculating monthly working days in salary LOP.
+                </div>
+                <select className="form-control" value={empSatSchedule} onChange={e => setEmpSatSchedule(e.target.value)}>
+                  {SAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                  {{
+                    school_default:  `Follows school default (Saturday is ${workingDays?.saturday ? 'working' : 'holiday'})`,
+                    all_working:    'All 4–5 Saturdays each month count as working days',
+                    all_holiday:    'All Saturdays are non-working — excluded from LOP divisor',
+                    alternate:      '1st & 3rd Saturdays working, 2nd & 4th are off',
+                    one_in_three:   '1st Saturday working, next 2 off — repeating cycle',
+                  }[empSatSchedule] || ''}
+                </div>
+              </div>
+
+              {/* Class-wise Saturday schedule */}
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Class-wise Saturday Schedule</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+                  Set a different Saturday pattern per class for student attendance calculation.
+                </div>
+                {classes.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>No classes found</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {classes.map(c => (
+                      <div key={c._id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-card,#fff)' }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, minWidth: 100, color: 'var(--primary)' }}>
+                          {c.name}{c.section ? ` ${c.section}` : ''}
+                        </div>
+                        <select
+                          className="form-control"
+                          style={{ flex: 1, fontSize: 13 }}
+                          value={classSchedules[c._id] || 'school_default'}
+                          onChange={e => setClassSchedules(prev => ({ ...prev, [c._id]: e.target.value }))}
+                        >
+                          {SAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 10, flexShrink: 0 }}>
+          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving || isLoading}>
+            {saving ? 'Saving...' : 'Save Schedule'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
