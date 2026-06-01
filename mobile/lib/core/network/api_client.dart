@@ -4,8 +4,7 @@ import '../storage/secure_storage.dart';
 
 class ApiClient {
   static final Dio _dio = Dio(BaseOptions(
-    baseUrl:
-        kIsWeb ? 'http://localhost:5000/api' : 'http://172.20.10.2:5000/api',
+    baseUrl: kIsWeb ? 'http://localhost:5000/api' : 'http://10.0.2.2:5000/api',
     connectTimeout: const Duration(seconds: 60),
     receiveTimeout: const Duration(seconds: 60),
     headers: {'Content-Type': 'application/json'},

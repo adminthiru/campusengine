@@ -6,7 +6,7 @@ import {
   DollarSign, CreditCard, CalendarDays, FileText, Truck,
   MessageSquare, CreditCard as IdCard, Settings, LogOut,
   GraduationCap, Building2, ChevronRight, Bell, BarChart3,
-  ClipboardList, Banknote, School, BookMarked, UsersRound, Calendar
+  ClipboardList, Banknote, School, BookMarked, UsersRound, Calendar, MapPin
 } from 'lucide-react';
 
 const navConfig = {
@@ -28,6 +28,7 @@ const navConfig = {
     { label: 'My Calendar', icon: Calendar, path: '/calendar' },
     { section: 'Attendance & Exams' },
     { label: 'Attendance', icon: UserCheck, path: '/attendance' },
+    { label: 'Staff Tracking', icon: MapPin, path: '/staff-tracking' },
     { label: 'Exams', icon: FileText, path: '/exams' },
     { label: 'Homework', icon: BookMarked, path: '/homework' },
     { section: 'Finance' },
@@ -53,6 +54,7 @@ const navConfig = {
     { label: 'My Calendar', icon: Calendar, path: '/calendar' },
     { section: 'Attendance & Exams' },
     { label: 'Attendance', icon: UserCheck, path: '/attendance' },
+    { label: 'Staff Tracking', icon: MapPin, path: '/staff-tracking' },
     { label: 'Exams', icon: FileText, path: '/exams' },
     { label: 'Homework', icon: BookMarked, path: '/homework' },
     { section: 'Finance' },
@@ -75,6 +77,7 @@ const navConfig = {
     { label: 'Classes', icon: BookOpen, path: '/classes' },
     { label: 'Timetable', icon: Clock, path: '/timetable' },
     { label: 'Attendance', icon: UserCheck, path: '/attendance' },
+    { label: 'Staff Tracking', icon: MapPin, path: '/staff-tracking' },
     { label: 'Exams', icon: FileText, path: '/exams' },
     { label: 'Homework', icon: BookMarked, path: '/homework' },
     { section: 'Finance' },

@@ -24,6 +24,83 @@ class _DashboardHeaderState extends State<DashboardHeader> {
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _now = DateTime.now());
     });
+    // Restore today's check-in state from the server.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final checkIn = context.read<CheckInProvider>();
+      if (!checkIn.loadedToday) checkIn.loadToday();
+    });
+  }
+
+  Future<void> _onCheckInOut() async {
+    final checkIn = context.read<CheckInProvider>();
+    final wasCheckedIn = checkIn.isCheckedIn;
+    final ok = await checkIn.handleCheckInOut();
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (ok) {
+      messenger.showSnackBar(SnackBar(
+        backgroundColor: AppColors.success,
+        content: Text(wasCheckedIn
+            ? 'Checked out — location recorded'
+            : 'Checked in — location recorded'),
+      ));
+    } else {
+      messenger.showSnackBar(SnackBar(
+        backgroundColor: AppColors.error,
+        content: Text(checkIn.lastError ?? 'Something went wrong'),
+      ));
+    }
+  }
+
+  Widget _timePill(
+    bool isDark, {
+    required IconData icon,
+    required String label,
+    required DateTime? time,
+    required Color color,
+  }) {
+    final hasTime = time != null;
+    final display = hasTime ? DateFormat('hh:mm a').format(time) : '--:--';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: (isDark ? AppColors.cardDark : AppColors.bgLight)
+            .withValues(alpha: isDark ? 1 : 0.6),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color: isDark ? AppColors.borderDark : AppColors.borderLight),
+      ),
+      child: Row(
+        children: [
+          Icon(icon,
+              size: 16, color: hasTime ? color : AppColors.textMuted),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textMuted,
+                ),
+              ),
+              Text(
+                display,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: hasTime
+                      ? (isDark ? Colors.white : AppColors.textPrimary)
+                      : AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -211,9 +288,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                       ),
                     ),
                     ElevatedButton(
-                      onPressed: checkIn.isLoading
-                          ? null
-                          : () => checkIn.handleCheckInOut(),
+                      onPressed: checkIn.isLoading ? null : _onCheckInOut,
                       style: ElevatedButton.styleFrom(
                         minimumSize: Size.zero,
                         backgroundColor:
@@ -249,6 +324,32 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                     color:
                         isDark ? AppColors.borderDark : AppColors.borderLight),
                 const SizedBox(height: 12),
+                if (checkIn.checkInTime != null) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _timePill(
+                          isDark,
+                          icon: Icons.login_rounded,
+                          label: 'Check In',
+                          time: checkIn.checkInTime,
+                          color: AppColors.success,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _timePill(
+                          isDark,
+                          icon: Icons.logout_rounded,
+                          label: 'Check Out',
+                          time: checkIn.checkOutTime,
+                          color: AppColors.error,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 Row(
                   children: [
                     Icon(Icons.calendar_today_rounded,

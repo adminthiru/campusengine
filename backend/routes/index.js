@@ -16,6 +16,7 @@ const feesCtrl = require('../controllers/feesController');
 const salCtrl = require('../controllers/salaryController');
 const ttCtrl = require('../controllers/timetableController');
 const examCtrl = require('../controllers/examController');
+const staffCheckinCtrl = require('../controllers/staffCheckinController');
 
 // Models for simple CRUD
 const Class = require('../models/Class');
@@ -552,6 +553,14 @@ router.delete('/subjects/:id', protect, authorize('admin', 'correspondent', 'pri
     res.json({ success: true });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
+
+// ============== STAFF CHECK-IN / CHECK-OUT (geo-tagged) ==============
+// Self-service punches for teachers & staff (mobile app)
+router.post('/staff-attendance/check-in',  protect, checkSubscription, staffCheckinCtrl.checkIn);
+router.post('/staff-attendance/check-out', protect, checkSubscription, staffCheckinCtrl.checkOut);
+router.get('/staff-attendance/today',      protect, staffCheckinCtrl.getToday);
+// Admin: track staff login time + location
+router.get('/staff-attendance', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), staffCheckinCtrl.listCheckins);
 
 // ============== ATTENDANCE ==============
 router.post('/attendance/student', protect, checkSubscription, attCtrl.markStudentAttendance);

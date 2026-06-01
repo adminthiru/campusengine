@@ -3,6 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../../core/network/api_client.dart';
 
+/// Handles geo-tagged self check-in / check-out for teachers & staff.
+///
+/// Both punches capture the current GPS location + time and are persisted on
+/// the server (`/staff-attendance/*`), so admins can track staff login time
+/// and location. State is restored from the server on load so the card stays
+/// correct across app restarts.
 class CheckInProvider extends ChangeNotifier {
   bool _isCheckedIn = false;
   bool get isCheckedIn => _isCheckedIn;
@@ -10,93 +16,136 @@ class CheckInProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
+  bool _loadedToday = false;
+  bool get loadedToday => _loadedToday;
+
   DateTime? _checkInTime;
   DateTime? get checkInTime => _checkInTime;
+
+  DateTime? _checkOutTime;
+  DateTime? get checkOutTime => _checkOutTime;
+
+  String? _lastError;
+  String? get lastError => _lastError;
 
   String _durationString = "00:00:00";
   String get durationString => _durationString;
 
   Timer? _timer;
 
-  Future<void> handleCheckInOut() async {
-    if (_isCheckedIn) {
-      await _checkOut();
-    } else {
-      await _checkIn();
+  /// Restore today's punch state from the server (call on dashboard load).
+  Future<void> loadToday() async {
+    try {
+      final res = await ApiClient.get('/staff-attendance/today');
+      _applyRecord(res.data['record']);
+    } catch (e) {
+      debugPrint('loadToday error: ${ApiClient.errorMessage(e)}');
+    } finally {
+      _loadedToday = true;
+      notifyListeners();
     }
   }
 
-  Future<void> _checkIn() async {
+  /// Returns true on success. On failure, [lastError] holds a message.
+  Future<bool> handleCheckInOut() {
+    return _isCheckedIn ? _punch(checkOut: true) : _punch(checkOut: false);
+  }
+
+  Future<bool> _punch({required bool checkOut}) async {
     _isLoading = true;
+    _lastError = null;
     notifyListeners();
-
     try {
-      bool serviceEnabled;
-      LocationPermission permission;
-
-      // Test if location services are enabled.
-      serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        throw Exception('Location services are disabled.');
-      }
-
-      permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          throw Exception('Location permissions are denied');
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        throw Exception('Location permissions are permanently denied, we cannot request permissions.');
-      }
-
-      // Fetch the location
-      await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      );
-
-      // Make the actual API call
-      await ApiClient.post('/attendance/employee', data: {
-        'status': 'present'
+      final pos = await _resolveLocation();
+      final path =
+          checkOut ? '/staff-attendance/check-out' : '/staff-attendance/check-in';
+      final res = await ApiClient.post(path, data: {
+        'lat': pos.latitude,
+        'lng': pos.longitude,
+        'accuracy': pos.accuracy,
       });
-
-      // Once location is fetched, successfully checked in
-      _isCheckedIn = true;
-      _checkInTime = DateTime.now();
-      _startTimer();
+      _applyRecord(res.data['record']);
+      return true;
     } catch (e) {
-      debugPrint('Check in error: $e');
+      _lastError = e is String ? e : ApiClient.errorMessage(e);
+      debugPrint('check-in/out error: $_lastError');
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> _checkOut() async {
-    _isLoading = true;
-    notifyListeners();
-    
-    // In a real app we'd call an API here to register check out time.
-    // However, the backend currently only marks status: 'present'
-    await Future.delayed(const Duration(milliseconds: 500)); 
+  /// Resolves the current GPS position, prompting for permission as needed.
+  /// Throws a user-facing [String] message on any failure.
+  Future<Position> _resolveLocation() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      throw 'Location is turned off. Please enable GPS and try again.';
+    }
 
-    _stopTimer();
-    _isCheckedIn = false;
-    _checkInTime = null;
-    _durationString = "00:00:00";
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied) {
+      throw 'Location permission denied. Allow location access to check in.';
+    }
+    if (permission == LocationPermission.deniedForever) {
+      throw 'Location permission is permanently denied. Enable it in Settings.';
+    }
 
-    _isLoading = false;
-    notifyListeners();
+    return Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 20),
+      ),
+    );
+  }
+
+  /// Maps a server record onto local state.
+  void _applyRecord(dynamic record) {
+    if (record == null) {
+      _isCheckedIn = false;
+      _checkInTime = null;
+      _checkOutTime = null;
+      _stopTimer();
+      _durationString = "00:00:00";
+      return;
+    }
+
+    final ci = record['checkIn'];
+    final co = record['checkOut'];
+    _checkInTime = _parseTime(ci?['time']);
+    _checkOutTime = _parseTime(co?['time']);
+
+    // Considered "checked in" only when there's a check-in and no check-out.
+    _isCheckedIn = _checkInTime != null && _checkOutTime == null;
+
+    if (_isCheckedIn) {
+      _startTimer();
+    } else {
+      _stopTimer();
+      _durationString = (_checkInTime != null && _checkOutTime != null)
+          ? _formatDuration(_checkOutTime!.difference(_checkInTime!))
+          : "00:00:00";
+    }
+  }
+
+  DateTime? _parseTime(dynamic value) {
+    if (value == null) return null;
+    return DateTime.tryParse(value.toString())?.toLocal();
   }
 
   void _startTimer() {
     _timer?.cancel();
+    if (_checkInTime != null) {
+      _durationString = _formatDuration(DateTime.now().difference(_checkInTime!));
+    }
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_checkInTime != null) {
-        final duration = DateTime.now().difference(_checkInTime!);
-        _durationString = _formatDuration(duration);
+        _durationString =
+            _formatDuration(DateTime.now().difference(_checkInTime!));
         notifyListeners();
       }
     });
@@ -109,9 +158,10 @@ class CheckInProvider extends ChangeNotifier {
 
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, "0");
-    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
-    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
-    return "${twoDigits(duration.inHours)}:$twoDigitMinutes:$twoDigitSeconds";
+    final h = twoDigits(duration.inHours);
+    final m = twoDigits(duration.inMinutes.remainder(60));
+    final s = twoDigits(duration.inSeconds.remainder(60));
+    return "$h:$m:$s";
   }
 
   @override

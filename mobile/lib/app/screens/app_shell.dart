@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:skl_teacher/app/widgets/app_bottom_nav.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/theme_provider.dart';
 import 'package:skl_teacher/features/auth/presentation/providers/auth_provider.dart';
@@ -213,14 +214,13 @@ class _AppShellState extends State<AppShell> {
         ],
       ),
       body: widget.child,
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
+      bottomNavigationBar: AppBottomNav(
         currentIndex: idx,
         onTap: (i) => context.go(tabs[i].path),
         items: tabs
-            .map((t) => BottomNavigationBarItem(
-                  icon: Icon(t.icon),
-                  activeIcon: Icon(t.activeIcon),
+            .map((t) => AppBottomNavItem(
+                  icon: t.icon,
+                  activeIcon: t.activeIcon,
                   label: t.label,
                 ))
             .toList(),
