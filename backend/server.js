@@ -53,7 +53,8 @@ if (process.env.NODE_ENV === 'production') {
   const frontendDist = path.join(__dirname, '../frontend/dist');
   app.use(express.static(frontendDist));
   // Catch-all: send index.html for any non-API route (React Router)
-  app.get('*', (req, res) => {
+  // Express 5 requires a named wildcard — '*' alone throws a PathError
+  app.get('/{*path}', (req, res) => {
     res.sendFile(path.join(frontendDist, 'index.html'));
   });
 }
