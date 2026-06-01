@@ -31,3 +31,7 @@ Thumbs.db
 
 # Misc
 dist/
+
+# Scratch / temp files
+frontend/scratch/
+scratch/
