@@ -19,8 +19,12 @@ app.use(cors({
     if (!origin) return callback(null, true);
     // Allow any localhost port (Flutter web dev server uses random ports)
     if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return callback(null, true);
-    // Allow configured client URL
-    if (origin === process.env.CLIENT_URL) return callback(null, true);
+    // Allow configured client URL (supports comma-separated list for multiple origins,
+    // e.g. "https://myapp.vercel.app,https://myapp.com")
+    const allowed = (process.env.CLIENT_URL || '').split(',').map(u => u.trim());
+    if (allowed.includes(origin)) return callback(null, true);
+    // Allow any *.vercel.app subdomain (preview deployments)
+    if (/^https:\/\/[^.]+\.vercel\.app$/.test(origin)) return callback(null, true);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true
@@ -34,7 +38,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, validate: { xForwardedForHeader: false } });
 app.use('/api', limiter);
 
-// Static files
+// Static files (uploads)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
@@ -43,6 +47,16 @@ app.use('/api', require('./routes/index'));
 // SMS Scheduler
 const { startScheduler } = require('./utils/scheduler');
 startScheduler();
+
+// Serve React frontend in production (built by Railway before starting the server)
+if (process.env.NODE_ENV === 'production') {
+  const frontendDist = path.join(__dirname, '../frontend/dist');
+  app.use(express.static(frontendDist));
+  // Catch-all: send index.html for any non-API route (React Router)
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+}
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'OK', timestamp: new Date() }));
