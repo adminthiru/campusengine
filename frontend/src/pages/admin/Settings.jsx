@@ -272,9 +272,9 @@ function GradeSettings() {
 }
 
 const DEFAULT_LEAVE_TYPES = [
-  { code: 'od', label: 'On Duty',      color: '#0ea5e9', enabled: true, daysPerMonth: 0, note: 'Employee working outside school premises' },
-  { code: 'cl', label: 'Casual Leave', color: '#8b5cf6', enabled: true, daysPerMonth: 1, note: 'Short-notice personal leave' },
-  { code: 'sl', label: 'Sick Leave',   color: '#ec4899', enabled: true, daysPerMonth: 1, note: 'Medical / health-related absence' },
+  { code: 'od', label: 'On Duty',      color: '#0ea5e9', enabled: true, daysPerMonth: 0, carryForward: false, note: 'Employee working outside school premises' },
+  { code: 'cl', label: 'Casual Leave', color: '#8b5cf6', enabled: true, daysPerMonth: 1, carryForward: false, note: 'Short-notice personal leave' },
+  { code: 'sl', label: 'Sick Leave',   color: '#ec4899', enabled: true, daysPerMonth: 1, carryForward: false, note: 'Medical / health-related absence' },
 ];
 
 function Toggle({ on, color, onChange }) {
@@ -343,60 +343,114 @@ function LeaveSettings() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
         {leaveTypes.map(lt => (
           <div key={lt.code} style={{
-            display: 'flex', alignItems: 'center', gap: 16,
-            padding: '16px 20px', borderRadius: 10,
+            borderRadius: 10,
             border: `1px solid ${lt.enabled ? lt.color + '44' : 'var(--border)'}`,
             background: lt.enabled ? lt.color + '08' : '#fafafa',
             opacity: lt.enabled ? 1 : 0.65,
-            transition: 'all 0.2s'
+            transition: 'all 0.2s',
+            overflow: 'hidden',
           }}>
-            {/* Badge + info */}
-            <span style={{
-              fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 6,
-              background: lt.color + '22', color: lt.color, letterSpacing: '0.05em', flexShrink: 0
-            }}>{lt.code.toUpperCase()}</span>
-            <div style={{ flex: 1 }}>
-              <div className="text-14-semibold">{lt.label}</div>
-              <div className="text-12-regular" style={{ color: 'var(--text-muted)', marginTop: 1 }}>{lt.note}</div>
+            {/* Top row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px' }}>
+              {/* Badge + info */}
+              <span style={{
+                fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 6,
+                background: lt.color + '22', color: lt.color, letterSpacing: '0.05em', flexShrink: 0
+              }}>{lt.code.toUpperCase()}</span>
+              <div style={{ flex: 1 }}>
+                <div className="text-14-semibold">{lt.label}</div>
+                <div className="text-12-regular" style={{ color: 'var(--text-muted)', marginTop: 1 }}>{lt.note}</div>
+              </div>
+
+              {/* Monthly input + yearly calculated total */}
+              {lt.code !== 'od' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Days / month</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <input
+                        type="number" min={0} step={0.5} className="form-control"
+                        style={{ width: 60, textAlign: 'center', padding: '4px 6px', fontSize: 16, fontWeight: 700, color: lt.color }}
+                        value={lt.daysPerMonth ?? ''}
+                        placeholder="0"
+                        disabled={!lt.enabled}
+                        onChange={e => update(lt.code, 'daysPerMonth', Number(e.target.value))}
+                      />
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>days</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>= Per year</label>
+                    <div style={{
+                      padding: '4px 14px', borderRadius: 6, background: lt.color + '18',
+                      fontSize: 16, fontWeight: 700, color: lt.color, minWidth: 60, textAlign: 'center'
+                    }}>
+                      {(lt.daysPerMonth || 0) * 12}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ minWidth: 80, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>
+                  No limit
+                </div>
+              )}
+
+              {/* Toggle */}
+              <Toggle on={lt.enabled} color={lt.color} onChange={() => update(lt.code, 'enabled', !lt.enabled)} />
             </div>
 
-            {/* Monthly input + yearly calculated total */}
-            {lt.code !== 'od' ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
-                {/* Per month */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                  <label style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Days / month</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <input
-                      type="number" min={0} step={0.5} className="form-control"
-                      style={{ width: 60, textAlign: 'center', padding: '4px 6px', fontSize: 16, fontWeight: 700, color: lt.color }}
-                      value={lt.daysPerMonth ?? ''}
-                      placeholder="0"
-                      disabled={!lt.enabled}
-                      onChange={e => update(lt.code, 'daysPerMonth', Number(e.target.value))}
-                    />
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>days</span>
-                  </div>
-                </div>
-                {/* Arrow + yearly total */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                  <label style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>= Per year</label>
-                  <div style={{
-                    padding: '4px 14px', borderRadius: 6, background: lt.color + '18',
-                    fontSize: 16, fontWeight: 700, color: lt.color, minWidth: 60, textAlign: 'center'
-                  }}>
-                    {(lt.daysPerMonth || 0) * 12}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div style={{ minWidth: 80, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>
-                No limit
+            {/* Carry-forward row — only for CL and SL */}
+            {lt.code !== 'od' && lt.enabled && (
+              <div style={{
+                borderTop: `1px dashed ${lt.color}33`,
+                padding: '12px 20px',
+                display: 'flex', alignItems: 'flex-start', gap: 24,
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', paddingTop: 2, flexShrink: 0 }}>
+                  Unused leaves
+                </span>
+                {[
+                  {
+                    value: false,
+                    title: 'Monthly reset',
+                    desc: 'Unused leaves are forfeited at month end — does not roll over',
+                  },
+                  {
+                    value: true,
+                    title: 'Carry forward',
+                    desc: 'Unused leaves accumulate and roll into the next month (until year end)',
+                  },
+                ].map(opt => {
+                  const active = (lt.carryForward ?? false) === opt.value;
+                  return (
+                    <label key={String(opt.value)} style={{
+                      display: 'flex', alignItems: 'flex-start', gap: 10,
+                      cursor: 'pointer', flex: 1,
+                      padding: '10px 14px', borderRadius: 8,
+                      border: `1.5px solid ${active ? lt.color : 'var(--border)'}`,
+                      background: active ? lt.color + '0d' : 'white',
+                      transition: 'all 0.15s',
+                    }}>
+                      <input
+                        type="radio"
+                        name={`carry-${lt.code}`}
+                        checked={active}
+                        onChange={() => update(lt.code, 'carryForward', opt.value)}
+                        style={{ accentColor: lt.color, marginTop: 2, flexShrink: 0 }}
+                      />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: active ? lt.color : 'var(--text-primary)' }}>
+                          {opt.title}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                          {opt.desc}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             )}
-
-            {/* Toggle */}
-            <Toggle on={lt.enabled} color={lt.color} onChange={() => update(lt.code, 'enabled', !lt.enabled)} />
           </div>
         ))}
       </div>
@@ -423,6 +477,15 @@ function LeaveSettings() {
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
                 = <strong style={{ color: lt.color }}>{(lt.daysPerMonth || 0) * 12}</strong> days / year
+              </div>
+              <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
+                  background: lt.carryForward ? '#10b98122' : '#f59e0b22',
+                  color: lt.carryForward ? '#10b981' : '#f59e0b',
+                }}>
+                  {lt.carryForward ? '↩ Carry forward' : '✕ Monthly reset'}
+                </span>
               </div>
             </div>
           ))}

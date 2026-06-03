@@ -154,6 +154,18 @@ router.put('/school/fee-terms', protect, authorize('admin', 'correspondent'), as
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+router.put('/school/staff-attendance-timing', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const { onTimeBy, lateFrom, halfDayFrom, schoolEndTime } = req.body;
+    const school = await School.findByIdAndUpdate(
+      req.user.school,
+      { staffAttendanceTiming: { onTimeBy, lateFrom, halfDayFrom, schoolEndTime } },
+      { new: true }
+    );
+    res.json({ success: true, school });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // Subscription
 router.post('/subscription/create-order', protect, async (req, res) => {
   try {
@@ -660,26 +672,38 @@ router.get('/attendance/employee-summary', protect, checkSubscription, async (re
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
-// Employee leave balance for a given month (counts CL/SL usage per employee)
+// Employee leave balance — returns both monthly and year-to-date CL/SL usage per employee
 router.get('/attendance/leave-balance', protect, checkSubscription, async (req, res) => {
   try {
     const { month, year } = req.query;
     const m = Number(month), y = Number(year);
-    const records = await Attendance.find({
-      school: req.user.school, type: 'employee',
-      date: { $gte: new Date(y, m - 1, 1), $lt: new Date(y, m, 1) }
-    });
-    const used = {};
-    for (const att of records) {
-      for (const rec of att.records) {
-        const id = rec.employee?.toString();
-        if (!id) continue;
-        if (!used[id]) used[id] = { cl: 0, sl: 0 };
-        if (rec.status === 'cl') used[id].cl++;
-        if (rec.status === 'sl') used[id].sl++;
+
+    const monthFrom = new Date(y, m - 1, 1);
+    const monthTo   = new Date(y, m, 1);
+    const yearFrom  = new Date(y, 0, 1);
+    const yearTo    = new Date(y + 1, 0, 1);
+
+    // Fetch month records and year records in parallel
+    const [monthRecords, yearRecords] = await Promise.all([
+      Attendance.find({ school: req.user.school, type: 'employee', date: { $gte: monthFrom, $lt: monthTo } }),
+      Attendance.find({ school: req.user.school, type: 'employee', date: { $gte: yearFrom,  $lt: yearTo  } }),
+    ]);
+
+    const tally = (records) => {
+      const used = {};
+      for (const att of records) {
+        for (const rec of att.records) {
+          const id = rec.employee?.toString();
+          if (!id) continue;
+          if (!used[id]) used[id] = { cl: 0, sl: 0 };
+          if (rec.status === 'cl') used[id].cl++;
+          if (rec.status === 'sl') used[id].sl++;
+        }
       }
-    }
-    res.json({ success: true, used });
+      return used;
+    };
+
+    res.json({ success: true, used: tally(monthRecords), usedYtd: tally(yearRecords) });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
@@ -1275,6 +1299,115 @@ router.post('/leaves', protect, authorize('teacher', 'principal', 'admin', 'corr
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+// Teacher: my leave balance (respects carry-forward setting per leave type)
+router.get('/leaves/my-balance', protect, async (req, res) => {
+  try {
+    const school = await School.findById(req.user.school).select('leaveTypes');
+    const leaveTypes = school?.leaveTypes ?? [];
+
+    const getType = code => leaveTypes.find(l => l.code === code.toLowerCase());
+    const clType = getType('cl');
+    const slType = getType('sl');
+
+    const now   = new Date();
+    const year  = now.getFullYear();
+    const month = now.getMonth() + 1; // 1-12
+
+    const yearStart  = new Date(year, 0, 1);
+    const yearEnd    = new Date(year + 1, 0, 1);
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd   = new Date(year, month, 1);
+
+    // Get this teacher's employee record
+    const emp = await Employee.findOne({ user: req.user._id, school: req.user.school }).select('_id');
+
+    // Count used days from attendance records only — single source of truth.
+    // Captures both admin manual marks ('cl'/'sl') and app-approved leaves
+    // (approval writes 'cl'/'sl' directly into attendance, so no double-count needed).
+    const countFromAttendance = async (statusCode, from, to) => {
+      if (!emp) return 0;
+      const docs = await Attendance.find({
+        school: req.user.school, type: 'employee',
+        date: { $gte: from, $lt: to }
+      }).select('records');
+      let total = 0;
+      for (const att of docs) {
+        for (const rec of att.records) {
+          if (rec.employee?.toString() === emp._id.toString() && rec.status === statusCode) {
+            total++;
+          }
+        }
+      }
+      return total;
+    };
+
+    // Pending: teacher applied but not yet approved — not yet in attendance
+    const pendingFromLeave = async (leaveTypeCode, from, to) => {
+      const result = await Leave.aggregate([
+        { $match: { user: req.user._id, school: req.user.school,
+                    leaveType: leaveTypeCode, status: 'pending',
+                    fromDate: { $gte: from, $lt: to } } },
+        { $group: { _id: null, total: { $sum: '$days' } } }
+      ]);
+      return result[0]?.total || 0;
+    };
+
+    const calcBalance = async (typeDoc, leaveTypeCode, attCode) => {
+      const dpm          = typeDoc?.daysPerMonth ?? 0;
+      const carryForward = typeDoc?.carryForward ?? false;
+
+      const [from, to] = carryForward
+        ? [yearStart, yearEnd]
+        : [monthStart, monthEnd];
+
+      const entitled = carryForward ? dpm * month : dpm;
+      const used     = await countFromAttendance(attCode, from, to);
+      const pending  = await pendingFromLeave(leaveTypeCode, from, to);
+
+      return {
+        allocated: entitled, used, pending,
+        available: Math.max(0, entitled - used - pending),
+        carryForward: carryForward ?? false,
+      };
+    };
+
+    const [cl, sl] = await Promise.all([
+      calcBalance(clType, 'CL', 'cl'),
+      calcBalance(slType, 'SL', 'sl'),
+    ]);
+
+    res.json({ success: true, balance: { cl, sl } });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Teacher: update own pending leave
+router.put('/leaves/my-leaves/:id', protect, async (req, res) => {
+  try {
+    const leave = await Leave.findOne({ _id: req.params.id, user: req.user._id, school: req.user.school });
+    if (!leave) return res.status(404).json({ success: false, message: 'Leave not found' });
+    if (leave.status !== 'pending') return res.status(400).json({ success: false, message: 'Only pending leaves can be edited' });
+    const { leaveType, fromDate, toDate, days, reason } = req.body;
+    if (leaveType) leave.leaveType = leaveType;
+    if (fromDate)  leave.fromDate  = fromDate;
+    if (toDate)    leave.toDate    = toDate;
+    if (days)      leave.days      = Number(days);
+    if (reason)    leave.reason    = reason;
+    await leave.save();
+    res.json({ success: true, leave });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Teacher: delete own pending leave
+router.delete('/leaves/my-leaves/:id', protect, async (req, res) => {
+  try {
+    const leave = await Leave.findOne({ _id: req.params.id, user: req.user._id, school: req.user.school });
+    if (!leave) return res.status(404).json({ success: false, message: 'Leave not found' });
+    if (leave.status !== 'pending') return res.status(400).json({ success: false, message: 'Only pending leaves can be deleted' });
+    await leave.deleteOne();
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // Teacher: my leave history
 router.get('/leaves/my-leaves', protect, async (req, res) => {
   try {
@@ -1307,21 +1440,57 @@ router.put('/leaves/:id', protect, authorize('admin', 'correspondent', 'principa
 
     leave.status = status;
     if (adminNote) leave.adminNote = adminNote;
+
     if (status === 'approved') {
       leave.approvedBy = req.user._id;
       leave.approvedAt = new Date();
 
-      // Auto-mark attendance as 'leave' for each date in range
-      const start = new Date(leave.fromDate);
-      const end = new Date(leave.toDate);
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        await Attendance.findOneAndUpdate(
-          { school: req.user.school, employee: leave.employee._id, date: new Date(d) },
-          { status: 'leave', markedBy: req.user._id },
-          { upsert: true, new: true }
-        );
+      // Map leave type to attendance status
+      // CL → 'cl', SL → 'sl', LOP → 'absent'
+      const attStatus = leave.leaveType === 'CL' ? 'cl'
+                      : leave.leaveType === 'SL' ? 'sl'
+                      : 'absent'; // LOP
+
+      const empId = leave.employee._id;
+      // Normalize to UTC midnight using LOCAL date (server runs in IST, same as admin UI)
+      const toUTCMidnight = dt => {
+        const local = new Date(dt);
+        const y = local.getFullYear();
+        const m = String(local.getMonth() + 1).padStart(2, '0');
+        const d = String(local.getDate()).padStart(2, '0');
+        return new Date(`${y}-${m}-${d}T00:00:00.000Z`);
+      };
+      const start = toUTCMidnight(leave.fromDate);
+      const end   = toUTCMidnight(leave.toDate);
+
+      // Mark each day in the leave range in the type:'employee' attendance records
+      for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+        const dayDate  = new Date(d);
+        const existing = await Attendance.findOne({
+          school: req.user.school, type: 'employee', date: dayDate,
+        });
+
+        if (existing) {
+          const idx = existing.records.findIndex(r => r.employee?.toString() === empId.toString());
+          if (idx !== -1) {
+            existing.records[idx].status  = attStatus;
+            existing.records[idx].remarks = `Leave: ${leave.leaveType}`;
+          } else {
+            existing.records.push({ employee: empId, status: attStatus, remarks: `Leave: ${leave.leaveType}` });
+          }
+          existing.markedBy = req.user._id;
+          await existing.save();
+        } else {
+          // No attendance document for this day — create one for just this employee
+          await Attendance.create({
+            school: req.user.school, type: 'employee', date: dayDate,
+            markedBy: req.user._id,
+            records: [{ employee: empId, status: attStatus, remarks: `Leave: ${leave.leaveType}` }],
+          });
+        }
       }
     }
+
     await leave.save();
     res.json({ success: true, leave });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }

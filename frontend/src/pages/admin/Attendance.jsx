@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { UserCheck, Save, ChevronLeft, ChevronRight, Edit2 } from 'lucide-react';
+import { UserCheck, Save, ChevronLeft, ChevronRight, Edit2, Settings, Clock, CheckCircle, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { PageLoader, Avatar, SearchInput } from '../../components/ui';
@@ -20,6 +20,71 @@ const LEAVE_META = {
   cl: { label: 'CL', fullLabel: 'Casual Leave', color: '#8b5cf6', bg: '#f5f3ff' },
   sl: { label: 'SL', fullLabel: 'Sick Leave',   color: '#ec4899', bg: '#fdf2f8' },
 };
+
+const toAmPm = (time = '') => {
+  if (!time) return '';
+  const [h, m] = time.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour   = h % 12 || 12;
+  return `${hour}:${String(m).padStart(2, '0')} ${period}`;
+};
+
+// Converts 12-hr parts → "HH:MM" 24-hr string stored in state
+const to24 = (h12, min, period) => {
+  let h = Number(h12);
+  if (period === 'AM') { if (h === 12) h = 0; }
+  else                 { if (h !== 12) h += 12; }
+  return `${String(h).padStart(2, '0')}:${min}`;
+};
+
+// Custom AM/PM time picker — stores value as "HH:MM" but displays 12-hr
+function AmPmTimePicker({ value = '10:00', onChange }) {
+  const [h24, m] = value.split(':');
+  const h24n = Number(h24);
+  const period = h24n >= 12 ? 'PM' : 'AM';
+  const hour12 = String(h24n % 12 || 12);
+
+  const sel = {
+    padding: '6px 4px', border: '1px solid var(--border)', borderRadius: 6,
+    fontSize: 14, fontWeight: 600, background: 'white', cursor: 'pointer',
+    outline: 'none', color: 'var(--text-primary)',
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 2,
+      border: '1px solid var(--border)', borderRadius: 8, padding: '4px 8px',
+      background: 'white' }}>
+      {/* Hour */}
+      <select value={hour12} style={sel}
+        onChange={e => onChange(to24(e.target.value, m, period))}>
+        {[12,1,2,3,4,5,6,7,8,9,10,11].map(h => (
+          <option key={h} value={String(h)}>{String(h).padStart(2,'0')}</option>
+        ))}
+      </select>
+      <span style={{ fontWeight: 700, color: 'var(--text-muted)' }}>:</span>
+      {/* Minute */}
+      <select value={m} style={sel}
+        onChange={e => onChange(to24(hour12, e.target.value, period))}>
+        {['00','05','10','15','20','25','30','35','40','45','50','55'].map(min => (
+          <option key={min} value={min}>{min}</option>
+        ))}
+      </select>
+      {/* AM/PM toggle */}
+      <div style={{ display: 'flex', marginLeft: 4, borderRadius: 6, overflow: 'hidden',
+        border: '1px solid var(--border)' }}>
+        {['AM','PM'].map(p => (
+          <button key={p} onClick={() => onChange(to24(hour12, m, p))}
+            style={{
+              padding: '4px 8px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+              background: period === p ? 'var(--primary)' : 'white',
+              color: period === p ? '#fff' : 'var(--text-muted)',
+              transition: 'all 0.15s',
+            }}>{p}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function Attendance() {
   const qc = useQueryClient();
@@ -81,9 +146,92 @@ export default function Attendance() {
   const { data: empData, isLoading: loadingEmps } = useQuery({
     queryKey: ['employees-all'],
     queryFn: () => api.get('/employees?limit=200&status=active'),
-    enabled: tab === 'employee'
+    enabled: tab === 'employee' || tab === 'checkin'
   });
   const allEmployees = empData?.employees || [];
+
+  // ── Leave Requests tab ───────────────────────────────────────────────────
+  const [leaveFilter, setLeaveFilter] = useState('all');
+  const [leaveNote, setLeaveNote]     = useState({});    // { [id]: noteText }
+
+  const { data: leavesData, isLoading: loadingLeaves } = useQuery({
+    queryKey: ['leaves', leaveFilter],
+    enabled:  tab === 'leaves',
+    queryFn:  () => api.get(`/leaves${leaveFilter !== 'all' ? `?status=${leaveFilter}` : ''}`),
+  });
+  const leaves = leavesData?.leaves ?? [];
+
+  const leaveAction = useMutation({
+    mutationFn: ({ id, status, adminNote }) =>
+      api.put(`/leaves/${id}`, { status, adminNote }),
+    onSuccess: (_, { status }) => {
+      toast.success(`Leave ${status}`);
+      qc.invalidateQueries({ queryKey: ['leaves'] });
+    },
+    onError: () => toast.error('Action failed'),
+  });
+
+  // ── Staff Check-in tab state ──────────────────────────────────────────────
+  const [showTimingForm, setShowTimingForm] = useState(false);
+  const [timingForm, setTimingForm] = useState({ onTimeBy: '10:00', lateFrom: '11:00', halfDayFrom: '12:30', schoolEndTime: '16:00' });
+  const [savingTiming, setSavingTiming] = useState(false);
+
+  const { data: checkinData, isLoading: loadingCheckins } = useQuery({
+    queryKey: ['staff-checkins', date],
+    queryFn: () => api.get(`/staff-attendance?date=${date}`),
+    enabled: tab === 'checkin',
+  });
+  const checkinRecords = checkinData?.records || [];
+  const checkinTiming  = checkinData?.timing;
+
+  // Sync timing form when data loads
+  useEffect(() => {
+    if (checkinTiming) {
+      setTimingForm({
+        onTimeBy:      checkinTiming.onTimeBy      || '10:00',
+        lateFrom:      checkinTiming.lateFrom      || '11:00',
+        halfDayFrom:   checkinTiming.halfDayFrom   || '12:30',
+        schoolEndTime: checkinTiming.schoolEndTime || '16:00',
+      });
+    }
+  }, [checkinTiming]);
+
+  // Merge: checked-in employees + all employees who haven't checked in
+  const checkinByEmpId = {};
+  checkinRecords.forEach(r => { checkinByEmpId[String(r.employee?._id)] = r; });
+
+  const toMinutes = (t = '00:00') => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const formatLate = (mins) => { const h = Math.floor(mins / 60); const m = mins % 60; return h > 0 ? `${h}h ${m}m` : `${m}m`; };
+
+  const getCheckinStatus = (checkInTime) => {
+    if (!checkInTime) return null;
+    const d = new Date(checkInTime);
+    const nowMins = d.getHours() * 60 + d.getMinutes();
+    const onTimeByMin    = toMinutes(timingForm.onTimeBy);
+    const lateFromMin    = toMinutes(timingForm.lateFrom);
+    const halfDayFromMin = toMinutes(timingForm.halfDayFrom);
+    if (nowMins > halfDayFromMin) {
+      return { status: 'half_day', label: 'Half Day', color: '#f97316', bg: '#fff7ed', late: formatLate(nowMins - onTimeByMin) };
+    }
+    if (nowMins > lateFromMin) {
+      return { status: 'late', label: 'Late', color: '#f59e0b', bg: '#fffbeb', late: formatLate(nowMins - onTimeByMin) };
+    }
+    return { status: 'present', label: 'On Time', color: '#10b981', bg: '#f0fdf4', late: null };
+  };
+
+  const saveTimingConfig = async () => {
+    setSavingTiming(true);
+    try {
+      await api.put('/school/staff-attendance-timing', timingForm);
+      toast.success('Timing rules saved');
+      qc.invalidateQueries(['staff-checkins']);
+      setShowTimingForm(false);
+    } catch (e) {
+      toast.error(e.message || 'Failed to save');
+    } finally {
+      setSavingTiming(false);
+    }
+  };
 
   // Unique roles from employees
   const empRoles = [...new Set(allEmployees.map(e => e.role).filter(Boolean))].sort();
@@ -98,16 +246,29 @@ export default function Attendance() {
     enabled: tab === 'employee',
     queryFn: () => api.get(`/attendance/leave-balance?month=${monthNum}&year=${yearNum}`)
   });
-  const usedLeave = leaveBalData?.used || {};
+  const usedLeave    = leaveBalData?.used    || {};  // this month only
+  const usedLeaveYtd = leaveBalData?.usedYtd || {};  // year to date
 
-  // Monthly limits from school settings
-  const clLimit = school?.leaveTypes?.find(lt => lt.code === 'cl')?.daysPerMonth ?? 1;
-  const slLimit = school?.leaveTypes?.find(lt => lt.code === 'sl')?.daysPerMonth ?? 1;
+  // Limits: respect carry-forward — if ON, entitlement grows each month
+  const currentMonth = new Date().getMonth() + 1; // 1–12
+  const clType = school?.leaveTypes?.find(lt => lt.code === 'cl');
+  const slType = school?.leaveTypes?.find(lt => lt.code === 'sl');
+  const clDpm  = clType?.daysPerMonth ?? 1;
+  const slDpm  = slType?.daysPerMonth ?? 1;
+  const clCf   = clType?.carryForward ?? false;
+  const slCf   = slType?.carryForward ?? false;
+  const clLimit = clCf ? clDpm * currentMonth : clDpm;
+  const slLimit = slCf ? slDpm * currentMonth : slDpm;
 
   const getRemaining = (empId, code) => {
+    const cf    = code === 'cl' ? clCf  : code === 'sl' ? slCf  : false;
     const limit = code === 'cl' ? clLimit : code === 'sl' ? slLimit : null;
     if (limit === null) return null;
-    return Math.max(0, limit - (usedLeave[empId]?.[code] || 0));
+    // Use YTD usage when carry-forward is on, monthly usage otherwise
+    const used = cf
+      ? (usedLeaveYtd[empId]?.[code] || 0)
+      : (usedLeave[empId]?.[code]    || 0);
+    return Math.max(0, limit - used);
   };
 
   const { data: existingData } = useQuery({
@@ -241,25 +402,29 @@ export default function Attendance() {
       {/* Tabs */}
       <div style={{ borderBottom: '2px solid var(--border)', marginBottom: 20 }}>
         <div style={{ display: 'flex', overflowX: 'auto', marginBottom: -2 }}>
-          {['student', 'employee'].map(t => (
-            <button key={t}
-              onClick={() => { setTab(t); setSearch(''); if (t === 'employee') setClassId(''); if (t === 'student') setEmpRole(''); window.scrollTo({ top: 0, behavior: 'instant' }); }}
+          {[
+            { key: 'student',  label: 'Student Attendance' },
+            { key: 'employee', label: 'Employee Attendance' },
+            { key: 'checkin',  label: 'Staff Check-in' },
+            { key: 'leaves',   label: 'Leave Requests' },
+          ].map(({ key, label }) => (
+            <button key={key}
+              onClick={() => { setTab(key); setSearch(''); if (key !== 'student') setClassId(''); if (key === 'student') setEmpRole(''); window.scrollTo({ top: 0, behavior: 'instant' }); }}
               style={{
                 padding: '10px 20px', border: 'none', background: 'none', cursor: 'pointer',
-                fontSize: 14, fontWeight: tab === t ? 700 : 500,
-                color: tab === t ? 'var(--primary)' : 'var(--text-secondary)',
-                borderBottom: `2px solid ${tab === t ? 'var(--primary)' : 'transparent'}`,
+                fontSize: 14, fontWeight: tab === key ? 700 : 500,
+                color: tab === key ? 'var(--primary)' : 'var(--text-secondary)',
+                borderBottom: `2px solid ${tab === key ? 'var(--primary)' : 'transparent'}`,
                 transition: 'all 0.15s', whiteSpace: 'nowrap', flexShrink: 0,
-                textTransform: 'capitalize'
               }}>
-              {t} Attendance
+              {label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Filter bar */}
-      <div className="filter-bar">
+      {/* Filter bar — hidden on check-in and leaves tabs */}
+      {tab !== 'checkin' && tab !== 'leaves' && <div className="filter-bar">
         <div style={{ minWidth: 240 }}>
           <SearchInput
             value={search}
@@ -310,10 +475,10 @@ export default function Attendance() {
             )
           )}
         </div>
-      </div>
+      </div>}
 
       {/* Working days info bar */}
-      {workingDaysInfo?.workingDays != null && (
+      {tab !== 'checkin' && tab !== 'leaves' && workingDaysInfo?.workingDays != null && (
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '8px 16px', marginBottom: 12, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13, color: '#1d4ed8', fontWeight: 600 }}>
             📅 {new Date(date).toLocaleString('default', { month: 'long', year: 'numeric' })}
@@ -335,7 +500,7 @@ export default function Attendance() {
       )}
 
       {/* Stats cards — full width equal columns */}
-      {people.length > 0 && (
+      {tab !== 'checkin' && tab !== 'leaves' && people.length > 0 && (
         <div style={{
           display: 'grid',
           gridTemplateColumns: `repeat(${statsCards.length}, 1fr)`,
@@ -354,8 +519,280 @@ export default function Attendance() {
         </div>
       )}
 
-      {/* Table */}
-      {tab === 'student' && !classId ? (
+      {/* ── Staff Check-in tab ─────────────────────────────────────────────── */}
+      {tab === 'checkin' && (() => {
+        const checkedIn   = allEmployees.filter(e => checkinByEmpId[e._id]);
+        const notCheckedIn = allEmployees.filter(e => !checkinByEmpId[e._id]);
+        const onTime  = checkedIn.filter(e => getCheckinStatus(checkinByEmpId[e._id]?.checkIn?.time)?.status === 'present').length;
+        const late    = checkedIn.filter(e => getCheckinStatus(checkinByEmpId[e._id]?.checkIn?.time)?.status === 'late').length;
+        const halfDay = checkedIn.filter(e => getCheckinStatus(checkinByEmpId[e._id]?.checkIn?.time)?.status === 'half_day').length;
+
+        return (
+          <div>
+            {/* Timing config */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div className="text-14-semibold" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Settings size={15} /> Attendance Timing Rules
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+                    On time by <b>{toAmPm(timingForm.onTimeBy)}</b> · Late from <b>{toAmPm(timingForm.lateFrom)}</b> · Half day from <b>{toAmPm(timingForm.halfDayFrom)}</b> · School ends <b>{toAmPm(timingForm.schoolEndTime)}</b>
+                  </div>
+                </div>
+                <button className="btn btn-secondary btn-sm" onClick={() => setShowTimingForm(v => !v)}>
+                  {showTimingForm ? 'Cancel' : 'Edit'}
+                </button>
+              </div>
+
+              {showTimingForm && (
+                <div style={{ marginTop: 16, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  {[
+                    { key: 'onTimeBy',      label: 'On time by (Present)' },
+                    { key: 'lateFrom',      label: 'Late starts from' },
+                    { key: 'halfDayFrom',   label: 'Half day starts from' },
+                    { key: 'schoolEndTime', label: 'School ends (auto check-out)' },
+                  ].map(({ key, label }) => (
+                    <div key={key} className="form-group" style={{ flex: '1 1 180px', minWidth: 160, marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: 12 }}>{label}</label>
+                      <AmPmTimePicker
+                        value={timingForm[key] || '10:00'}
+                        onChange={val => setTimingForm(f => ({ ...f, [key]: val }))}
+                      />
+                    </div>
+                  ))}
+                  <button className="btn btn-primary btn-sm" onClick={saveTimingConfig} disabled={savingTiming} style={{ height: 38 }}>
+                    {savingTiming ? 'Saving...' : <><Save size={13} /> Save Rules</>}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Summary stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 16 }}>
+              {[
+                { label: 'Total Staff',    val: allEmployees.length, color: 'var(--text-primary)' },
+                { label: 'Checked In',     val: checkedIn.length,    color: '#1a56e8' },
+                { label: 'On Time',        val: onTime,              color: '#10b981' },
+                { label: 'Late',           val: late,                color: '#f59e0b' },
+                { label: 'Half Day',       val: halfDay,             color: '#f97316' },
+              ].map(s => (
+                <div key={s.label} style={{ background: 'white', padding: '10px 6px', borderRadius: 8, border: '1px solid var(--border)', textAlign: 'center' }}>
+                  <div className="text-20-bold" style={{ color: s.color }}>{s.val}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {loadingCheckins ? <PageLoader /> : (
+              <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                <div className="table-container">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Employee</th>
+                        <th>Role / Dept</th>
+                        <th>Check-in Time</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* Checked-in employees */}
+                      {checkedIn.map((emp, idx) => {
+                        const rec = checkinByEmpId[emp._id];
+                        const st  = getCheckinStatus(rec?.checkIn?.time);
+                        const checkInTime = rec?.checkIn?.time ? new Date(rec.checkIn.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—';
+                        return (
+                          <tr key={emp._id} style={{ background: st ? st.bg + '55' : undefined }}>
+                            <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{idx + 1}</td>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <Avatar src={emp.photo} name={emp.name} size={30} />
+                                <div>
+                                  <div className="text-14-medium">{emp.name}</div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{emp.employeeId}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td style={{ fontSize: 13, color: 'var(--text-secondary)', textTransform: 'capitalize' }}>
+                              {emp.role}{emp.department ? ` · ${emp.department}` : ''}
+                            </td>
+                            <td style={{ fontSize: 13, fontWeight: 600 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <Clock size={13} style={{ color: 'var(--text-muted)' }} />
+                                {checkInTime}
+                              </div>
+                              {st?.late && (
+                                <div style={{ fontSize: 11, color: st.color, marginTop: 2 }}>{st.late} late</div>
+                              )}
+                            </td>
+                            <td>
+                              {st && (
+                                <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 20, background: st.bg, color: st.color, fontSize: 12, fontWeight: 600, border: `1px solid ${st.color}33` }}>
+                                  {st.label}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {/* Not checked-in employees */}
+                      {notCheckedIn.map((emp, idx) => (
+                        <tr key={emp._id} style={{ opacity: 0.55 }}>
+                          <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{checkedIn.length + idx + 1}</td>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <Avatar src={emp.photo} name={emp.name} size={30} />
+                              <div>
+                                <div className="text-14-medium">{emp.name}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{emp.employeeId}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ fontSize: 13, color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{emp.role}</td>
+                          <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>—</td>
+                          <td><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Not checked in</span></td>
+                        </tr>
+                      ))}
+
+                      {allEmployees.length === 0 && (
+                        <tr><td colSpan={5} style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>No employees found</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ── Leave Requests tab ──────────────────────────────────────────────── */}
+      {tab === 'leaves' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Filter pills */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            {['all', 'pending', 'approved', 'rejected'].map(f => (
+              <button key={f} onClick={() => setLeaveFilter(f)} style={{
+                padding: '6px 18px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                background: leaveFilter === f ? 'var(--primary)' : 'white',
+                color: leaveFilter === f ? '#fff' : 'var(--text-secondary)',
+                border: `1.5px solid ${leaveFilter === f ? 'var(--primary)' : 'var(--border)'}`,
+              }}>{f.charAt(0).toUpperCase() + f.slice(1)}</button>
+            ))}
+          </div>
+
+          {loadingLeaves ? <PageLoader /> : leaves.length === 0 ? (
+            <div className="card">
+              <div className="empty-state">
+                <div className="empty-state-icon"><CheckCircle size={28} /></div>
+                <p>No {leaveFilter === 'all' ? '' : leaveFilter} leave requests</p>
+              </div>
+            </div>
+          ) : (
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div className="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Employee</th>
+                      <th>Type</th>
+                      <th>From</th>
+                      <th>To</th>
+                      <th>Days</th>
+                      <th>Reason</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leaves.map((lv, idx) => {
+                      const statusColor = { pending: '#f59e0b', approved: '#10b981', rejected: '#ef4444' }[lv.status];
+                      const statusBg    = { pending: '#fffbeb', approved: '#f0fdf4', rejected: '#fef2f2' }[lv.status];
+                      return (
+                        <tr key={lv._id}>
+                          <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{idx + 1}</td>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <Avatar name={lv.employee?.name} size={30} />
+                              <div>
+                                <div className="text-14-medium">{lv.employee?.name}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{lv.employee?.employeeId}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--primary)' }}>{lv.leaveType}</span>
+                          </td>
+                          <td style={{ fontSize: 13 }}>{format(new Date(lv.fromDate), 'dd MMM yyyy')}</td>
+                          <td style={{ fontSize: 13 }}>{format(new Date(lv.toDate), 'dd MMM yyyy')}</td>
+                          <td style={{ fontSize: 13, fontWeight: 600 }}>{lv.days}</td>
+                          <td style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 200 }}>{lv.reason}</td>
+                          <td>
+                            <span style={{
+                              display: 'inline-block', padding: '2px 10px', borderRadius: 20,
+                              background: statusBg, color: statusColor,
+                              fontSize: 12, fontWeight: 600, border: `1px solid ${statusColor}33`,
+                              textTransform: 'capitalize',
+                            }}>{lv.status}</span>
+                            {lv.adminNote && (
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{lv.adminNote}</div>
+                            )}
+                          </td>
+                          <td>
+                          {lv.status === 'pending' ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 180 }}>
+                                <input
+                                  placeholder="Note (optional)"
+                                  value={leaveNote[lv._id] || ''}
+                                  onChange={e => setLeaveNote(n => ({ ...n, [lv._id]: e.target.value }))}
+                                  style={{
+                                    fontSize: 12, padding: '4px 8px', borderRadius: 6,
+                                    border: '1px solid var(--border)', outline: 'none', width: '100%',
+                                  }}
+                                />
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                  <button
+                                    onClick={() => leaveAction.mutate({ id: lv._id, status: 'approved', adminNote: leaveNote[lv._id] || '' })}
+                                    disabled={leaveAction.isPending}
+                                    style={{
+                                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                      padding: '5px 0', borderRadius: 6, border: 'none', cursor: 'pointer',
+                                      background: '#10b981', color: '#fff', fontSize: 12, fontWeight: 600,
+                                    }}
+                                  ><CheckCircle size={13} /> Approve</button>
+                                  <button
+                                    onClick={() => leaveAction.mutate({ id: lv._id, status: 'rejected', adminNote: leaveNote[lv._id] || '' })}
+                                    disabled={leaveAction.isPending}
+                                    style={{
+                                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                      padding: '5px 0', borderRadius: 6, border: 'none', cursor: 'pointer',
+                                      background: '#ef4444', color: '#fff', fontSize: 12, fontWeight: 600,
+                                    }}
+                                  ><XCircle size={13} /> Reject</button>
+                                </div>
+                              </div>
+                          ) : (
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
+                          )}
+
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Table — student / employee tabs */}
+      {tab !== 'checkin' && tab !== 'leaves' && (tab === 'student' && !classId ? (
         <div className="card">
           <div className="empty-state">
             <div className="empty-state-icon"><UserCheck size={28} /></div>
@@ -474,7 +911,7 @@ export default function Attendance() {
             </table>
           </div>
         </div>
-      )}
+      ))}
 
     </div>
   );

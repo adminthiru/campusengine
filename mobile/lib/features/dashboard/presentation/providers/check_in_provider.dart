@@ -31,6 +31,10 @@ class CheckInProvider extends ChangeNotifier {
   String _durationString = "00:00:00";
   String get durationString => _durationString;
 
+  // School timing config (loaded from server)
+  Map<String, dynamic> _timing = {};
+  Map<String, dynamic> get timing => _timing;
+
   Timer? _timer;
 
   /// Restore today's punch state from the server (call on dashboard load).
@@ -38,6 +42,9 @@ class CheckInProvider extends ChangeNotifier {
     try {
       final res = await ApiClient.get('/staff-attendance/today');
       _applyRecord(res.data['record']);
+      if (res.data['timing'] != null) {
+        _timing = Map<String, dynamic>.from(res.data['timing'] as Map);
+      }
     } catch (e) {
       debugPrint('loadToday error: ${ApiClient.errorMessage(e)}');
     } finally {
@@ -46,8 +53,53 @@ class CheckInProvider extends ChangeNotifier {
     }
   }
 
+  /// Returns null if within check-in window, or a user-facing error string.
+  String? _checkInWindowError() {
+    final onTimeBy  = (_timing['onTimeBy']      as String?) ?? '10:00';
+    final schoolEnd = (_timing['schoolEndTime'] as String?) ?? '16:00';
+
+    final now     = DateTime.now();
+    final nowMins = now.hour * 60 + now.minute;
+
+    final startMin = _toMins(onTimeBy);
+    final endMin   = _toMins(schoolEnd);
+
+    if (nowMins < startMin) {
+      return 'School starts by ${_toAmPm(onTimeBy)}. You can check in after that.';
+    }
+    if (nowMins >= endMin) {
+      return 'School is finished by ${_toAmPm(schoolEnd)}. You can check in tomorrow by ${_toAmPm(onTimeBy)} only.';
+    }
+    return null;
+  }
+
+  static int _toMins(String t) {
+    final parts = t.split(':');
+    if (parts.length < 2) return 0;
+    return (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
+  }
+
+  static String _toAmPm(String t) {
+    final parts = t.split(':');
+    if (parts.length < 2) return t;
+    final h = int.tryParse(parts[0]) ?? 0;
+    final m = int.tryParse(parts[1]) ?? 0;
+    final period = h >= 12 ? 'PM' : 'AM';
+    final hour   = h % 12 == 0 ? 12 : h % 12;
+    return '$hour:${m.toString().padLeft(2, '0')} $period';
+  }
+
   /// Returns true on success. On failure, [lastError] holds a message.
   Future<bool> handleCheckInOut() {
+    // Only validate window for check-in; checkout is always allowed
+    if (!_isCheckedIn) {
+      final windowError = _checkInWindowError();
+      if (windowError != null) {
+        _lastError = windowError;
+        notifyListeners();
+        return Future.value(false);
+      }
+    }
     return _isCheckedIn ? _punch(checkOut: true) : _punch(checkOut: false);
   }
 
@@ -65,9 +117,17 @@ class CheckInProvider extends ChangeNotifier {
         'accuracy': pos.accuracy,
       });
       _applyRecord(res.data['record']);
+      // If server says already done (e.g. auto-checkout already ran),
+      // treat as success — state is synced, no error shown
       return true;
     } catch (e) {
-      _lastError = e is String ? e : ApiClient.errorMessage(e);
+      // If server already processed this punch, refresh state silently
+      final msg = ApiClient.errorMessage(e);
+      if (msg.toLowerCase().contains('already checked')) {
+        await loadToday();
+        return true; // not an error — just a stale state sync
+      }
+      _lastError = msg;
       debugPrint('check-in/out error: $_lastError');
       return false;
     } finally {

@@ -103,10 +103,11 @@ const schoolSchema = new mongoose.Schema({
     notifications: { type: Object, default: {} }
   },
   leaveTypes: [{
-    code:       { type: String },
-    label:      { type: String },
-    enabled:    { type: Boolean, default: true },
-    daysPerMonth:{ type: Number, default: 0 }
+    code:         { type: String },
+    label:        { type: String },
+    enabled:      { type: Boolean, default: true },
+    daysPerMonth: { type: Number, default: 0 },
+    carryForward: { type: Boolean, default: false }, // unused leaves roll to next month
   }],
   feeTerms: [{ name: { type: String } }],
   leaveConfig: {
@@ -162,6 +163,12 @@ const schoolSchema = new mongoose.Schema({
     notifyOnFeePayment:       { type: Boolean, default: true },
     notifyOnFeeReminder:      { type: Boolean, default: true },
     notifyOnAttendance:       { type: Boolean, default: true },
+  },
+  staffAttendanceTiming: {
+    onTimeBy:    { type: String, default: '10:00' },  // check-in by this = present
+    lateFrom:    { type: String, default: '11:00' },  // after this = late
+    halfDayFrom: { type: String, default: '12:30' },  // after this = half day
+    schoolEndTime: { type: String, default: '16:00' }, // auto check-out at this time
   },
   profileCompleted: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true }

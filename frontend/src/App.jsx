@@ -9,7 +9,6 @@ import Students from './pages/admin/Students';
 import Employees from './pages/admin/Employees';
 import { Classes, Subjects } from './pages/admin/ClassesSubjects';
 import Attendance from './pages/admin/Attendance';
-import StaffTracking from './pages/admin/StaffTracking';
 import Fees from './pages/admin/Fees';
 import Timetable from './pages/admin/Timetable';
 import Calendar from './pages/admin/Calendar';
@@ -69,7 +68,7 @@ export default function App() {
       <Route path="/classes" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Classes /></ProtectedRoute>} />
       <Route path="/subjects" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Subjects /></ProtectedRoute>} />
       <Route path="/attendance" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Attendance /></ProtectedRoute>} />
-      <Route path="/staff-tracking" element={<ProtectedRoute roles={['admin', 'correspondent', 'principal']}><StaffTracking /></ProtectedRoute>} />
+      <Route path="/staff-tracking" element={<Navigate to="/attendance" replace />} />
       <Route path="/fees" element={<ProtectedRoute roles={ADMIN}><Fees /></ProtectedRoute>} />
       <Route path="/timetable" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Timetable /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Calendar /></ProtectedRoute>} />
