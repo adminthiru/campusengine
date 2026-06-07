@@ -162,6 +162,19 @@ class MoreScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
+          // ── Library ──────────────────────────────────────────────────────────
+          _sectionLabel('Library', isDark),
+          const SizedBox(height: 8),
+          _MenuTile(
+            icon: Icons.menu_book_outlined,
+            iconColor: AppColors.accentPurple,
+            title: 'Library',
+            subtitle: 'View your issued books and request renewals',
+            onTap: () => context.go('/library'),
+            isDark: isDark,
+          ),
+          const SizedBox(height: 16),
+
           // ── Account ──────────────────────────────────────────────────────────
           _sectionLabel('Account', isDark),
           const SizedBox(height: 8),

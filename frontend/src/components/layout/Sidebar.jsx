@@ -6,7 +6,7 @@ import {
   DollarSign, CreditCard, CalendarDays, FileText, Truck,
   MessageSquare, CreditCard as IdCard, Settings, LogOut,
   GraduationCap, Building2, ChevronRight, Bell, BarChart3,
-  ClipboardList, Banknote, School, BookMarked, UsersRound, Calendar
+  ClipboardList, Banknote, School, BookMarked, UsersRound, Calendar, Library
 } from 'lucide-react';
 
 const navConfig = {
@@ -35,6 +35,7 @@ const navConfig = {
     { label: 'Salary', icon: Banknote, path: '/salary' },
     { label: 'Expenses', icon: DollarSign, path: '/expenses' },
     { section: 'Other' },
+    { label: 'Library', icon: Library, path: '/library' },
     { label: 'Transport', icon: Truck, path: '/transport' },
     { label: 'ID Cards', icon: IdCard, path: '/id-cards' },
     { label: 'SMS Services', icon: MessageSquare, path: '/sms' },
@@ -60,6 +61,7 @@ const navConfig = {
     { label: 'Salary', icon: Banknote, path: '/salary' },
     { label: 'Expenses', icon: DollarSign, path: '/expenses' },
     { section: 'Other' },
+    { label: 'Library', icon: Library, path: '/library' },
     { label: 'Transport', icon: Truck, path: '/transport' },
     { label: 'ID Cards', icon: IdCard, path: '/id-cards' },
     { label: 'SMS Services', icon: MessageSquare, path: '/sms' },
@@ -80,6 +82,8 @@ const navConfig = {
     { section: 'Finance' },
     { label: 'Fees', icon: CreditCard, path: '/fees' },
     { label: 'Salary', icon: Banknote, path: '/salary' },
+    { section: 'Other' },
+    { label: 'Library', icon: Library, path: '/library' },
     { label: 'Settings', icon: Settings, path: '/settings' },
   ],
   teacher: [

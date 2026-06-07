@@ -12,6 +12,7 @@ const TABS = [
   { id: 'school',        label: 'School Profile',   icon: School },
   { id: 'grades',        label: 'Grade Config',     icon: Bell },
   { id: 'leaves',        label: 'Leave Config',     icon: CalendarCheck },
+  { id: 'library',       label: 'Library Config',   icon: BookOpen },
   { id: 'feeterms',      label: 'Fee Terms',        icon: ListOrdered },
   { id: 'teacherroles',  label: 'Teacher Roles',    icon: ShieldCheck },
   { id: 'parentroles',   label: 'Parent Roles',     icon: UsersRound },
@@ -67,6 +68,7 @@ export default function Settings() {
           {activeTab === 'school'       && isAdmin && <SchoolSettings />}
           {activeTab === 'grades'       && isAdmin && <GradeSettings />}
           {activeTab === 'leaves'       && isAdmin && <LeaveSettings />}
+          {activeTab === 'library'      && isAdmin && <LibraryConfigSettings />}
           {activeTab === 'feeterms'     && isAdmin && <FeeTermsSettings />}
           {activeTab === 'teacherroles' && isAdmin && <TeacherRolesSettings />}
           {activeTab === 'parentroles'  && isAdmin && <ParentRolesSettings />}
@@ -495,6 +497,65 @@ function LeaveSettings() {
       <button className="btn btn-primary" onClick={save} disabled={saving}>
         {saving ? 'Saving...' : 'Save Leave Config'}
       </button>
+    </div>
+  );
+}
+
+function LibraryConfigSettings() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
+  const school = data?.school;
+  const [finePerDay, setFinePerDay] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // Populate from saved value when school loads
+  const saved = school?.libraryConfig?.finePerDay ?? 2;
+  const display = finePerDay === '' ? saved : finePerDay;
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.put('/school/library-config', { finePerDay: Number(display) });
+      qc.invalidateQueries(['school']);
+      toast.success('Library config saved!');
+    } catch { toast.error('Failed to save'); }
+    finally { setSaving(false); }
+  };
+
+  if (isLoading) return <PageLoader />;
+
+  return (
+    <div className="card">
+      <div style={{ marginBottom: 24 }}>
+        <h2 className="text-18-bold">Library Configuration</h2>
+        <p className="text-14-regular" style={{ color: 'var(--text-secondary)', marginTop: 4 }}>
+          Set the fine amount charged per day for overdue books.
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
+        <div className="form-group" style={{ marginBottom: 0, minWidth: 200 }}>
+          <label className="form-label">Fine per overdue day (₹)</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="number" min={0} step={0.5} className="form-control"
+              style={{ width: 100, fontWeight: 700, fontSize: 18 }}
+              value={display}
+              onChange={e => setFinePerDay(e.target.value)}
+            />
+            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>₹ / day</span>
+          </div>
+        </div>
+        <button className="btn btn-primary" onClick={save} disabled={saving} style={{ height: 42 }}>
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+
+      <div style={{ marginTop: 20, padding: '12px 16px', borderRadius: 8, background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+        <span style={{ fontSize: 13, color: '#1d4ed8', fontWeight: 500 }}>
+          Current rate: <strong>₹{display}/day</strong> — e.g. a book 5 days overdue = fine of ₹{Number(display) * 5}
+        </span>
+      </div>
     </div>
   );
 }

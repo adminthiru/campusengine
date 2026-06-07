@@ -16,6 +16,7 @@ import '../../features/notifications/presentation/screens/notifications_screen.d
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/more/presentation/screens/more_screen.dart';
 import '../../features/leave/presentation/screens/leave_screen.dart';
+import '../../features/library/presentation/screens/library_screen.dart';
 import '../../features/exams/presentation/screens/exams_screen.dart';
 import '../../features/calendar/presentation/screens/calendar_screen.dart';
 // Teacher dynamic module screens
@@ -117,6 +118,7 @@ class AppRouter {
             GoRoute(
                 path: '/settings', builder: (_, __) => const SettingsScreen()),
             GoRoute(path: '/leave', builder: (_, __) => const LeaveScreen()),
+            GoRoute(path: '/library', builder: (_, __) => const LibraryScreen()),
             GoRoute(path: '/exams', builder: (_, __) => const ExamsScreen()),
             GoRoute(
                 path: '/calendar', builder: (_, __) => const CalendarScreen()),

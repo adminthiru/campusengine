@@ -24,6 +24,7 @@ import SMS from './pages/admin/SMS';
 import Parents from './pages/admin/Parents';
 import { SuperAdminDashboard } from './pages/superadmin/Dashboard';
 import { TeacherDashboard, MySalary, MyTasks, StudentDashboard, ParentDashboard } from './pages/portals/index';
+import Library from './pages/admin/Library';
 
 
 function ProtectedRoute({ children, roles }) {
@@ -77,6 +78,7 @@ export default function App() {
       <Route path="/exams/:id" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><ExamDetail /></ProtectedRoute>} />
       <Route path="/homework" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Homework /></ProtectedRoute>} />
       <Route path="/expenses" element={<ProtectedRoute roles={ADMIN}><Expenses /></ProtectedRoute>} />
+      <Route path="/library" element={<ProtectedRoute roles={['admin','correspondent','principal']}><Library /></ProtectedRoute>} />
       <Route path="/transport" element={<ProtectedRoute roles={ADMIN}><Transport /></ProtectedRoute>} />
       <Route path="/id-cards" element={<ProtectedRoute roles={ADMIN}><IDCards /></ProtectedRoute>} />
       <Route path="/sms" element={<ProtectedRoute roles={['admin','correspondent','principal']}><SMS /></ProtectedRoute>} />

@@ -30,6 +30,8 @@ const Student = require('../models/Student');
 const Employee = require('../models/Employee');
 const Attendance = require('../models/Attendance');
 const Leave = require('../models/Leave');
+const Book = require('../models/Book');
+const BookIssue = require('../models/BookIssue');
 const { v4: uuidv4 } = require('uuid');
 const { notifyParentUsers, notifyStudentUsers } = require('../utils/notify');
 
@@ -1493,6 +1495,320 @@ router.put('/leaves/:id', protect, authorize('admin', 'correspondent', 'principa
 
     await leave.save();
     res.json({ success: true, leave });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ============== LIBRARY ==============
+
+const calcFine = (dueDate, finePerDay = 2) => {
+  if (!dueDate) return 0;
+  const now = Date.now();
+  const due = new Date(dueDate).getTime();
+  if (now <= due) return 0;
+  return Math.max(0, Math.ceil((now - due) / 86400000) * finePerDay);
+};
+
+// Save library config (fine rate)
+router.put('/school/library-config', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const { finePerDay } = req.body;
+    const school = await School.findByIdAndUpdate(
+      req.user.school,
+      { 'libraryConfig.finePerDay': Number(finePerDay) || 2 },
+      { new: true }
+    );
+    res.json({ success: true, school });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// GET /library/books
+router.get('/library/books', protect, checkSubscription, async (req, res) => {
+  try {
+    const { search, category, status } = req.query;
+    const query = { school: req.user.school };
+    if (category) query.category = category;
+    if (status) query.status = status;
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { author: { $regex: search, $options: 'i' } },
+        { isbn: { $regex: search, $options: 'i' } },
+      ];
+    }
+    const books = await Book.find(query).sort({ title: 1 });
+    res.json({ success: true, books });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// POST /library/books
+router.post('/library/books', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const { title, author, isbn, category, publisher, year, totalCopies, location, description, status } = req.body;
+    const copies = Number(totalCopies) || 1;
+    const book = await Book.create({
+      school: req.user.school, title, author, isbn, category, publisher,
+      year: year ? Number(year) : undefined,
+      totalCopies: copies, availableCopies: copies,
+      location, description, status: status || 'available',
+    });
+    res.status(201).json({ success: true, book });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// PUT /library/books/:id
+router.put('/library/books/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const existing = await Book.findOne({ _id: req.params.id, school: req.user.school });
+    if (!existing) return res.status(404).json({ success: false, message: 'Book not found' });
+
+    const { totalCopies, ...rest } = req.body;
+    if (totalCopies !== undefined) {
+      const newTotal = Number(totalCopies);
+      const diff = newTotal - existing.totalCopies;
+      existing.totalCopies = newTotal;
+      existing.availableCopies = Math.max(0, existing.availableCopies + diff);
+    }
+    Object.assign(existing, rest);
+    await existing.save();
+    res.json({ success: true, book: existing });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// DELETE /library/books/:id
+router.delete('/library/books/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const book = await Book.findOne({ _id: req.params.id, school: req.user.school });
+    if (!book) return res.status(404).json({ success: false, message: 'Book not found' });
+    if (book.availableCopies !== book.totalCopies) {
+      return res.status(400).json({ success: false, message: 'Cannot delete book — some copies are currently issued.' });
+    }
+    await book.deleteOne();
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// GET /library/issues
+router.get('/library/issues', protect, checkSubscription, async (req, res) => {
+  try {
+    const { status, borrowerType } = req.query;
+    const query = { school: req.user.school };
+    if (status) query.status = status;
+    if (borrowerType) query.borrowerType = borrowerType;
+    const issues = await BookIssue.find(query)
+      .populate('book', 'title author isbn category')
+      .populate('student', 'name admissionNumber photo')
+      .populate('employee', 'name employeeId photo')
+      .populate('issuedBy', 'name')
+      .populate('returnedTo', 'name')
+      .sort({ createdAt: -1 });
+    res.json({ success: true, issues });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// POST /library/issues
+router.post('/library/issues', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const { bookId, borrowerType, studentId, employeeId, dueDate } = req.body;
+    if (!bookId || !borrowerType || !dueDate) {
+      return res.status(400).json({ success: false, message: 'bookId, borrowerType, and dueDate are required' });
+    }
+    const book = await Book.findOne({ _id: bookId, school: req.user.school });
+    if (!book) return res.status(404).json({ success: false, message: 'Book not found' });
+    if (book.availableCopies < 1) {
+      return res.status(400).json({ success: false, message: 'No copies available for issuing.' });
+    }
+    const issueData = {
+      school: req.user.school, book: bookId, borrowerType, dueDate,
+      issuedBy: req.user._id,
+    };
+    if (borrowerType === 'student') {
+      if (!studentId) return res.status(400).json({ success: false, message: 'studentId required for student borrower' });
+      issueData.student = studentId;
+    } else {
+      if (!employeeId) return res.status(400).json({ success: false, message: 'employeeId required for employee borrower' });
+      issueData.employee = employeeId;
+    }
+    const issue = await BookIssue.create(issueData);
+    book.availableCopies -= 1;
+    await book.save();
+    await issue.populate([
+      { path: 'book', select: 'title author isbn category' },
+      { path: 'student', select: 'name admissionNumber' },
+      { path: 'employee', select: 'name employeeId' },
+      { path: 'issuedBy', select: 'name' },
+    ]);
+    res.status(201).json({ success: true, issue });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// PUT /library/issues/:id/return
+router.put('/library/issues/:id/return', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const issue = await BookIssue.findOne({ _id: req.params.id, school: req.user.school });
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue record not found' });
+    if (issue.status !== 'issued' && issue.status !== 'overdue') {
+      return res.status(400).json({ success: false, message: 'Book is not currently issued' });
+    }
+    const schoolCfg  = await School.findById(req.user.school).select('libraryConfig');
+    const finePerDay = schoolCfg?.libraryConfig?.finePerDay ?? 2;
+    const now = new Date();
+    issue.returnDate  = now;
+    issue.status      = 'returned';
+    issue.returnedTo  = req.user._id;
+    // Use admin-provided fine if given, otherwise auto-calculate with school rate
+    issue.fine        = req.body.fine != null ? Number(req.body.fine) : calcFine(issue.dueDate, finePerDay);
+    if (req.body.finePaid != null) issue.finePaid = !!req.body.finePaid;
+    await issue.save();
+
+    const book = await Book.findById(issue.book);
+    if (book) { book.availableCopies += 1; await book.save(); }
+
+    await issue.populate([
+      { path: 'book', select: 'title author isbn' },
+      { path: 'student', select: 'name admissionNumber' },
+      { path: 'employee', select: 'name employeeId' },
+    ]);
+    res.json({ success: true, issue });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// PUT /library/issues/:id/status — mark as lost or damaged
+router.put('/library/issues/:id/status', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const { status, fine, notes } = req.body;
+    if (!['lost', 'damaged'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'status must be lost or damaged' });
+    }
+    const issue = await BookIssue.findOne({ _id: req.params.id, school: req.user.school });
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue record not found' });
+
+    issue.status = status;
+    if (fine !== undefined) issue.fine = Number(fine);
+    if (notes) issue.notes = notes;
+
+    // For lost: do not restore availableCopies. For damaged: admin decides (don't restore automatically)
+    if (status === 'damaged') {
+      // Admin may choose to restore copies manually via edit book; don't auto-restore
+    }
+    await issue.save();
+    res.json({ success: true, issue });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// PUT /library/issues/:id/renewal/:rid — approve or reject a renewal request
+router.put('/library/issues/:id/renewal/:rid', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const { action, newDueDate, note } = req.body;
+    if (!['approve', 'reject'].includes(action)) {
+      return res.status(400).json({ success: false, message: 'action must be approve or reject' });
+    }
+    const issue = await BookIssue.findOne({ _id: req.params.id, school: req.user.school });
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue record not found' });
+
+    const renewal = issue.renewalRequests.id(req.params.rid);
+    if (!renewal) return res.status(404).json({ success: false, message: 'Renewal request not found' });
+
+    if (action === 'approve') {
+      if (!newDueDate) return res.status(400).json({ success: false, message: 'newDueDate required for approval' });
+      renewal.status = 'approved';
+      renewal.newDueDate = new Date(newDueDate);
+      if (note) renewal.note = note;
+      issue.dueDate = new Date(newDueDate);
+    } else {
+      renewal.status = 'rejected';
+      if (note) renewal.note = note;
+    }
+    await issue.save();
+    res.json({ success: true, issue });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// GET /library/overdue
+router.get('/library/overdue', protect, checkSubscription, async (req, res) => {
+  try {
+    const now = new Date();
+    const issues = await BookIssue.find({
+      school: req.user.school, status: 'issued', dueDate: { $lt: now },
+    })
+      .populate('book', 'title author isbn category')
+      .populate('student', 'name admissionNumber photo')
+      .populate('employee', 'name employeeId photo')
+      .sort({ dueDate: 1 });
+
+    const schoolCfg  = await School.findById(req.user.school).select('libraryConfig');
+    const finePerDay = schoolCfg?.libraryConfig?.finePerDay ?? 2;
+    const withFines = issues.map(issue => {
+      const obj = issue.toObject();
+      obj.calculatedFine = calcFine(issue.dueDate, finePerDay);
+      return obj;
+    });
+    res.json({ success: true, issues: withFines, finePerDay });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// GET /library/reports
+router.get('/library/reports', protect, checkSubscription, async (req, res) => {
+  try {
+    const school = req.user.school;
+    const [books, issued, overdue, returned, allIssues] = await Promise.all([
+      Book.find({ school }),
+      BookIssue.countDocuments({ school, status: 'issued' }),
+      BookIssue.countDocuments({ school, status: 'issued', dueDate: { $lt: new Date() } }),
+      BookIssue.countDocuments({ school, status: 'returned' }),
+      BookIssue.find({ school, fine: { $gt: 0 } }, 'fine finePaid'),
+    ]);
+    const totalBooks = books.length;
+    const totalCopies = books.reduce((s, b) => s + b.totalCopies, 0);
+    const availableCopies = books.reduce((s, b) => s + b.availableCopies, 0);
+    const totalFines = allIssues.reduce((s, i) => s + i.fine, 0);
+    const collectedFines = allIssues.filter(i => i.finePaid).reduce((s, i) => s + i.fine, 0);
+    res.json({
+      success: true,
+      report: { totalBooks, totalCopies, availableCopies, issuedCount: issued, overdueCount: overdue, returnedCount: returned, totalFines, collectedFines },
+    });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// GET /library/my-issues — for teacher/employee mobile app
+router.get('/library/my-issues', protect, async (req, res) => {
+  try {
+    const emp = await Employee.findOne({ user: req.user._id, school: req.user.school });
+    if (!emp) return res.status(404).json({ success: false, message: 'Employee profile not found' });
+    const issues = await BookIssue.find({ school: req.user.school, employee: emp._id, borrowerType: 'employee' })
+      .populate('book', 'title author isbn category')
+      .sort({ createdAt: -1 });
+    const withFines = issues.map(issue => {
+      const obj = issue.toObject();
+      if (issue.status === 'issued') {
+        obj.calculatedFine = calcFine(issue.dueDate);
+      }
+      return obj;
+    });
+    res.json({ success: true, issues: withFines });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// POST /library/my-issues/:id/renewal — teacher requests renewal
+router.post('/library/my-issues/:id/renewal', protect, async (req, res) => {
+  try {
+    const emp = await Employee.findOne({ user: req.user._id, school: req.user.school });
+    if (!emp) return res.status(404).json({ success: false, message: 'Employee profile not found' });
+
+    const issue = await BookIssue.findOne({ _id: req.params.id, school: req.user.school, employee: emp._id });
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue record not found' });
+    if (issue.status !== 'issued') {
+      return res.status(400).json({ success: false, message: 'Only issued books can be renewed' });
+    }
+    const hasPending = issue.renewalRequests.some(r => r.status === 'pending');
+    if (hasPending) {
+      return res.status(400).json({ success: false, message: 'A renewal request is already pending' });
+    }
+    const { newDueDate } = req.body;
+    if (!newDueDate) return res.status(400).json({ success: false, message: 'newDueDate is required' });
+
+    issue.renewalRequests.push({ newDueDate: new Date(newDueDate) });
+    await issue.save();
+    res.status(201).json({ success: true, issue });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 

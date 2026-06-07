@@ -170,6 +170,9 @@ const schoolSchema = new mongoose.Schema({
     halfDayFrom: { type: String, default: '12:30' },  // after this = half day
     schoolEndTime: { type: String, default: '16:00' }, // auto check-out at this time
   },
+  libraryConfig: {
+    finePerDay: { type: Number, default: 2 }, // ₹ per day overdue
+  },
   profileCompleted: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
