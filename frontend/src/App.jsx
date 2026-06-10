@@ -18,7 +18,6 @@ import ExamDetail from './pages/admin/ExamDetail';
 import Expenses from './pages/admin/Expenses';
 import Homework from './pages/admin/Homework';
 import Transport from './pages/admin/Transport';
-import IDCards from './pages/admin/IDCards';
 import Settings from './pages/admin/Settings';
 import SMS from './pages/admin/SMS';
 import Parents from './pages/admin/Parents';
@@ -80,7 +79,6 @@ export default function App() {
       <Route path="/expenses" element={<ProtectedRoute roles={ADMIN}><Expenses /></ProtectedRoute>} />
       <Route path="/library" element={<ProtectedRoute roles={['admin','correspondent','principal']}><Library /></ProtectedRoute>} />
       <Route path="/transport" element={<ProtectedRoute roles={ADMIN}><Transport /></ProtectedRoute>} />
-      <Route path="/id-cards" element={<ProtectedRoute roles={ADMIN}><IDCards /></ProtectedRoute>} />
       <Route path="/sms" element={<ProtectedRoute roles={['admin','correspondent','principal']}><SMS /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute roles={ALL}><Settings /></ProtectedRoute>} />
       <Route path="/settings/:tab" element={<ProtectedRoute roles={ALL}><Settings /></ProtectedRoute>} />

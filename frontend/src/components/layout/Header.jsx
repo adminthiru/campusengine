@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 
-export default function Header({ onMenuClick }) {
+export default function Header({ onMenuClick, sidebarCollapsed }) {
   const { user, logout, updateUser } = useAuth();
   const navigate = useNavigate();
   const { i18n } = useTranslation();
@@ -67,9 +67,9 @@ export default function Header({ onMenuClick }) {
         </div>
       )}
 
-      <header className="header">
+      <header className={`header${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
         <div className="header-left">
-          <button className="btn-icon btn btn-secondary" onClick={onMenuClick} style={{ display: 'none' }} id="mobile-menu-btn">
+          <button className="btn-icon btn btn-secondary mobile-menu-btn" onClick={onMenuClick}>
             <Menu size={20} />
           </button>
           <div className="text-18-bold" style={{ color: 'var(--text-primary)' }}>

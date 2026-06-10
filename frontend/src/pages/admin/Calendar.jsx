@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, CalendarDays, List, X, Settings2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Select as AntSelect } from 'antd';
 import api from '../../utils/api';
 
 const TYPE_CONFIG = {
@@ -144,9 +145,7 @@ export default function Calendar() {
       <div className="page-header" style={{ marginBottom: 20 }}>
         <div>
           <h1 className="page-title">School Calendar</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>
-            Manage holidays, events and important dates
-          </p>
+          <p className="page-subtitle">Manage holidays, events and important dates</p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <button className="btn btn-secondary" onClick={() => setScheduleModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -220,9 +219,27 @@ export default function Calendar() {
                 </div>
                 <div>
                   <label className="form-label">Type</label>
-                  <select className="form-control" value={form.type || 'event'} onChange={e => setForm(f => ({...f, type: e.target.value}))}>
-                    {Object.entries(TYPE_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                  </select>
+                  <AntSelect
+                    style={{ width: '100%' }}
+                    value={form.type || 'event'}
+                    onChange={val => setForm(f => ({...f, type: val}))}
+                    options={Object.entries(TYPE_CONFIG).map(([k, v]) => ({ value: k, label: v.label, color: v.color }))}
+                    optionRender={(option) => (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: option.data.color, flexShrink: 0 }} />
+                        <span>{option.data.label}</span>
+                      </div>
+                    )}
+                    labelRender={({ value }) => {
+                      const cfg = TYPE_CONFIG[value];
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {cfg && <div style={{ width: 10, height: 10, borderRadius: '50%', background: cfg.color, flexShrink: 0 }} />}
+                          <span>{cfg?.label || value}</span>
+                        </div>
+                      );
+                    }}
+                  />
                 </div>
                 <div>
                   <label className="form-label">Description <span style={{color:'var(--text-muted)',fontSize:11}}>(optional)</span></label>
@@ -370,9 +387,12 @@ function WorkScheduleModal({ onClose }) {
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
                   Used for calculating monthly working days in salary LOP.
                 </div>
-                <select className="form-control" value={empSatSchedule} onChange={e => setEmpSatSchedule(e.target.value)}>
-                  {SAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
+                <AntSelect
+                  style={{ width: '100%' }}
+                  value={empSatSchedule}
+                  onChange={val => setEmpSatSchedule(val)}
+                  options={SAT_OPTIONS}
+                />
                 <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
                   {{
                     school_default:  `Follows school default (Saturday is ${workingDays?.saturday ? 'working' : 'holiday'})`,
@@ -399,14 +419,12 @@ function WorkScheduleModal({ onClose }) {
                         <div style={{ fontWeight: 600, fontSize: 14, minWidth: 100, color: 'var(--primary)' }}>
                           {c.name}{c.section ? ` ${c.section}` : ''}
                         </div>
-                        <select
-                          className="form-control"
-                          style={{ flex: 1, fontSize: 13 }}
+                        <AntSelect
+                          style={{ flex: 1 }}
                           value={classSchedules[c._id] || 'school_default'}
-                          onChange={e => setClassSchedules(prev => ({ ...prev, [c._id]: e.target.value }))}
-                        >
-                          {SAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
+                          onChange={val => setClassSchedules(prev => ({ ...prev, [c._id]: val }))}
+                          options={SAT_OPTIONS}
+                        />
                       </div>
                     ))}
                   </div>

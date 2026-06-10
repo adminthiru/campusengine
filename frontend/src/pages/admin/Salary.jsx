@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Banknote, Download, DollarSign, Search, Plus, Trash2, Edit2, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Select as AntSelect } from 'antd';
 import api from '../../utils/api';
-import { StatusBadge, PageLoader, EmptyState, StatCard, Modal, FormRow, ConfirmDialog } from '../../components/ui';
+import { StatusBadge, PageLoader, EmptyState, StatCard, Modal, FormRow, ConfirmDialog, SearchInput } from '../../components/ui';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -48,11 +49,35 @@ export default function Salary() {
   const [selected, setSelected] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const autoGenAttempted = useRef(new Set());
+  const [autoGenerating, setAutoGenerating] = useState(false);
+
   const { data, isLoading } = useQuery({
     queryKey: ['salaries', month, year],
     queryFn: () => api.get(`/salaries?month=${month}&year=${year}`)
   });
   const salaries = data?.salaries || [];
+
+  const autoGenerateMutation = useMutation({
+    mutationFn: () => api.post('/salaries/generate', { month, year }),
+    onSuccess: (res) => {
+      qc.invalidateQueries(['salaries', month, year]);
+      const count = res.generated?.length ?? 0;
+      if (count > 0) toast.success(`Generated salaries for ${count} employee${count > 1 ? 's' : ''} — ${MONTHS[month - 1]} ${year}`);
+      setAutoGenerating(false);
+    },
+    onError: () => setAutoGenerating(false),
+  });
+
+  useEffect(() => {
+    const key = `${month}-${year}`;
+    if (!isLoading && salaries.length === 0 && !autoGenAttempted.current.has(key)) {
+      autoGenAttempted.current.add(key);
+      setAutoGenerating(true);
+      autoGenerateMutation.mutate();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, salaries.length, month, year]);
 
   const totalNetPay = salaries.reduce((s, sal) => s + (sal.netSalary || 0), 0);
   const totalPaid = salaries.filter(s => s.status === 'paid').reduce((s, sal) => s + (sal.netSalary || 0), 0);
@@ -91,6 +116,19 @@ export default function Salary() {
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to recalculate')
   });
 
+  const syncMutation = useMutation({
+    mutationFn: () => api.post('/salaries/generate', { month, year }),
+    onSuccess: (res) => {
+      qc.invalidateQueries(['salaries', month, year]);
+      const count = res.generated?.length ?? 0;
+      toast.success(count > 0
+        ? `Added ${count} missing employee${count > 1 ? 's' : ''} to ${MONTHS[month - 1]} ${year}`
+        : `All employees already have salary records for ${MONTHS[month - 1]} ${year}`
+      );
+    },
+    onError: (err) => toast.error(err?.message || 'Sync failed'),
+  });
+
   const roles = [...new Set(salaries.map(s => s.employee?.role).filter(Boolean))];
 
   const filteredSalaries = salaries.filter(s => {
@@ -120,19 +158,33 @@ export default function Salary() {
           <p className="page-subtitle">Manage employee salary and payslips</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <select className="form-control" style={{ width: 'auto' }} value={month} onChange={e => setMonth(Number(e.target.value))}>
-            {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-          </select>
-          <select className="form-control" style={{ width: 'auto' }} value={year} onChange={e => setYear(Number(e.target.value))}>
-            {[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map(y => <option key={y}>{y}</option>)}
-          </select>
+          <AntSelect
+            style={{ width: 90, height: 36, fontSize: 14 }}
+            value={month}
+            onChange={val => setMonth(val)}
+            options={MONTHS.map((m, i) => ({ value: i + 1, label: m }))}
+            className="salary-period-select"
+          />
+          <AntSelect
+            style={{ width: 100, height: 36, fontSize: 14 }}
+            value={year}
+            onChange={val => setYear(val)}
+            options={[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map(y => ({ value: y, label: String(y) }))}
+            className="salary-period-select"
+          />
           {selected.length > 0 && (
             <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
               <Trash2 size={16} /> Delete ({selected.length})
             </button>
           )}
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-            <Plus size={16} /> Add Salary Record
+          <button
+            className="btn btn-secondary"
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending}
+            title="Add any missing employees to this month's salary"
+          >
+            <RotateCcw size={16} style={syncMutation.isPending ? { animation: 'spin 1s linear infinite' } : {}} />
+            {syncMutation.isPending ? 'Syncing...' : 'Sync Employees'}
           </button>
         </div>
       </div>
@@ -143,22 +195,18 @@ export default function Salary() {
         <StatCard title="Pending" value={pendingCount} icon={Banknote} color="#f59e0b" bg="#fffbeb" sub="employees to pay" />
       </div>
 
-      {isLoading ? <PageLoader /> : (
+      {(isLoading || autoGenerating) ? <PageLoader /> : (
         <>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center' }}>
-            <div style={{ position: 'relative', flex: 1, maxWidth: 300 }}>
-              <Search size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-              <input className="form-control" placeholder="Search by name, employee ID..."
-                value={search} onChange={e => setSearch(e.target.value)}
-                style={{ paddingLeft: 32 }} />
-            </div>
-            <select className="form-control" style={{ width: 'auto', minWidth: 140 }}
-              value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
-              <option value="">All Roles</option>
-              {roles.map(r => (
-                <option key={r} value={r} style={{ textTransform: 'capitalize' }}>{r}</option>
-              ))}
-            </select>
+          <div className="filter-bar" style={{ marginBottom: 14 }}>
+            <SearchInput value={search} onChange={setSearch} placeholder="Search by name, employee ID..." />
+            <AntSelect
+              style={{ width: 160 }}
+              value={roleFilter || undefined}
+              placeholder="All Roles"
+              allowClear
+              onChange={val => setRoleFilter(val ?? '')}
+              options={roles.map(r => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
+            />
           </div>
 
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -182,7 +230,7 @@ export default function Salary() {
                     <tr><td colSpan={9}>
                       <EmptyState icon={Banknote} message={
                         salaries.length === 0
-                          ? `No salary records for ${MONTHS[month - 1]} ${year}. Click "Generate Salaries" or "Add Salary Record".`
+                          ? `No active employees found to generate salaries for ${MONTHS[month - 1]} ${year}. Add employees first.`
                           : 'No employees match your search.'
                       } />
                     </td></tr>
@@ -192,7 +240,9 @@ export default function Salary() {
                       <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={selected.includes(sal._id)} onChange={e => setSelected(p => e.target.checked ? [...p, sal._id] : p.filter(id => id !== sal._id))} /></td>
                       <td>
                         <div className="text-14-semibold">{sal.employee?.name}</div>
-                        <div className="text-12-regular" style={{ color: 'var(--text-muted)', textTransform: 'capitalize' }}>{sal.employee?.role}</div>
+                        <div className="text-12-regular" style={{ color: 'var(--text-muted)', textTransform: 'capitalize' }}>
+                          {[sal.employee?.designation, sal.employee?.role].filter(Boolean).join(' · ')}
+                        </div>
                       </td>
                       <td className="text-14-regular">₹{(sal.earnings?.basic || 0).toLocaleString('en-IN')}</td>
                       <td className="text-14-medium">₹{(sal.grossSalary || 0).toLocaleString('en-IN')}</td>
@@ -242,12 +292,17 @@ export default function Salary() {
           </div>
           <div className="form-group">
             <label className="form-label">Payment Method</label>
-            <select className="form-control" value={payMethod} onChange={e => setPayMethod(e.target.value)}>
-              <option value="bank_transfer">Bank Transfer</option>
-              <option value="cash">Cash</option>
-              <option value="cheque">Cheque</option>
-              <option value="upi">UPI</option>
-            </select>
+            <AntSelect
+              style={{ width: '100%' }}
+              value={payMethod}
+              onChange={val => setPayMethod(val)}
+              options={[
+                { value: 'bank_transfer', label: 'Bank Transfer' },
+                { value: 'cash',          label: 'Cash' },
+                { value: 'cheque',        label: 'Cheque' },
+                { value: 'upi',           label: 'UPI' },
+              ]}
+            />
           </div>
           <div className="form-group">
             <label className="form-label">Transaction ID / Reference</label>
@@ -411,27 +466,38 @@ function AddSalaryModal({ month, year, onClose, onSuccess }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label" style={{ fontSize: 12 }}>Role</label>
-            <select className="form-control" value={roleFilter}
-              onChange={e => { setRoleFilter(e.target.value); setDeptFilter(''); setEmpId(''); }}>
-              <option value="">All Roles</option>
-              {roles.map(r => <option key={r} value={r} style={{ textTransform: 'capitalize' }}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
-            </select>
+            <AntSelect
+              style={{ width: '100%' }}
+              value={roleFilter || undefined}
+              placeholder="All Roles"
+              allowClear
+              onChange={val => { setRoleFilter(val ?? ''); setDeptFilter(''); setEmpId(''); }}
+              options={roles.map(r => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
+            />
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label" style={{ fontSize: 12 }}>Department / Subject</label>
-            <select className="form-control" value={deptFilter}
-              onChange={e => { setDeptFilter(e.target.value); setEmpId(''); }}
-              disabled={!roleFilter && departments.length === 0}>
-              <option value="">All Departments</option>
-              {departments.map(dep => <option key={dep} value={dep}>{dep}</option>)}
-            </select>
+            <AntSelect
+              style={{ width: '100%' }}
+              value={deptFilter || undefined}
+              placeholder="All Departments"
+              allowClear
+              disabled={!roleFilter && departments.length === 0}
+              onChange={val => { setDeptFilter(val ?? ''); setEmpId(''); }}
+              options={departments.map(dep => ({ value: dep, label: dep }))}
+            />
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label" style={{ fontSize: 12 }}>Employee *</label>
-            <select className="form-control" value={empId} onChange={e => setEmpId(e.target.value)}>
-              <option value="">{filteredEmps.length === 0 ? 'No employees' : 'Select employee'}</option>
-              {filteredEmps.map(e => <option key={e._id} value={e._id}>{e.name}</option>)}
-            </select>
+            <AntSelect
+              style={{ width: '100%' }}
+              value={empId || undefined}
+              placeholder={filteredEmps.length === 0 ? 'No employees' : 'Select employee'}
+              showSearch
+              optionFilterProp="label"
+              onChange={val => setEmpId(val ?? '')}
+              options={filteredEmps.map(e => ({ value: e._id, label: e.name }))}
+            />
           </div>
         </div>
       </div>

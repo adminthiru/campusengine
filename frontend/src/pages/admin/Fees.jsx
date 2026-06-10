@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
+import { Select as AntSelect } from 'antd';
 import { Plus, Download, MessageSquare, CreditCard, IndianRupee, Trash2, Edit2, Users, User, RotateCcw, Tag } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
@@ -49,7 +50,7 @@ export default function Fees() {
   const fees = data?.fees || [];
   const total = data?.total || 0;
 
-  const { register, handleSubmit, reset } = useForm();
+  const { register, handleSubmit, reset, control } = useForm();
 
   const createMutation = useMutation({
     mutationFn: (d) => api.post('/fees', d),
@@ -201,14 +202,24 @@ export default function Fees() {
         <div style={{ minWidth: 260 }}>
           <SearchInput value={search} onChange={v => { setSearch(v); setPage(1); }} placeholder="Search by student name or admission no..." />
         </div>
-        <select className="form-control" style={{ width: 'auto' }} value={classFilter} onChange={e => { setClassFilter(e.target.value); setPage(1); }}>
-          <option value="">All Classes</option>
-          {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
-        </select>
-        <select className="form-control" style={{ width: 'auto' }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-          <option value="">All Status</option>
-          {['pending', 'partial', 'paid', 'overdue'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-        </select>
+        <AntSelect
+          style={{ minWidth: 160 }}
+          value={classFilter || undefined}
+          placeholder="All Classes"
+          allowClear
+          showSearch
+          optionFilterProp="label"
+          onChange={val => { setClassFilter(val ?? ''); setPage(1); }}
+          options={classes.map(c => ({ value: c._id, label: `${c.name}${c.section ? ` ${c.section}` : ''}` }))}
+        />
+        <AntSelect
+          style={{ minWidth: 140 }}
+          value={statusFilter || undefined}
+          placeholder="All Status"
+          allowClear
+          onChange={val => setStatusFilter(val ?? '')}
+          options={['pending','partial','paid','overdue'].map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))}
+        />
         <ColumnSelector storageKey="fees" cols={FEE_COLS} visible={visibleCols} onChange={setVisibleCols} />
         <div style={{ marginLeft: 'auto' }}>
           <button className="btn btn-secondary" onClick={downloadReport} disabled={reportLoading}>
@@ -317,10 +328,15 @@ export default function Fees() {
               <FormRow>
                 <div className="form-group">
                   <label className="form-label">Class *</label>
-                  <select className="form-control" value={indivClassId} onChange={e => { setIndivClassId(e.target.value); reset({ studentId: '', academicYear: '' }); }}>
-                    <option value="">Select class</option>
-                    {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
-                  </select>
+                  <AntSelect
+                    style={{ width: '100%' }}
+                    value={indivClassId || undefined}
+                    placeholder="Select class"
+                    showSearch
+                    optionFilterProp="label"
+                    onChange={val => { setIndivClassId(val ?? ''); reset({ studentId: '', academicYear: '' }); }}
+                    options={classes.map(c => ({ value: c._id, label: `${c.name}${c.section ? ` ${c.section}` : ''}` }))}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Academic Year</label>
@@ -329,22 +345,45 @@ export default function Fees() {
               </FormRow>
               <div className="form-group">
                 <label className="form-label">Student *</label>
-                <select className="form-control" {...register('studentId', { required: true })} disabled={!indivClassId}>
-                  <option value="">{indivClassId ? 'Select student' : 'Select a class first'}</option>
-                  {students
-                    .filter(s => s.currentClass?._id === indivClassId || s.currentClass === indivClassId)
-                    .map(s => <option key={s._id} value={s._id}>{s.name} ({s.admissionNumber})</option>)}
-                </select>
+                <Controller
+                  name="studentId"
+                  control={control}
+                  rules={{ required: true }}
+                  render={({ field }) => (
+                    <AntSelect
+                      {...field}
+                      style={{ width: '100%' }}
+                      placeholder={indivClassId ? 'Select student' : 'Select a class first'}
+                      disabled={!indivClassId}
+                      showSearch
+                      optionFilterProp="label"
+                      options={students
+                        .filter(s => s.currentClass?._id === indivClassId || s.currentClass === indivClassId)
+                        .map(s => ({ value: s._id, label: `${s.name} (${s.admissionNumber})` }))}
+                    />
+                  )}
+                />
               </div>
             </>
           ) : (
             <FormRow>
               <div className="form-group">
                 <label className="form-label">Class *</label>
-                <select className="form-control" {...register('classId', { required: true })}>
-                  <option value="">Select class</option>
-                  {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
-                </select>
+                <Controller
+                  name="classId"
+                  control={control}
+                  rules={{ required: true }}
+                  render={({ field }) => (
+                    <AntSelect
+                      {...field}
+                      style={{ width: '100%' }}
+                      placeholder="Select class"
+                      showSearch
+                      optionFilterProp="label"
+                      options={classes.map(c => ({ value: c._id, label: `${c.name}${c.section ? ` ${c.section}` : ''}` }))}
+                    />
+                  )}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Academic Year</label>
@@ -715,12 +754,17 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
 
       <div className="form-group" style={{ marginTop: 16 }}>
         <label className="form-label">Payment Method</label>
-        <select className="form-control" value={method} onChange={e => setMethod(e.target.value)}>
-          <option value="cash">Cash</option>
-          <option value="bank_transfer">Bank Transfer</option>
-          <option value="cheque">Cheque</option>
-          <option value="online">Online (UPI/NEFT)</option>
-        </select>
+        <AntSelect
+          style={{ width: '100%' }}
+          value={method}
+          onChange={val => setMethod(val)}
+          options={[
+            { value: 'cash',          label: 'Cash' },
+            { value: 'bank_transfer', label: 'Bank Transfer' },
+            { value: 'cheque',        label: 'Cheque' },
+            { value: 'online',        label: 'Online (UPI/NEFT)' },
+          ]}
+        />
       </div>
     </Modal>
   );
@@ -779,10 +823,15 @@ function EditClassFeeModal({ classes, schoolFeeTerms, onClose, onSuccess }) {
       <FormRow style={{ marginBottom: 16 }}>
         <div className="form-group">
           <label className="form-label">Class *</label>
-          <select className="form-control" value={classId} onChange={e => setClassId(e.target.value)}>
-            <option value="">Select class</option>
-            {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
-          </select>
+          <AntSelect
+            style={{ width: '100%' }}
+            value={classId || undefined}
+            placeholder="Select class"
+            showSearch
+            optionFilterProp="label"
+            onChange={val => setClassId(val ?? '')}
+            options={classes.map(c => ({ value: c._id, label: `${c.name}${c.section ? ` ${c.section}` : ''}` }))}
+          />
         </div>
         <div className="form-group">
           <label className="form-label">Academic Year *</label>

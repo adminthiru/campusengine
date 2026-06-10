@@ -3,10 +3,9 @@ import { useAuth } from '../../store/AuthContext';
 import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, Users, UserCheck, BookOpen, Clock,
-  DollarSign, CreditCard, CalendarDays, FileText, Truck,
-  MessageSquare, CreditCard as IdCard, Settings, LogOut,
-  GraduationCap, Building2, ChevronRight, Bell, BarChart3,
-  ClipboardList, Banknote, School, BookMarked, UsersRound, Calendar, Library
+  DollarSign, CreditCard, FileText, Truck,
+  MessageSquare, Settings,
+  GraduationCap, Building2, ClipboardList, Banknote, School, BookMarked, UsersRound, Calendar, Library
 } from 'lucide-react';
 
 const navConfig = {
@@ -37,7 +36,6 @@ const navConfig = {
     { section: 'Other' },
     { label: 'Library', icon: Library, path: '/library' },
     { label: 'Transport', icon: Truck, path: '/transport' },
-    { label: 'ID Cards', icon: IdCard, path: '/id-cards' },
     { label: 'SMS Services', icon: MessageSquare, path: '/sms' },
     { label: 'Settings', icon: Settings, path: '/settings' },
   ],
@@ -63,7 +61,6 @@ const navConfig = {
     { section: 'Other' },
     { label: 'Library', icon: Library, path: '/library' },
     { label: 'Transport', icon: Truck, path: '/transport' },
-    { label: 'ID Cards', icon: IdCard, path: '/id-cards' },
     { label: 'SMS Services', icon: MessageSquare, path: '/sms' },
     { label: 'Settings', icon: Settings, path: '/settings' },
   ],
@@ -131,15 +128,15 @@ const navConfig = {
   ],
 };
 
-export default function Sidebar({ open, onClose }) {
-  const { user, logout } = useAuth();
+export default function Sidebar({ open, onClose, collapsed }) {
+  const { user } = useAuth();
   const { t } = useTranslation();
   const items = navConfig[user?.role] || navConfig.admin;
 
   return (
     <>
       {open && <div className="sidebar-overlay" onClick={onClose} />}
-      <aside className={`sidebar ${open ? 'open' : ''}`}>
+      <aside className={`sidebar ${open ? 'open' : ''} ${collapsed ? 'collapsed' : ''}`}>
         {/* Logo */}
         <div className="sidebar-logo">
           <div className="sidebar-logo-icon">
@@ -150,19 +147,6 @@ export default function Sidebar({ open, onClose }) {
           <div className="sidebar-logo-text">
             <h3>{user?.school?.name || 'School ERP'}</h3>
             <span>{user?.school?.code || 'Super Admin'}</span>
-          </div>
-        </div>
-
-        {/* User info */}
-        <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div className="avatar-placeholder text-14-regular" style={{ width: 36, height: 36 }}>
-              {user?.name?.charAt(0)}
-            </div>
-            <div>
-              <div className="text-14-semibold" style={{ color: 'white' }}>{user?.name}</div>
-              <div className="text-12-regular" style={{ color: 'rgba(255,255,255,0.4)', textTransform: 'capitalize' }}>{user?.role?.replace('_', ' ')}</div>
-            </div>
           </div>
         </div>
 
@@ -179,6 +163,7 @@ export default function Sidebar({ open, onClose }) {
                 to={item.path}
                 className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
                 onClick={onClose}
+                title={collapsed ? item.label : undefined}
               >
                 <Icon className="icon" />
                 <span>{item.label}</span>
@@ -187,13 +172,6 @@ export default function Sidebar({ open, onClose }) {
           })}
         </nav>
 
-        {/* Footer */}
-        <div style={{ padding: '12px 0', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-          <button className="sidebar-link" onClick={logout} style={{ color: '#f87171' }}>
-            <LogOut className="icon" />
-            <span>Logout</span>
-          </button>
-        </div>
       </aside>
     </>
   );

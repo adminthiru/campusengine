@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle, Info, SlidersHorizontal } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle, Info, SlidersHorizontal, Search } from 'lucide-react';
+import { Input } from 'antd';
 import ReactSelect from 'react-select';
 import ReactDatePicker from 'react-datepicker';
 
@@ -193,13 +194,14 @@ export function Pagination({ page, pages, onPage }) {
 // Search Input
 export function SearchInput({ value, onChange, placeholder = 'Search...' }) {
   return (
-    <div className="search-bar">
-      <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ color: 'var(--text-muted)', flexShrink: 0 }}>
-        <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-      </svg>
-      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
-      {value && <button onClick={() => onChange('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, display: 'flex' }}><X size={14} /></button>}
-    </div>
+    <Input
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      prefix={<Search size={14} style={{ color: 'var(--text-muted)' }} />}
+      suffix={value ? <X size={14} style={{ color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => onChange('')} /> : null}
+      style={{ height: 36, borderRadius: 10, fontSize: 14, width: 260, flexShrink: 0 }}
+    />
   );
 }
 

@@ -2,8 +2,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
-import { Plus, FileText, Download, Send, Edit2, Trash2, EyeOff, ChevronRight, CheckCircle } from 'lucide-react';
+import { useForm, Controller } from 'react-hook-form';
+import { Select as AntSelect } from 'antd';
+import { Plus, FileText, Download, Edit2, Trash2, ChevronRight, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, StatusBadge, PageLoader, EmptyState, FormRow } from '../../components/ui';
@@ -18,7 +19,9 @@ export function Exams() {
   const [deleteId, setDeleteId] = useState(null);
   const [marksModal, setMarksModal] = useState(null);
   const [selectedClasses, setSelectedClasses] = useState([]);
-  const { register, handleSubmit, reset } = useForm();
+  const [selected, setSelected] = useState([]);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const { register, handleSubmit, reset, control } = useForm();
 
   const { data: classData } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes') });
   const classes = classData?.classes || [];
@@ -59,11 +62,13 @@ export function Exams() {
     onError: (err) => toast.error(err.message || 'Failed')
   });
 
-  const publishMutation = useMutation({
-    mutationFn: (id) => api.post(`/exams/${id}/publish`),
-    onSuccess: () => { qc.invalidateQueries(['exams']); toast.success('Results published! SMS sent to parents.'); },
-    onError: (err) => toast.error(err.message || 'Failed')
-  });
+  const bulkDeleteMutation = async () => {
+    await Promise.all(selected.map(id => api.delete(`/exams/${id}`)));
+    qc.invalidateQueries(['exams']);
+    setSelected([]);
+    setBulkDeleteConfirm(false);
+    toast.success(`${selected.length} exam(s) deleted`);
+  };
 
   const handleSubmitForm = handleSubmit((d) => {
     const payload = { ...d, classes: selectedClasses };
@@ -89,82 +94,94 @@ export function Exams() {
           <h1 className="page-title">Exams</h1>
           <p className="page-subtitle">{exams.length} exams</p>
         </div>
-        <button className="btn btn-primary" onClick={openCreate}>
-          <Plus size={16} /> Create Exam
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {selected.length > 0 && (
+            <button className="btn btn-danger" onClick={() => setBulkDeleteConfirm(true)}>
+              <Trash2 size={15} /> Delete ({selected.length})
+            </button>
+          )}
+          <button className="btn btn-primary" onClick={openCreate}>
+            <Plus size={16} /> Create Exam
+          </button>
+        </div>
       </div>
 
-      {isLoading ? <PageLoader /> : (
-        <div className="grid-2">
-          {exams.length === 0 && (
-            <div style={{ gridColumn: '1/-1' }}>
-              <div className="card"><EmptyState icon={FileText} message="No exams scheduled." /></div>
-            </div>
-          )}
-          {exams.map(exam => (
-            <div key={exam._id} className="card"
-              onClick={() => navigate(`/exams/${exam._id}`)}
-              style={{ cursor: 'pointer', transition: 'box-shadow 0.15s' }}
-              onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.10)'}
-              onMouseLeave={e => e.currentTarget.style.boxShadow = ''}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="text-16-bold" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {exam.name}
-                    <ChevronRight size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                  </div>
-                  <div className="text-13-regular" style={{ color: 'var(--text-secondary)', marginTop: 4 }}>
-                    {exam.type || 'No type'} · {exam.examDate ? new Date(exam.examDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No date'} · {exam.academicYear}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                  <StatusBadge status={exam.status} />
-                  <button className="btn btn-secondary btn-sm btn-icon" title="Edit exam"
-                    onClick={e => { e.stopPropagation(); openEdit(exam); }}>
-                    <Edit2 size={14} />
-                  </button>
-                  <button className="btn btn-danger btn-sm btn-icon" title="Delete exam"
-                    onClick={e => { e.stopPropagation(); setDeleteId(exam._id); }}>
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-                {exam.classes?.slice(0, 4).map(c => (
-                  <span key={c._id} className="badge badge-info">{c.name} {c.section}</span>
+      {isLoading ? <PageLoader /> : exams.length === 0 ? (
+        <div className="card"><EmptyState icon={FileText} message="No exams scheduled." /></div>
+      ) : (
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 40 }}>
+                    <input type="checkbox"
+                      checked={selected.length === exams.length && exams.length > 0}
+                      onChange={e => setSelected(e.target.checked ? exams.map(ex => ex._id) : [])}
+                    />
+                  </th>
+                  <th>Exam Name</th>
+                  <th>Type</th>
+                  <th>Date</th>
+                  <th>Academic Year</th>
+                  <th>Classes</th>
+                  <th>Status</th>
+                  <th>Results</th>
+                  <th style={{ width: 60 }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {exams.map(exam => (
+                  <tr key={exam._id} onClick={() => navigate(`/exams/${exam._id}`)} style={{ cursor: 'pointer' }}>
+                    <td onClick={e => e.stopPropagation()}>
+                      <input type="checkbox"
+                        checked={selected.includes(exam._id)}
+                        onChange={e => setSelected(prev => e.target.checked ? [...prev, exam._id] : prev.filter(id => id !== exam._id))}
+                      />
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 5 }}>
+                        {exam.name}
+                        <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                      </div>
+                    </td>
+                    <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                      {exam.type || <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    </td>
+                    <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
+                      {exam.examDate ? new Date(exam.examDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    </td>
+                    <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{exam.academicYear || '—'}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {exam.classes?.slice(0, 3).map(c => (
+                          <span key={c._id} className="badge badge-info">{c.name} {c.section}</span>
+                        ))}
+                        {exam.classes?.length > 3 && (
+                          <span className="badge badge-secondary">+{exam.classes.length - 3}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td><StatusBadge status={exam.status} /></td>
+                    <td>
+                      {exam.isResultPublished ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#16a34a' }}>
+                          <CheckCircle size={13} /> Published
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>Unpublished</span>
+                      )}
+                    </td>
+                    <td onClick={e => e.stopPropagation()}>
+                      <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => openEdit(exam)}>
+                        <Edit2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
                 ))}
-                {exam.classes?.length > 4 && (
-                  <span className="badge badge-secondary">+{exam.classes.length - 4} more</span>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {!exam.isResultPublished && exam.status !== 'cancelled' && (
-                  <button
-                    onClick={e => { e.stopPropagation(); publishMutation.mutate(exam._id); }}
-                    disabled={publishMutation.isPending}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                      padding: '6px 14px', borderRadius: 8, border: 'none',
-                      cursor: 'pointer', fontSize: 13, fontWeight: 600,
-                      background: '#16a34a', color: 'white',
-                      opacity: publishMutation.isPending ? 0.7 : 1
-                    }}>
-                    <Send size={13} /> Publish Results
-                  </button>
-                )}
-                {exam.isResultPublished && (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    fontSize: 13, fontWeight: 600, color: '#16a34a'
-                  }}>
-                    <CheckCircle size={14} /> Published
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -231,12 +248,23 @@ export function Exams() {
             </div>
             <div className="form-group">
               <label className="form-label">Status</label>
-              <select className="form-control" {...register('status')}>
-                <option value="scheduled">Scheduled</option>
-                <option value="ongoing">Ongoing</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
+              <Controller
+                name="status"
+                control={control}
+                defaultValue="scheduled"
+                render={({ field }) => (
+                  <AntSelect
+                    {...field}
+                    style={{ width: '100%' }}
+                    options={[
+                      { value: 'scheduled', label: 'Scheduled' },
+                      { value: 'ongoing',   label: 'Ongoing' },
+                      { value: 'completed', label: 'Completed' },
+                      { value: 'cancelled', label: 'Cancelled' },
+                    ]}
+                  />
+                )}
+              />
             </div>
           </FormRow>
 
@@ -278,6 +306,14 @@ export function Exams() {
         onConfirm={() => deleteMutation.mutate(deleteId)}
         onClose={() => setDeleteId(null)}
       />
+      <ConfirmDialog
+        open={bulkDeleteConfirm}
+        title={`Delete ${selected.length} Exam${selected.length > 1 ? 's' : ''}`}
+        message="This will permanently delete the selected exams and all their results. This cannot be undone."
+        danger
+        onConfirm={bulkDeleteMutation}
+        onClose={() => setBulkDeleteConfirm(false)}
+      />
 
       {marksModal && (
         <ResultsModal exam={marksModal} classes={classes} onClose={() => setMarksModal(null)} />
@@ -309,12 +345,13 @@ function ResultsModal({ exam, classes, onClose }) {
     <Modal open onClose={onClose} title={`${exam.name} — Results`} size="lg">
       <div className="form-group">
         <label className="form-label">Select Class</label>
-        <select className="form-control" value={classId} onChange={e => setClassId(e.target.value)}>
-          <option value="">Select class</option>
-          {exam.classes?.map(c => (
-            <option key={c._id} value={c._id}>{c.name} {c.section}</option>
-          ))}
-        </select>
+        <AntSelect
+          style={{ width: '100%' }}
+          value={classId || undefined}
+          placeholder="Select class"
+          onChange={val => setClassId(val ?? '')}
+          options={(exam.classes || []).map(c => ({ value: c._id, label: `${c.name}${c.section ? ` ${c.section}` : ''}` }))}
+        />
       </div>
       {classId && (
         <div className="table-container">

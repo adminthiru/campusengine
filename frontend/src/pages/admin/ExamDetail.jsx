@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Upload, Save, Send, CheckCircle, Edit2, EyeOff, FileDown, Search, CalendarDays, Ticket } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
+import { Select as AntSelect } from 'antd';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { PageLoader, StatusBadge, Modal, FormRow, SearchInput } from '../../components/ui';
@@ -29,7 +30,7 @@ export default function ExamDetail() {
   const [scheduleState, setScheduleState] = useState({});
   const [hallTicketDownloading, setHallTicketDownloading] = useState(null);
   const fileInputRefs = useRef({});
-  const { register: regEdit, handleSubmit: handleEditSubmit, reset: resetEdit } = useForm();
+  const { register: regEdit, handleSubmit: handleEditSubmit, reset: resetEdit, control: controlEdit } = useForm();
 
   const { data: examData, isLoading } = useQuery({
     queryKey: ['exam', id],
@@ -373,38 +374,24 @@ export default function ExamDetail() {
                 padding: '2px 10px', fontWeight: 500
               }}>{text}</span>
             ))}
+            <StatusBadge status={exam.status} />
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button className="btn btn-secondary btn-sm btn-icon" title="Edit exam" onClick={openEditModal}>
             <Edit2 size={14} />
           </button>
-          <StatusBadge status={exam.status} />
           {!exam.isResultPublished ? (
-            <button onClick={() => publishMutation.mutate()} disabled={publishMutation.isPending}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 16px',
-                borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-                background: '#16a34a', color: 'white',
-                opacity: publishMutation.isPending ? 0.7 : 1
-              }}>
+            <button className="btn btn-publish" onClick={() => publishMutation.mutate()} disabled={publishMutation.isPending}>
               <Send size={14} /> {publishMutation.isPending ? 'Publishing...' : 'Publish Results'}
             </button>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                fontSize: 13, fontWeight: 600, color: '#16a34a'
-              }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 600, color: '#16a34a' }}>
                 <CheckCircle size={14} /> Published
               </span>
-              <button onClick={() => unpublishMutation.mutate()} disabled={unpublishMutation.isPending}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px',
-                  borderRadius: 8, border: '1.5px solid #e2e8f0', background: 'white',
-                  cursor: 'pointer', fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)'
-                }}>
-                <EyeOff size={13} /> {unpublishMutation.isPending ? 'Unpublishing...' : 'Unpublish'}
+              <button className="btn btn-secondary" onClick={() => unpublishMutation.mutate()} disabled={unpublishMutation.isPending}>
+                <EyeOff size={14} /> {unpublishMutation.isPending ? 'Unpublishing...' : 'Unpublish'}
               </button>
             </div>
           )}
@@ -457,42 +444,38 @@ export default function ExamDetail() {
 
           {/* Subject selector + Save */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-            <div style={{ minWidth: 220 }}>
-              <SearchInput
-                value={studentSearch}
-                onChange={setStudentSearch}
-                placeholder="Search student..."
-              />
-            </div>
-            <div style={{ minWidth: 220 }}>
-              <select className="form-control" value={activeSubjectId || ''}
-                onChange={e => { setActiveSubjectId(e.target.value); setEditMode(false); }}>
-                {examSubjects.map(s => (
-                  <option key={s._id} value={s._id}>{s.name}{s.code ? ` (${s.code})` : ''}</option>
-                ))}
-              </select>
-            </div>
+            <SearchInput
+              value={studentSearch}
+              onChange={setStudentSearch}
+              placeholder="Search student..."
+            />
+            <AntSelect
+              style={{ width: 240, height: 36, fontSize: 14 }}
+              value={activeSubjectId || undefined}
+              onChange={val => { setActiveSubjectId(val ?? ''); setEditMode(false); }}
+              options={examSubjects.map(s => ({ value: s._id, label: `${s.name}${s.code ? ` (${s.code})` : ''}` }))}
+            />
             {scheduleEntry && (
               <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                 Max: <strong>{maxMarks}</strong> · Passing: <strong>{scheduleEntry.passingMarks || 35}</strong>
               </div>
             )}
             <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
-              <button className="btn btn-secondary btn-sm" onClick={openScheduleModal}>
+              <button className="btn btn-secondary" onClick={openScheduleModal}>
                 <CalendarDays size={14} /> Set Exam Dates
               </button>
-              <button className="btn btn-secondary btn-sm"
+              <button className="btn btn-secondary"
                 onClick={() => { setReportClassId(activeClassId || ''); setReportSearch(''); setShowReportModal(true); }}>
                 <FileDown size={14} /> Download Report
               </button>
               {activeSubjectId && !editMode && (
-                <button className="btn btn-primary btn-sm" onClick={() => setEditMode(true)}>
+                <button className="btn btn-primary" onClick={() => setEditMode(true)}>
                   <Edit2 size={14} /> Edit Marks
                 </button>
               )}
             </div>
             {activeSubjectId && editMode && (
-              <button className="btn btn-success btn-sm"
+              <button className="btn btn-success"
                 onClick={() => { handleSaveMarks(); setEditMode(false); }}
                 disabled={saveMarksMutation.isPending}>
                 <Save size={14} /> {saveMarksMutation.isPending ? 'Saving...' : 'Save Marks'}
@@ -738,13 +721,14 @@ export default function ExamDetail() {
             <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
               <div className="form-group" style={{ flex: 1, margin: 0 }}>
                 <label className="form-label">Class</label>
-                <select className="form-control" value={reportClassId}
-                  onChange={e => { setReportClassId(e.target.value); setReportSearch(''); }}>
-                  <option value="">Select class</option>
-                  {exam.classes?.map(c => (
-                    <option key={c._id} value={c._id}>{c.name} {c.section}</option>
-                  ))}
-                </select>
+                <AntSelect
+                  style={{ width: '100%' }}
+                  value={reportClassId || undefined}
+                  placeholder="Select class"
+                  allowClear
+                  onChange={val => { setReportClassId(val ?? ''); setReportSearch(''); }}
+                  options={(exam.classes || []).map(c => ({ value: c._id, label: `${c.name}${c.section ? ` ${c.section}` : ''}` }))}
+                />
               </div>
               <div className="form-group" style={{ flex: 2, margin: 0 }}>
                 <label className="form-label">Search Student</label>
@@ -940,12 +924,23 @@ export default function ExamDetail() {
             </div>
             <div className="form-group">
               <label className="form-label">Status</label>
-              <select className="form-control" {...regEdit('status')}>
-                <option value="scheduled">Scheduled</option>
-                <option value="ongoing">Ongoing</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
+              <Controller
+                name="status"
+                control={controlEdit}
+                defaultValue="scheduled"
+                render={({ field }) => (
+                  <AntSelect
+                    {...field}
+                    style={{ width: '100%' }}
+                    options={[
+                      { value: 'scheduled', label: 'Scheduled' },
+                      { value: 'ongoing',   label: 'Ongoing' },
+                      { value: 'completed', label: 'Completed' },
+                      { value: 'cancelled', label: 'Cancelled' },
+                    ]}
+                  />
+                )}
+              />
             </div>
           </FormRow>
         </form>

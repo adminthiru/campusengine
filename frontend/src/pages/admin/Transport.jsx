@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Bus, Plus, Edit2, Trash2, Users, Phone, Hash, User } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Select as AntSelect } from 'antd';
 import api from '../../utils/api';
 import { PageLoader, EmptyState, StatCard, Modal, FormRow, ConfirmDialog } from '../../components/ui';
 
@@ -377,20 +378,27 @@ function VehicleModal({ vehicle, onClose, onSuccess }) {
 
       <div className="form-group">
         <label className="form-label">Vehicle Type <span style={{ color: '#ef4444' }}>*</span></label>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {VEHICLE_TYPES.map(t => (
-            <button key={t.value} type="button"
-              onClick={() => setVehicleType(t.value)}
-              style={{
-                padding: '7px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: '2px solid',
-                borderColor: vehicleType === t.value ? t.color : 'var(--border)',
-                background: vehicleType === t.value ? t.bg : 'white',
-                color: vehicleType === t.value ? t.color : 'var(--text-secondary)',
-              }}>
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <AntSelect
+          style={{ width: '100%' }}
+          value={vehicleType}
+          onChange={setVehicleType}
+          options={VEHICLE_TYPES.map(t => ({ value: t.value, label: t.label, color: t.color, bg: t.bg }))}
+          optionRender={(option) => (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: option.data.color, flexShrink: 0 }} />
+              <span>{option.data.label}</span>
+            </div>
+          )}
+          labelRender={({ value: v }) => {
+            const t = typeInfo(v);
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+                <span>{t.label}</span>
+              </div>
+            );
+          }}
+        />
       </div>
 
       <FormRow>
@@ -445,19 +453,15 @@ function VehicleModal({ vehicle, onClose, onSuccess }) {
 
       <div className="form-group">
         <label className="form-label">Status</label>
-        <div style={{ display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', width: 'fit-content' }}>
-          {[true, false].map(val => (
-            <button key={String(val)} type="button"
-              onClick={() => setIsActive(val)}
-              style={{
-                padding: '7px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none',
-                background: isActive === val ? (val ? '#16a34a' : '#ef4444') : 'white',
-                color: isActive === val ? 'white' : 'var(--text-secondary)',
-              }}>
-              {val ? 'Active' : 'Inactive'}
-            </button>
-          ))}
-        </div>
+        <AntSelect
+          style={{ width: '100%' }}
+          value={isActive}
+          onChange={setIsActive}
+          options={[
+            { value: true, label: 'Active' },
+            { value: false, label: 'Inactive' },
+          ]}
+        />
       </div>
     </Modal>
   );

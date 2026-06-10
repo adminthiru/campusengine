@@ -3,6 +3,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { UserCheck, Save, ChevronLeft, ChevronRight, Edit2, Settings, Clock, CheckCircle, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Select as AntSelect } from 'antd';
 import api from '../../utils/api';
 import { PageLoader, Avatar, SearchInput } from '../../components/ui';
 
@@ -433,20 +434,26 @@ export default function Attendance() {
           />
         </div>
         {tab === 'student' && (
-          <select className="form-control" style={{ width: 'auto' }} value={classId}
-            onChange={e => { setClassId(e.target.value); setSearch(''); }}>
-            <option value="">Select Class</option>
-            {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
-          </select>
+          <AntSelect
+            style={{ minWidth: 160 }}
+            value={classId || undefined}
+            placeholder="Select Class"
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            onChange={val => { setClassId(val ?? ''); setSearch(''); }}
+            options={classes.map(c => ({ value: c._id, label: `${c.name}${c.section ? ` ${c.section}` : ''}` }))}
+          />
         )}
         {tab === 'employee' && empRoles.length > 0 && (
-          <select className="form-control" style={{ width: 'auto' }} value={empRole}
-            onChange={e => setEmpRole(e.target.value)}>
-            <option value="">All Roles</option>
-            {empRoles.map(r => (
-              <option key={r} value={r} style={{ textTransform: 'capitalize' }}>{r}</option>
-            ))}
-          </select>
+          <AntSelect
+            style={{ minWidth: 140 }}
+            value={empRole || undefined}
+            placeholder="All Roles"
+            allowClear
+            onChange={val => setEmpRole(val ?? '')}
+            options={empRoles.map(r => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
+          />
         )}
         <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
           {editMode && people.length > 0 && (

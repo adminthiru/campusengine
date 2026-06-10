@@ -324,14 +324,14 @@ router.get('/parents', protect, async (req, res) => {
     // Query students directly (don't rely on parent.students[] which can be stale)
     const students = await Student.find({
       primaryGuardian: { $in: primaryIds }, school: req.user.school
-    }).populate('currentClass', 'name section').select('name admissionNumber currentClass primaryGuardian');
+    }).populate('currentClass', 'name section').select('name admissionNumber photo currentClass primaryGuardian');
 
     // Group students by their primaryGuardian ID
     const byParent = {};
     students.forEach(s => {
       const pid = s.primaryGuardian.toString();
       if (!byParent[pid]) byParent[pid] = [];
-      byParent[pid].push({ _id: s._id, name: s.name, admissionNumber: s.admissionNumber, currentClass: s.currentClass });
+      byParent[pid].push({ _id: s._id, name: s.name, admissionNumber: s.admissionNumber, photo: s.photo, currentClass: s.currentClass });
     });
 
     const result = parents.map(p => ({ ...p.toObject(), students: byParent[p._id.toString()] || [] }));
@@ -539,7 +539,7 @@ router.get('/subjects', protect, checkSubscription, async (req, res) => {
     const { classId } = req.query;
     const query = { school: req.user.school };
     if (classId) query.classes = classId;
-    const subjects = await Subject.find(query).populate('teacher', 'name').populate('classes', 'name section');
+    const subjects = await Subject.find(query).populate('teacher', 'name').populate('teachers', 'name designation').populate('classes', 'name section');
     res.json({ success: true, subjects });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -1508,6 +1508,16 @@ const calcFine = (dueDate, finePerDay = 2) => {
   return Math.max(0, Math.ceil((now - due) / 86400000) * finePerDay);
 };
 
+// Save expense categories
+router.put('/school/expense-categories', protect, authorize('admin', 'correspondent', 'accountant'), async (req, res) => {
+  try {
+    const { categories } = req.body;
+    if (!Array.isArray(categories)) return res.status(400).json({ success: false, message: 'categories must be an array' });
+    const school = await School.findByIdAndUpdate(req.user.school, { expenseCategories: categories }, { new: true });
+    res.json({ success: true, school });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // Save library config (fine rate)
 router.put('/school/library-config', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
   try {
@@ -1590,17 +1600,29 @@ router.delete('/library/books/:id', protect, checkSubscription, authorize('admin
 // GET /library/issues
 router.get('/library/issues', protect, checkSubscription, async (req, res) => {
   try {
-    const { status, borrowerType } = req.query;
+    const { status, borrowerType, search } = req.query;
     const query = { school: req.user.school };
     if (status) query.status = status;
     if (borrowerType) query.borrowerType = borrowerType;
-    const issues = await BookIssue.find(query)
+    let issues = await BookIssue.find(query)
       .populate('book', 'title author isbn category')
-      .populate('student', 'name admissionNumber photo')
-      .populate('employee', 'name employeeId photo')
+      .populate({ path: 'student', select: 'name admissionNumber photo rollNumber currentClass', populate: { path: 'currentClass', select: 'name section' } })
+      .populate('employee', 'name employeeId photo designation role')
       .populate('issuedBy', 'name')
       .populate('returnedTo', 'name')
       .sort({ createdAt: -1 });
+    if (search) {
+      const q = search.toLowerCase();
+      issues = issues.filter(i =>
+        i.book?.title?.toLowerCase().includes(q) ||
+        i.book?.author?.toLowerCase().includes(q) ||
+        i.book?.isbn?.toLowerCase().includes(q) ||
+        i.student?.name?.toLowerCase().includes(q) ||
+        i.student?.admissionNumber?.toLowerCase().includes(q) ||
+        i.employee?.name?.toLowerCase().includes(q) ||
+        i.employee?.employeeId?.toLowerCase().includes(q)
+      );
+    }
     res.json({ success: true, issues });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -1750,21 +1772,37 @@ router.get('/library/overdue', protect, checkSubscription, async (req, res) => {
 router.get('/library/reports', protect, checkSubscription, async (req, res) => {
   try {
     const school = req.user.school;
-    const [books, issued, overdue, returned, allIssues] = await Promise.all([
+    const populateBorrower = [
+      { path: 'student', select: 'name admissionNumber' },
+      { path: 'employee', select: 'name employeeId designation' },
+      { path: 'book', select: 'title author' },
+    ];
+    const [books, issuedCount, finesPaid, currentlyOverdue, overdueReturned, damaged, lost] = await Promise.all([
       Book.find({ school }),
       BookIssue.countDocuments({ school, status: 'issued' }),
-      BookIssue.countDocuments({ school, status: 'issued', dueDate: { $lt: new Date() } }),
-      BookIssue.countDocuments({ school, status: 'returned' }),
-      BookIssue.find({ school, fine: { $gt: 0 } }, 'fine finePaid'),
+      BookIssue.find({ school, fine: { $gt: 0 }, finePaid: true }).populate(populateBorrower).sort({ updatedAt: -1 }),
+      BookIssue.find({ school, status: 'issued', dueDate: { $lt: new Date() } }).populate(populateBorrower).sort({ dueDate: 1 }),
+      BookIssue.find({ school, status: 'returned', $expr: { $gt: ['$returnDate', '$dueDate'] } }).populate(populateBorrower).sort({ returnDate: -1 }),
+      BookIssue.find({ school, status: 'damaged' }).populate(populateBorrower).sort({ updatedAt: -1 }),
+      BookIssue.find({ school, status: 'lost' }).populate(populateBorrower).sort({ updatedAt: -1 }),
     ]);
+    const allFineIssues = await BookIssue.find({ school, fine: { $gt: 0 } }, 'fine finePaid');
     const totalBooks = books.length;
     const totalCopies = books.reduce((s, b) => s + b.totalCopies, 0);
     const availableCopies = books.reduce((s, b) => s + b.availableCopies, 0);
-    const totalFines = allIssues.reduce((s, i) => s + i.fine, 0);
-    const collectedFines = allIssues.filter(i => i.finePaid).reduce((s, i) => s + i.fine, 0);
+    const totalFines = allFineIssues.reduce((s, i) => s + i.fine, 0);
+    const collectedFines = allFineIssues.filter(i => i.finePaid).reduce((s, i) => s + i.fine, 0);
     res.json({
       success: true,
-      report: { totalBooks, totalCopies, availableCopies, issuedCount: issued, overdueCount: overdue, returnedCount: returned, totalFines, collectedFines },
+      report: {
+        totalBooks, totalCopies, availableCopies, issuedCount,
+        overdueCount: currentlyOverdue.length,
+        returnedLateCount: overdueReturned.length,
+        damagedCount: damaged.length,
+        lostCount: lost.length,
+        totalFines, collectedFines,
+        finesPaid, currentlyOverdue, overdueReturned, damaged, lost,
+      },
     });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });

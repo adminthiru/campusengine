@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { Select as AntSelect } from 'antd';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Settings as SettingsIcon, School, Key, CreditCard, Bell, Plus, Trash2, Check, Upload, CalendarCheck, ListOrdered, ShieldCheck, GraduationCap, BookOpen, UsersRound, UserCheck, KeyRound, Banknote, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -89,7 +90,7 @@ function SchoolSettings() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
   const school = data?.school;
-  const { register, handleSubmit } = useForm();
+  const { register, handleSubmit, control } = useForm();
   const [logoFile, setLogoFile] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -138,9 +139,13 @@ function SchoolSettings() {
           </div>
           <div className="form-group">
             <label className="form-label">Board / Syllabus</label>
-            <select className="form-control" {...register('board')} defaultValue={school?.board}>
-              {['CBSE','ICSE','State Board','IB','Other'].map(b => <option key={b}>{b}</option>)}
-            </select>
+            <Controller name="board" control={control} defaultValue={school?.board} render={({ field }) => (
+              <AntSelect
+                {...field}
+                style={{ width: '100%' }}
+                options={['CBSE','ICSE','State Board','IB','Other'].map(b => ({ value: b, label: b }))}
+              />
+            )} />
           </div>
         </FormRow>
         <FormRow>
@@ -180,10 +185,16 @@ function SchoolSettings() {
           </div>
           <div className="form-group">
             <label className="form-label">Language (SMS)</label>
-            <select className="form-control" {...register('language')} defaultValue={school?.language}>
-              <option value="en">English</option>
-              <option value="ta">Tamil</option>
-            </select>
+            <Controller name="language" control={control} defaultValue={school?.language} render={({ field }) => (
+              <AntSelect
+                {...field}
+                style={{ width: '100%' }}
+                options={[
+                  { value: 'en', label: 'English' },
+                  { value: 'ta', label: 'Tamil' },
+                ]}
+              />
+            )} />
           </div>
         </FormRow>
         <button type="submit" className="btn btn-primary" disabled={saving}>
@@ -235,11 +246,17 @@ function GradeSettings() {
       <form onSubmit={handleSubmit(onSubmit)}>
         <div className="form-group">
           <label className="form-label">Grading System</label>
-          <select className="form-control" {...register('system')} style={{ maxWidth: 200 }}>
-            <option value="percentage">Percentage</option>
-            <option value="gpa">GPA</option>
-            <option value="letter">Letter Grade</option>
-          </select>
+          <Controller name="system" control={control} render={({ field }) => (
+            <AntSelect
+              {...field}
+              style={{ width: 200 }}
+              options={[
+                { value: 'percentage', label: 'Percentage' },
+                { value: 'gpa', label: 'GPA' },
+                { value: 'letter', label: 'Letter Grade' },
+              ]}
+            />
+          )} />
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', marginBottom: 16 }}>
@@ -1265,7 +1282,7 @@ function PasswordSettings() {
 
 function ProfileSettings() {
   const { user, updateUser } = useAuth();
-  const { register, handleSubmit } = useForm();
+  const { register, handleSubmit, control } = useForm();
   const [saving, setSaving] = useState(false);
 
   const onSubmit = async (d) => {
@@ -1295,10 +1312,16 @@ function ProfileSettings() {
         </div>
         <div className="form-group">
           <label className="form-label">SMS Language</label>
-          <select className="form-control" {...register('language')} defaultValue={user?.language}>
-            <option value="en">English</option>
-            <option value="ta">Tamil</option>
-          </select>
+          <Controller name="language" control={control} defaultValue={user?.language} render={({ field }) => (
+            <AntSelect
+              {...field}
+              style={{ width: '100%' }}
+              options={[
+                { value: 'en', label: 'English' },
+                { value: 'ta', label: 'Tamil' },
+              ]}
+            />
+          )} />
         </div>
         <button type="submit" className="btn btn-primary" disabled={saving}>
           {saving ? 'Saving...' : 'Update Profile'}

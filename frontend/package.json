@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.100.9",
+    "antd": "^6.4.3",
     "axios": "^1.16.0",
     "date-fns": "^4.1.0",
     "exceljs": "^3.4.0",

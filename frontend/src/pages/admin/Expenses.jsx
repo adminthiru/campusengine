@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
-import { Plus, Trash2, Edit2, Download, DollarSign, TrendingDown } from 'lucide-react';
+import { useForm, Controller } from 'react-hook-form';
+import { Select as AntSelect } from 'antd';
+import { Plus, Trash2, Edit2, Download, DollarSign, TrendingDown, Tag, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, StatusBadge, PageLoader, EmptyState, StatCard, FormRow, ColumnSelector, useColumnSelector } from '../../components/ui';
@@ -27,7 +28,8 @@ export default function Expenses() {
   const [editExpense, setEditExpense] = useState(null);
   const [showReport, setShowReport] = useState(false);
   const [viewExpense, setViewExpense] = useState(null);
-  const { register, handleSubmit, reset, formState: { errors } } = useForm();
+  const [showCatModal, setShowCatModal] = useState(false);
+  const { register, handleSubmit, reset, control, formState: { errors } } = useForm();
 
   const { data, isLoading } = useQuery({
     queryKey: ['expenses', month, year, category],
@@ -36,8 +38,12 @@ export default function Expenses() {
   const expenses = data?.expenses || [];
   const total = data?.total || 0;
 
+  const { data: schoolData } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
+
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const categories = ['furniture','electronics','maintenance','stationery','transport','utilities','salary','events','other'];
+  const DEFAULT_CATEGORIES = ['furniture','electronics','maintenance','stationery','transport','utilities','salary','events','other'];
+  const customCategories = schoolData?.school?.expenseCategories || [];
+  const categories = [...DEFAULT_CATEGORIES, ...customCategories.filter(c => !DEFAULT_CATEGORIES.includes(c.toLowerCase()))];
 
   const createMutation = useMutation({
     mutationFn: (d) => api.post('/expenses', d),
@@ -87,6 +93,9 @@ export default function Expenses() {
           <button className="btn btn-secondary" onClick={() => setShowReport(true)}>
             <Download size={16} /> Download Report
           </button>
+          <button className="btn btn-secondary" onClick={() => setShowCatModal(true)}>
+            <Tag size={16} /> Add Category
+          </button>
           <button className="btn btn-primary" onClick={() => { reset(); setShowModal(true); }}>
             <Plus size={16} /> Add Expense
           </button>
@@ -95,16 +104,26 @@ export default function Expenses() {
 
       {/* Filters */}
       <div className="filter-bar">
-        <select className="form-control" style={{ width: 'auto' }} value={month} onChange={e => setMonth(Number(e.target.value))}>
-          {months.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-        </select>
-        <select className="form-control" style={{ width: 'auto' }} value={year} onChange={e => setYear(Number(e.target.value))}>
-          {[now.getFullYear() - 1, now.getFullYear()].map(y => <option key={y}>{y}</option>)}
-        </select>
-        <select className="form-control" style={{ width: 'auto' }} value={category} onChange={e => setCategory(e.target.value)}>
-          <option value="">All Categories</option>
-          {categories.map(c => <option key={c} value={c} style={{ textTransform: 'capitalize' }}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
-        </select>
+        <AntSelect
+          style={{ minWidth: 90 }}
+          value={month}
+          onChange={val => setMonth(val)}
+          options={months.map((m, i) => ({ value: i + 1, label: m }))}
+        />
+        <AntSelect
+          style={{ minWidth: 90 }}
+          value={year}
+          onChange={val => setYear(val)}
+          options={[now.getFullYear() - 1, now.getFullYear()].map(y => ({ value: y, label: String(y) }))}
+        />
+        <AntSelect
+          style={{ minWidth: 160 }}
+          value={category || undefined}
+          placeholder="All Categories"
+          allowClear
+          onChange={val => setCategory(val ?? '')}
+          options={categories.map(c => ({ value: c, label: c.charAt(0).toUpperCase() + c.slice(1) }))}
+        />
         <ColumnSelector storageKey="expenses" cols={EXPENSE_COLS} visible={visibleCols} onChange={setVisibleCols} />
       </div>
 
@@ -184,10 +203,14 @@ export default function Expenses() {
           <FormRow>
             <div className="form-group">
               <label className="form-label">Category *</label>
-              <select className="form-control" {...register('category', { required: 'Required' })}>
-                <option value="">Select category</option>
-                {categories.map(c => <option key={c} value={c} style={{ textTransform: 'capitalize' }}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
-              </select>
+              <Controller name="category" control={control} rules={{ required: 'Required' }} render={({ field }) => (
+                <AntSelect
+                  {...field}
+                  style={{ width: '100%' }}
+                  placeholder="Select category"
+                  options={categories.map(c => ({ value: c, label: c.charAt(0).toUpperCase() + c.slice(1) }))}
+                />
+              )} />
               {errors.category && <p className="text-12-regular" style={{ color: '#ef4444', marginTop: 4 }}>{errors.category.message}</p>}
             </div>
             <div className="form-group">
@@ -209,12 +232,18 @@ export default function Expenses() {
           <FormRow>
             <div className="form-group">
               <label className="form-label">Payment Method</label>
-              <select className="form-control" {...register('paymentMethod')}>
-                <option value="cash">Cash</option>
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="cheque">Cheque</option>
-                <option value="online">Online</option>
-              </select>
+              <Controller name="paymentMethod" control={control} render={({ field }) => (
+                <AntSelect
+                  {...field}
+                  style={{ width: '100%' }}
+                  options={[
+                    { value: 'cash', label: 'Cash' },
+                    { value: 'bank_transfer', label: 'Bank Transfer' },
+                    { value: 'cheque', label: 'Cheque' },
+                    { value: 'online', label: 'Online' },
+                  ]}
+                />
+              )} />
             </div>
             <div className="form-group">
               <label className="form-label">Bill Number</label>
@@ -253,6 +282,15 @@ export default function Expenses() {
 
       {showReport && (
         <ExpenseReportModal categories={categories} onClose={() => setShowReport(false)} />
+      )}
+
+      {showCatModal && (
+        <CategoryModal
+          defaultCategories={DEFAULT_CATEGORIES}
+          customCategories={customCategories}
+          onClose={() => setShowCatModal(false)}
+          onSaved={() => { qc.invalidateQueries(['school']); setShowCatModal(false); }}
+        />
       )}
     </div>
   );
@@ -390,10 +428,14 @@ function ExpenseReportModal({ categories, onClose }) {
 
       <div className="form-group">
         <label className="form-label">Category (optional)</label>
-        <select className="form-control" value={category} onChange={e => setCategory(e.target.value)}>
-          <option value="">All Categories</option>
-          {categories.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
-        </select>
+        <AntSelect
+          style={{ width: '100%' }}
+          value={category || undefined}
+          placeholder="All Categories"
+          allowClear
+          onChange={val => setCategory(val ?? '')}
+          options={categories.map(c => ({ value: c, label: c.charAt(0).toUpperCase() + c.slice(1) }))}
+        />
       </div>
 
       {startDate && endDate && (
@@ -407,8 +449,91 @@ function ExpenseReportModal({ categories, onClose }) {
   );
 }
 
+function CategoryModal({ defaultCategories, customCategories, onClose, onSaved }) {
+  const [newCat, setNewCat] = useState('');
+  const [list, setList] = useState([...customCategories]);
+  const [saving, setSaving] = useState(false);
+
+  const handleAdd = () => {
+    const trimmed = newCat.trim().toLowerCase();
+    if (!trimmed) return;
+    if (defaultCategories.includes(trimmed) || list.includes(trimmed)) {
+      toast.error('Category already exists');
+      return;
+    }
+    setList(prev => [...prev, trimmed]);
+    setNewCat('');
+  };
+
+  const handleRemove = (cat) => setList(prev => prev.filter(c => c !== cat));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.put('/school/expense-categories', { categories: list });
+      toast.success('Categories saved');
+      onSaved();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Manage Expense Categories"
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving...' : 'Save Categories'}
+        </button>
+      </>}
+    >
+      <div className="form-group">
+        <label className="form-label">Default Categories</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {defaultCategories.map(c => (
+            <span key={c} style={{ padding: '4px 12px', borderRadius: 20, background: '#f1f5f9', fontSize: 13, color: 'var(--text-secondary)', textTransform: 'capitalize' }}>
+              {c}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Custom Categories</label>
+        {list.length === 0 && (
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>No custom categories yet.</p>
+        )}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+          {list.map(c => (
+            <span key={c} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: '#eff6ff', border: '1px solid #bfdbfe', fontSize: 13, color: '#1d4ed8', textTransform: 'capitalize' }}>
+              {c}
+              <button onClick={() => handleRemove(c)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', color: '#1d4ed8' }}>
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            className="form-control"
+            placeholder="e.g. infrastructure, sports..."
+            value={newCat}
+            onChange={e => setNewCat(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAdd()}
+          />
+          <button className="btn btn-secondary" onClick={handleAdd} disabled={!newCat.trim()}>
+            <Plus size={14} /> Add
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function EditExpenseModal({ expense, categories, onClose, onSuccess }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const { register, handleSubmit, control: controlEdit, formState: { errors } } = useForm({
     defaultValues: {
       title: expense.title || '',
       category: expense.category || '',
@@ -443,10 +568,14 @@ function EditExpenseModal({ expense, categories, onClose, onSuccess }) {
         <FormRow>
           <div className="form-group">
             <label className="form-label">Category *</label>
-            <select className="form-control" {...register('category', { required: 'Required' })}>
-              <option value="">Select category</option>
-              {categories.map(c => <option key={c} value={c} style={{ textTransform: 'capitalize' }}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
-            </select>
+            <Controller name="category" control={controlEdit} rules={{ required: 'Required' }} render={({ field }) => (
+              <AntSelect
+                {...field}
+                style={{ width: '100%' }}
+                placeholder="Select category"
+                options={categories.map(c => ({ value: c, label: c.charAt(0).toUpperCase() + c.slice(1) }))}
+              />
+            )} />
             {errors.category && <p className="text-12-regular" style={{ color: '#ef4444', marginTop: 4 }}>{errors.category.message}</p>}
           </div>
           <div className="form-group">
@@ -468,12 +597,18 @@ function EditExpenseModal({ expense, categories, onClose, onSuccess }) {
         <FormRow>
           <div className="form-group">
             <label className="form-label">Payment Method</label>
-            <select className="form-control" {...register('paymentMethod')}>
-              <option value="cash">Cash</option>
-              <option value="bank_transfer">Bank Transfer</option>
-              <option value="cheque">Cheque</option>
-              <option value="online">Online</option>
-            </select>
+            <Controller name="paymentMethod" control={controlEdit} render={({ field }) => (
+              <AntSelect
+                {...field}
+                style={{ width: '100%' }}
+                options={[
+                  { value: 'cash', label: 'Cash' },
+                  { value: 'bank_transfer', label: 'Bank Transfer' },
+                  { value: 'cheque', label: 'Cheque' },
+                  { value: 'online', label: 'Online' },
+                ]}
+              />
+            )} />
           </div>
           <div className="form-group">
             <label className="form-label">Bill Number</label>

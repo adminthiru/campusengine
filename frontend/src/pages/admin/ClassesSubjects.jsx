@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
+import { Select as AntSelect } from 'antd';
 import { Plus, Trash2, BookOpen, Users, Edit, GripVertical, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
@@ -21,7 +22,7 @@ export function Classes() {
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
   const defaultClassValues = { name: '', section: '', capacity: 40, classTeacher: '', room: '', 'fees.feeType': 'yearly', 'fees.yearly': '', 'fees.lateFee': 0, saturdaySchedule: 'school_default' };
-  const { register, handleSubmit, reset, formState: { errors } } = useForm({ defaultValues: defaultClassValues });
+  const { register, handleSubmit, reset, control, formState: { errors } } = useForm({ defaultValues: defaultClassValues });
 
   const { data: empData } = useQuery({ queryKey: ['employees-teachers'], queryFn: () => api.get('/employees?role=teacher&limit=100') });
   const teachers = empData?.employees || [];
@@ -296,10 +297,21 @@ export function Classes() {
           <FormRow>
             <div className="form-group">
               <label className="form-label">Class Teacher</label>
-              <select className="form-control" {...register('classTeacher')}>
-                <option value="">Select teacher</option>
-                {teachers.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
-              </select>
+              <Controller
+                name="classTeacher"
+                control={control}
+                render={({ field }) => (
+                  <AntSelect
+                    {...field}
+                    style={{ width: '100%' }}
+                    placeholder="Select teacher"
+                    allowClear
+                    showSearch
+                    optionFilterProp="label"
+                    options={teachers.map(t => ({ value: t._id, label: t.name }))}
+                  />
+                )}
+              />
             </div>
             <div className="form-group">
               <label className="form-label">Capacity</label>
@@ -313,11 +325,21 @@ export function Classes() {
             </div>
             <div className="form-group">
               <label className="form-label">Fee Type</label>
-              <select className="form-control" {...register('fees.feeType')}>
-                <option value="yearly">Yearly</option>
-                <option value="monthly">Monthly</option>
-                <option value="installment">Installment</option>
-              </select>
+              <Controller
+                name="fees.feeType"
+                control={control}
+                render={({ field }) => (
+                  <AntSelect
+                    {...field}
+                    style={{ width: '100%' }}
+                    options={[
+                      { value: 'yearly', label: 'Yearly' },
+                      { value: 'monthly', label: 'Monthly' },
+                      { value: 'installment', label: 'Installment' },
+                    ]}
+                  />
+                )}
+              />
             </div>
           </FormRow>
           <FormRow>
@@ -372,32 +394,44 @@ export function Classes() {
             <div className="form-group">
               <label className="form-label">Subject Teachers</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {allSubjects.filter(s => selectedSubjects.includes(s._id)).map(sub => (
-                  <div key={sub._id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{
-                      minWidth: 150, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
-                      borderLeft: `3px solid ${sub.color || 'var(--primary)'}`, paddingLeft: 8,
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0
-                    }}>
-                      {sub.name}{sub.code ? ` · ${sub.code}` : ''}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <Select
-                        options={teachers.map(t => ({ value: t._id, label: t.name, designation: t.designation }))}
-                        value={subjectTeacherMap[sub._id] || ''}
-                        onChange={val => setSubjectTeacherMap(prev => ({ ...prev, [sub._id]: val }))}
-                        placeholder="Assign teacher..."
-                        isClearable
-                        formatOptionLabel={opt => (
-                          <div>
-                            <div style={{ fontSize: 14, fontWeight: 500 }}>{opt.label}</div>
-                            {opt.designation && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{opt.designation}</div>}
+                {allSubjects.filter(s => selectedSubjects.includes(s._id)).map(sub => {
+                  const subTeachers = sub.teachers?.length > 0
+                    ? sub.teachers
+                    : sub.teacher ? [sub.teacher] : [];
+                  return (
+                    <div key={sub._id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{
+                        minWidth: 150, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
+                        borderLeft: `3px solid ${sub.color || 'var(--primary)'}`, paddingLeft: 8,
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0
+                      }}>
+                        {sub.name}{sub.code ? ` · ${sub.code}` : ''}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        {subTeachers.length === 0 ? (
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 2px' }}>
+                            No teachers assigned to this subject
                           </div>
+                        ) : (
+                          <AntSelect
+                            style={{ width: '100%' }}
+                            placeholder="Assign teacher..."
+                            allowClear
+                            value={subjectTeacherMap[sub._id] || undefined}
+                            onChange={val => setSubjectTeacherMap(prev => ({ ...prev, [sub._id]: val ?? '' }))}
+                            options={subTeachers.map(t => ({ value: t._id || t, label: t.name || t }))}
+                            optionRender={(option) => (
+                              <div>
+                                <div style={{ fontSize: 14, fontWeight: 500 }}>{option.data.label}</div>
+                                {option.data.designation && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{option.data.designation}</div>}
+                              </div>
+                            )}
+                          />
                         )}
-                      />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -416,7 +450,7 @@ export function Subjects() {
   const [showModal, setShowModal] = useState(false);
   const [editSubject, setEditSubject] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, control, setValue, watch, formState: { errors } } = useForm();
   const [customColor, setCustomColor] = useState('#000000');
 
   const codeAutoFill = useRef(true);
@@ -462,7 +496,7 @@ export function Subjects() {
   const openEdit = (sub) => {
     codeAutoFill.current = false;
     setEditSubject(sub);
-    reset({ name: sub.name, code: sub.code, type: sub.type, teacher: sub.teacher?._id || '', maxMarks: sub.maxMarks, passingMarks: sub.passingMarks, color: sub.color });
+    reset({ name: sub.name, code: sub.code, type: sub.type, teachers: (sub.teachers?.map(t => t._id || t) || (sub.teacher ? [sub.teacher._id || sub.teacher] : [])), color: sub.color });
     if (sub.color && !['#1a56e8','#10b981','#f59e0b','#ef4444','#8b5cf6','#f97316','#ec4899','#14b8a6'].includes(sub.color)) {
       setCustomColor(sub.color);
     }
@@ -504,11 +538,13 @@ export function Subjects() {
                 </div>
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 12 }}>
-                <span>Max: {sub.maxMarks}</span>
-                <span>Pass: {sub.passingMarks}</span>
                 <span style={{ textTransform: 'capitalize' }}>{sub.type}</span>
               </div>
-              {sub.teacher && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Teacher: {sub.teacher.name}</div>}
+              {(sub.teachers?.length > 0 || sub.teacher) && (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+                  {(sub.teachers?.length > 0 ? sub.teachers : [sub.teacher]).map(t => t?.name).filter(Boolean).join(', ')}
+                </div>
+              )}
               <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                 {sub.classes?.slice(0, 4).map(c => <span key={c._id} className="badge badge-info" style={{ fontSize: 11 }}>{c.name} {c.section}</span>)}
                 {sub.classes?.length > 4 && <span className="badge badge-secondary" style={{ fontSize: 11 }}>+{sub.classes.length - 4}</span>}
@@ -522,8 +558,8 @@ export function Subjects() {
         footer={<>
           <button className="btn btn-secondary" onClick={() => { setShowModal(false); setEditSubject(null); reset(); }}>Cancel</button>
           <button className="btn btn-primary" onClick={handleSubmit(d => {
-            if (!d.teacher) delete d.teacher;
             if (!d.code) delete d.code;
+            if (!d.teachers?.length) d.teachers = [];
             if (editSubject) { updateMutation.mutate({ id: editSubject._id, data: d }); }
             else { createMutation.mutate(d); }
           })}>
@@ -546,39 +582,44 @@ export function Subjects() {
           <FormRow>
             <div className="form-group">
               <label className="form-label">Type</label>
-              <select className="form-control" {...register('type')}>
-                <option value="theory">Theory</option>
-                <option value="practical">Practical</option>
-                <option value="both">Theory + Practical</option>
-              </select>
+              <Controller
+                name="type"
+                control={control}
+                defaultValue="theory"
+                render={({ field }) => (
+                  <AntSelect
+                    {...field}
+                    style={{ width: '100%' }}
+                    options={[
+                      { value: 'theory', label: 'Theory' },
+                      { value: 'practical', label: 'Practical' },
+                      { value: 'both', label: 'Theory + Practical' },
+                    ]}
+                  />
+                )}
+              />
             </div>
             <div className="form-group">
-              <label className="form-label">Assign to Teacher</label>
-              <Select
+              <label className="form-label">Assign to Teachers</label>
+              <AntSelect
+                mode="multiple"
+                style={{ width: '100%' }}
+                placeholder="Select teachers"
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                value={watch('teachers') || []}
+                onChange={val => setValue('teachers', val)}
                 options={teachers.map(t => ({ value: t._id, label: t.name, designation: t.designation }))}
-                value={watch('teacher') || ''}
-                onChange={val => setValue('teacher', val)}
-                placeholder="Select teacher"
-                isClearable
-                formatOptionLabel={opt => (
+                optionRender={(option) => (
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>{opt.label}</div>
-                    {opt.designation && (
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>{opt.designation}</div>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>{option.data.label}</div>
+                    {option.data.designation && (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>{option.data.designation}</div>
                     )}
                   </div>
                 )}
               />
-            </div>
-          </FormRow>
-          <FormRow>
-            <div className="form-group">
-              <label className="form-label">Max Marks</label>
-              <input className="form-control" type="number" {...register('maxMarks')} defaultValue={100} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Passing Marks</label>
-              <input className="form-control" type="number" {...register('passingMarks')} defaultValue={35} />
             </div>
           </FormRow>
           <div className="form-group">

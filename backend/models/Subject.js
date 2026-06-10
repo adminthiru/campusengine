@@ -8,7 +8,8 @@ const subjectSchema = new mongoose.Schema({
   maxMarks: { type: Number, default: 100 },
   passingMarks: { type: Number, default: 35 },
   classes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Class' }],
-  teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+  teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }, // legacy single teacher
+  teachers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }],
   color: { type: String, default: '#4F46E5' },
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });

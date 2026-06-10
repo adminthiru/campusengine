@@ -139,7 +139,7 @@ const getSalaries = async (req, res) => {
     if (status) query.status = status;
 
     const salaries = await Salary.find(query)
-      .populate('employee', 'name employeeId role department photo')
+      .populate('employee', 'name employeeId role designation department photo')
       .populate('paidBy', 'name')
       .sort({ createdAt: -1 });
 

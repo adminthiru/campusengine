@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BookMarked, Plus, Edit2, Bell, Calendar, Users, CheckCircle, ChevronLeft, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Select as AntSelect } from 'antd';
 import { format } from 'date-fns';
 import api from '../../utils/api';
 import { PageLoader, EmptyState, Modal, FormRow, StatCard } from '../../components/ui';
@@ -23,7 +24,7 @@ export default function Homework() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [activeClass, setActiveClass] = useState('all');
-  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
+  const [dateFilter, setDateFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [editHw, setEditHw] = useState(null);
@@ -70,7 +71,7 @@ export default function Homework() {
   const statsActive = allHw.filter(h => h.status === 'active').length;
   const statsDueToday = allHw.filter(h => new Date(h.dueDate).toISOString().split('T')[0] === today && h.status === 'active').length;
 
-  const hasFilters = statusFilter;
+  const hasFilters = statusFilter || dateFilter;
 
   const invalidateAll = () => {
     qc.invalidateQueries(['homework']);
@@ -117,15 +118,20 @@ export default function Homework() {
         </div>
         <input type="date" className="form-control" style={{ maxWidth: 180 }} value={dateFilter}
           onChange={e => setDateFilter(e.target.value)} />
-        <select className="form-control" style={{ maxWidth: 160 }} value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}>
-          <option value="">All Status</option>
-          <option value="active">Active</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
+        <AntSelect
+          style={{ width: 160 }}
+          value={statusFilter || undefined}
+          placeholder="All Status"
+          allowClear
+          onChange={val => setStatusFilter(val ?? '')}
+          options={[
+            { value: 'active',    label: 'Active' },
+            { value: 'completed', label: 'Completed' },
+            { value: 'cancelled', label: 'Cancelled' },
+          ]}
+        />
         {hasFilters && (
-          <button className="btn btn-secondary btn-sm" onClick={() => setStatusFilter('')}>Clear</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => { setStatusFilter(''); setDateFilter(''); }}>Clear</button>
         )}
       </div>
 
@@ -681,17 +687,28 @@ function AddEditModal({ hw, classes, onClose, onSaved }) {
       <FormRow>
         <div className="form-group">
           <label className="form-label">Class *</label>
-          <select className="form-control" value={classId} onChange={e => { setClassId(e.target.value); setSelectedStudents([]); }}>
-            <option value="">Select class</option>
-            {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
-          </select>
+          <AntSelect
+            style={{ width: '100%' }}
+            value={classId || undefined}
+            placeholder="Select class"
+            showSearch
+            optionFilterProp="label"
+            onChange={val => { setClassId(val ?? ''); setSelectedStudents([]); }}
+            options={classes.map(c => ({ value: c._id, label: `${c.name}${c.section ? ` ${c.section}` : ''}` }))}
+          />
         </div>
         <div className="form-group">
           <label className="form-label">Subject</label>
-          <select className="form-control" value={subjectId} onChange={e => setSubjectId(e.target.value)}>
-            <option value="">Select subject</option>
-            {subjects.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
-          </select>
+          <AntSelect
+            style={{ width: '100%' }}
+            value={subjectId || undefined}
+            placeholder="Select subject"
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            onChange={val => setSubjectId(val ?? '')}
+            options={subjects.map(s => ({ value: s._id, label: s.name }))}
+          />
         </div>
       </FormRow>
 
@@ -721,11 +738,16 @@ function AddEditModal({ hw, classes, onClose, onSaved }) {
       {isEdit && (
         <div className="form-group">
           <label className="form-label">Status</label>
-          <select className="form-control" value={status} onChange={e => setStatus(e.target.value)}>
-            <option value="active">Active</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
+          <AntSelect
+            style={{ width: '100%' }}
+            value={status}
+            onChange={val => setStatus(val)}
+            options={[
+              { value: 'active',    label: 'Active' },
+              { value: 'completed', label: 'Completed' },
+              { value: 'cancelled', label: 'Cancelled' },
+            ]}
+          />
         </div>
       )}
 

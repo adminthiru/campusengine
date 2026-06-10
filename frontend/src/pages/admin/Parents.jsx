@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { UsersRound, Phone, Search } from 'lucide-react';
+import { UsersRound, Phone, Search, ChevronRight } from 'lucide-react';
 import api from '../../utils/api';
-import { PageLoader, EmptyState, Avatar } from '../../components/ui';
+import { PageLoader, EmptyState, Avatar, Modal } from '../../components/ui';
 
 const RELATION_COLORS = {
   father:   { bg: '#eff6ff', color: '#1d4ed8', label: 'Father' },
@@ -13,6 +14,8 @@ const RELATION_COLORS = {
 
 export default function Parents() {
   const [search, setSearch] = useState('');
+  const [selectedParent, setSelectedParent] = useState(null);
+  const navigate = useNavigate();
 
   const { data, isLoading } = useQuery({
     queryKey: ['parents'],
@@ -85,7 +88,7 @@ export default function Parents() {
                   const visibleStudents = students.slice(0, 3);
                   const extra = students.length - 3;
                   return (
-                    <tr key={parent._id}>
+                    <tr key={parent._id} onClick={() => setSelectedParent(parent)} style={{ cursor: 'pointer' }}>
                       {/* Name */}
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -141,6 +144,84 @@ export default function Parents() {
           </div>
         </div>
       )}
+
+      {/* Parent Detail Modal */}
+      {selectedParent && (() => {
+        const rel = RELATION_COLORS[selectedParent.relation] || RELATION_COLORS.other;
+        const students = selectedParent.students || [];
+        return (
+          <Modal
+            open
+            onClose={() => setSelectedParent(null)}
+            title="Parent Details"
+            size="md"
+          >
+            {/* Parent info header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '4px 0 20px', borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
+              <Avatar name={selectedParent.name} size={52} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{selectedParent.name}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 10px', borderRadius: 20, background: rel.bg, color: rel.color }}>
+                    {rel.label}
+                  </span>
+                  {selectedParent.phone && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
+                      <Phone size={12} />
+                      {selectedParent.phone}
+                    </span>
+                  )}
+                  {selectedParent.alternatePhone && (
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{selectedParent.alternatePhone}</span>
+                  )}
+                </div>
+                {selectedParent.email && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{selectedParent.email}</div>
+                )}
+              </div>
+            </div>
+
+            {/* Students list */}
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+                Students ({students.length})
+              </div>
+              {students.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)', fontSize: 14, padding: '12px 0' }}>No students linked</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {students.map(s => (
+                    <div
+                      key={s._id}
+                      onClick={() => { setSelectedParent(null); navigate(`/students?student=${s._id}`); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '12px 14px', borderRadius: 10,
+                        border: '1px solid var(--border)',
+                        background: '#fafafa', cursor: 'pointer',
+                        transition: 'background 0.15s, border-color 0.15s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#bfdbfe'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = '#fafafa'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+                    >
+                      <Avatar src={s.photo} name={s.name} size={36} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{s.name}</div>
+                        {s.currentClass && (
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>
+                            {s.currentClass.name}{s.currentClass.section ? ` · ${s.currentClass.section}` : ''}
+                          </div>
+                        )}
+                      </div>
+                      <ChevronRight size={16} color="var(--text-muted)" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Modal>
+        );
+      })()}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm, useWatch, Controller } from 'react-hook-form';
+import { Select } from 'antd';
 import { Plus, Download, Eye, Trash2, Users, ClipboardList, ChevronLeft, ChevronRight, Camera, Edit, ArrowLeft, Mail, MapPin, Briefcase, Phone, BookOpen, User as UserIcon, FileText, Upload, Banknote, ChevronDown, ChevronUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
@@ -341,10 +342,14 @@ export default function Employees() {
 
       <div className="filter-bar">
         <SearchInput value={search} onChange={setSearch} placeholder="Search by name, employee ID..." />
-        <select className="form-control" style={{ width: 'auto' }} value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
-          <option value="">All Roles</option>
-          {roles.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
-        </select>
+        <Select
+          style={{ minWidth: 140 }}
+          value={roleFilter || undefined}
+          placeholder="All Roles"
+          allowClear
+          onChange={val => setRoleFilter(val ?? '')}
+          options={roles.map(r => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
+        />
         {selected.length > 0 && (
           <button className="btn btn-danger btn-sm" onClick={() => setBulkDeleteConfirm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Trash2 size={15} /> Delete ({selected.length})
@@ -709,12 +714,13 @@ function AddEditEmployeeModal({
             <FormRow>
               <div className="form-group">
                 <label className="form-label">Gender</label>
-                <select className="form-control" {...register('gender')}>
-                  <option value="">Select gender</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other</option>
-                </select>
+                <Controller name="gender" control={control}
+                  render={({ field }) => (
+                    <Select {...field} style={{ width: '100%' }} placeholder="Select gender" allowClear
+                      options={[{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }, { value: 'other', label: 'Other' }]}
+                    />
+                  )}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Date of Birth</label>
@@ -724,10 +730,13 @@ function AddEditEmployeeModal({
             <FormRow>
               <div className="form-group">
                 <label className="form-label">Blood Group</label>
-                <select className="form-control" {...register('bloodGroup')}>
-                  <option value="">Select</option>
-                  {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => <option key={bg} value={bg}>{bg}</option>)}
-                </select>
+                <Controller name="bloodGroup" control={control}
+                  render={({ field }) => (
+                    <Select {...field} style={{ width: '100%' }} placeholder="Select blood group" allowClear
+                      options={['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bg => ({ value: bg, label: bg }))}
+                    />
+                  )}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Country</label>
@@ -762,10 +771,14 @@ function AddEditEmployeeModal({
               </div>
               <div className="form-group">
                 <label className="form-label">Role <span style={{ color: '#ef4444' }}>*</span></label>
-                <select className="form-control" {...register('role', { required: 'Required' })}>
-                  <option value="">Select role</option>
-                  {roles.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
-                </select>
+                <Controller name="role" control={control} rules={{ required: 'Required' }}
+                  render={({ field }) => (
+                    <Select {...field} style={{ width: '100%' }} placeholder="Select role" showSearch
+                      status={errors.role ? 'error' : ''}
+                      options={roles.map(r => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
+                    />
+                  )}
+                />
                 {errors.role && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.role.message}</p>}
               </div>
             </FormRow>
@@ -782,12 +795,18 @@ function AddEditEmployeeModal({
             <FormRow>
               <div className="form-group">
                 <label className="form-label">Employment Type</label>
-                <select className="form-control" {...register('employmentType')}>
-                  <option value="">Select type</option>
-                  <option value="Full-time">Full-time</option>
-                  <option value="Part-time">Part-time</option>
-                  <option value="Contract">Contract</option>
-                </select>
+                <Controller name="employmentType" control={control}
+                  render={({ field }) => (
+                    <Select {...field} style={{ width: '100%' }} placeholder="Select type" allowClear
+                      options={[
+                        { value: 'Full-time', label: 'Full-time' },
+                        { value: 'Part-time', label: 'Part-time' },
+                        { value: 'Contract', label: 'Contract' },
+                        { value: 'Intern', label: 'Intern' },
+                      ]}
+                    />
+                  )}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Date of Joining</label>
@@ -870,12 +889,17 @@ function AddEditEmployeeModal({
                 <FormRow>
                   <div className="form-group">
                     <label className="form-label">Employment Type</label>
-                    <select className="form-control" value={entry.employmentType || ''} onChange={e => setExperience(a => a.map((x, i) => i === idx ? { ...x, employmentType: e.target.value } : x))}>
-                      <option value="">Select type</option>
-                      <option value="Full-time">Full-time</option>
-                      <option value="Part-time">Part-time</option>
-                      <option value="Contract">Contract</option>
-                    </select>
+                    <Select
+                      style={{ width: '100%' }} placeholder="Select type" allowClear
+                      value={entry.employmentType || undefined}
+                      onChange={v => setExperience(a => a.map((x, i) => i === idx ? { ...x, employmentType: v || '' } : x))}
+                      options={[
+                        { value: 'Full-time', label: 'Full-time' },
+                        { value: 'Part-time', label: 'Part-time' },
+                        { value: 'Contract', label: 'Contract' },
+                        { value: 'Intern', label: 'Intern' },
+                      ]}
+                    />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Skills Used</label>
@@ -953,15 +977,19 @@ function AddEditEmployeeModal({
                 <FormRow>
                   <div className="form-group">
                     <label className="form-label">Document Type</label>
-                    <select className="form-control" value={entry.documentType || ''} onChange={e => setDocuments(a => a.map((x, i) => i === idx ? { ...x, documentType: e.target.value } : x))}>
-                      <option value="">Select type</option>
-                      <option value="Aadhaar Card">Aadhaar Card</option>
-                      <option value="PAN Card">PAN Card</option>
-                      <option value="Resume">Resume</option>
-                      <option value="Certificates">Certificates</option>
-                      <option value="Experience Letter">Experience Letter</option>
-                      <option value="Other Documents">Other Documents</option>
-                    </select>
+                    <Select
+                      style={{ width: '100%' }} placeholder="Select type" allowClear
+                      value={entry.documentType || undefined}
+                      onChange={v => setDocuments(a => a.map((x, i) => i === idx ? { ...x, documentType: v || '' } : x))}
+                      options={[
+                        { value: 'Aadhaar Card',       label: 'Aadhaar Card' },
+                        { value: 'PAN Card',           label: 'PAN Card' },
+                        { value: 'Resume',             label: 'Resume' },
+                        { value: 'Certificates',       label: 'Certificates' },
+                        { value: 'Experience Letter',  label: 'Experience Letter' },
+                        { value: 'Other Documents',    label: 'Other Documents' },
+                      ]}
+                    />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Upload File</label>

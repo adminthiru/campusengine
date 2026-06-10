@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Clock, Plus, Save, AlertTriangle, BookOpen, Users, UserX, ChevronRight, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Select as AntSelect } from 'antd';
 import api from '../../utils/api';
 import { PageLoader, EmptyState, Modal, FormRow } from '../../components/ui';
 import { useAuth } from '../../store/AuthContext';
@@ -158,9 +159,15 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
   return (
     <div>
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-        <select className="form-control" style={{ maxWidth: 220 }} value={classId} onChange={e => { setClassId(e.target.value); setEditMode(false); setConflict(null); }}>
-          {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
-        </select>
+        <AntSelect
+          style={{ width: 220, height: 36, fontSize: 14 }}
+          value={classId || undefined}
+          placeholder="Select class"
+          showSearch
+          optionFilterProp="label"
+          onChange={val => { setClassId(val); setEditMode(false); setConflict(null); }}
+          options={classes.map(c => ({ value: c._id, label: `${c.name}${c.section ? ` ${c.section}` : ''}` }))}
+        />
         <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{academicYear}</span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           {classId && !editMode && <button className="btn btn-secondary" onClick={() => { setEditMode(true); if (!schedule.length) initSchedule(); }}><Plus size={16} /> Edit Timetable</button>}
@@ -834,17 +841,41 @@ function EditCellModal({ cell, day, period, subjects, teachers, onSave, onClose,
       ) : <>
         <div className="form-group">
           <label className="form-label">Subject</label>
-          <select className="form-control" value={subjectId} onChange={e => setSubjectId(e.target.value)}>
-            <option value="">Select subject</option>
-            {subjects.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
-          </select>
+          <AntSelect
+            style={{ width: '100%' }}
+            placeholder="Select subject"
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            value={subjectId || undefined}
+            onChange={val => setSubjectId(val ?? '')}
+            options={subjects.map(s => ({ value: s._id, label: s.name, color: s.color }))}
+            optionRender={(option) => (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {option.data.color && <div style={{ width: 10, height: 10, borderRadius: '50%', background: option.data.color, flexShrink: 0 }} />}
+                <span>{option.data.label}</span>
+              </div>
+            )}
+          />
         </div>
         <div className="form-group">
           <label className="form-label">Teacher</label>
-          <select className="form-control" value={teacherId} onChange={e => setTeacherId(e.target.value)}>
-            <option value="">Select teacher</option>
-            {teachers.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
-          </select>
+          <AntSelect
+            style={{ width: '100%' }}
+            placeholder="Select teacher"
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            value={teacherId || undefined}
+            onChange={val => setTeacherId(val ?? '')}
+            options={teachers.map(t => ({ value: t._id, label: t.name, designation: t.designation }))}
+            optionRender={(option) => (
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 500 }}>{option.data.label}</div>
+                {option.data.designation && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{option.data.designation}</div>}
+              </div>
+            )}
+          />
         </div>
         <div className="form-group">
           <label className="form-label">Room</label>

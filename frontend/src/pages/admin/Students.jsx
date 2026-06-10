@@ -1,6 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm, useWatch, Controller } from 'react-hook-form';
+import { Select } from 'antd';
 import {
   Plus, Download, Trash2, GraduationCap, ArrowLeft,
   Edit, Phone, Mail, MapPin, BookOpen, Camera, ChevronLeft, ChevronRight, Upload,
@@ -60,6 +62,16 @@ export default function Students() {
   const [formTab, setFormTab] = useState('personal');
   const [studentStatus, setStudentStatus] = useState('active');
 
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const studentId = searchParams.get('student');
+    if (!studentId) return;
+    api.get(`/students/${studentId}`).then(res => {
+      const stu = res.student || res;
+      if (stu?._id) setViewStudent(stu);
+    }).catch(() => {});
+  }, [searchParams]);
+
   // Parents managed outside react-hook-form for card UX
   const [parents, setParents] = useState([]);
   const [parentForm, setParentForm] = useState(null); // null | 'add' | index(number)
@@ -87,7 +99,7 @@ export default function Students() {
   const total = data?.total || 0;
   const pages = data?.pages || 1;
 
-  const { register, handleSubmit, reset, watch, control, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, watch, control, setValue, formState: { errors } } = useForm();
 
   const watchedClassGroup = watch('classGroup');
   const uniqueClassNames = [...new Set(classes.map(c => c.name))];
@@ -302,7 +314,7 @@ export default function Students() {
           parentDraft={parentDraft} setParentDraft={setParentDraft}
           profilePreview={profilePreview} setProfilePreview={setProfilePreview}
           imgInputRef={imgInputRef}
-          studentStatus={studentStatus} setStudentStatus={setStudentStatus} control={control}
+          studentStatus={studentStatus} setStudentStatus={setStudentStatus} control={control} setValue={setValue}
           transports={transports} selectedTransport={selectedTransport} setSelectedTransport={setSelectedTransport}
         />
       </>
@@ -314,7 +326,7 @@ export default function Students() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Students</h1>
+          <h1 className="text-24-semibold">Students</h1>
           <p className="page-subtitle">{total} students enrolled</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -324,20 +336,24 @@ export default function Students() {
             </button>
           )}
           <button className="btn btn-secondary" onClick={() => setShowBulkModal(true)}>
-            <Upload size={16} /> Bulk Upload
+            <Upload size={14} /> Bulk Upload
           </button>
           <button className="btn btn-primary" onClick={openAdd}>
-            <Plus size={16} /> Add Student
+            <Plus size={14} /> Add Student
           </button>
         </div>
       </div>
 
       <div className="filter-bar">
         <SearchInput value={search} onChange={setSearch} placeholder="Search by name, admission no..." />
-        <select className="form-control" style={{ width: 'auto', textAlign: 'center', textAlignLast: 'center' }} value={classFilter} onChange={e => setClassFilter(e.target.value)}>
-          <option value="">All Classes</option>
-          {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
-        </select>
+        <Select
+          style={{ minWidth: 160 }}
+          value={classFilter || undefined}
+          placeholder="All Classes"
+          allowClear
+          onChange={val => setClassFilter(val ?? '')}
+          options={classes.map(c => ({ value: c._id, label: `${c.name}${c.section ? ` ${c.section}` : ''}` }))}
+        />
         {selected.length > 0 && (
           <button className="btn btn-danger btn-sm" onClick={() => setBulkDeleteConfirm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Trash2 size={15} /> Delete ({selected.length})
@@ -460,7 +476,7 @@ function AddEditModal({
   uniqueClassNames, filteredSections, watchedClassGroup,
   parents, setParents, parentForm, setParentForm, parentDraft, setParentDraft,
   profilePreview, setProfilePreview, imgInputRef,
-  studentStatus, setStudentStatus, control,
+  studentStatus, setStudentStatus, control, setValue,
   transports, selectedTransport, setSelectedTransport
 }) {
   // useWatch subscribes to field changes inside this component and re-renders reactively
@@ -628,12 +644,13 @@ function AddEditModal({
             <FormRow>
               <div className="form-group">
                 <label className="form-label">Gender <span style={{ color: '#ef4444' }}>*</span></label>
-                <select className="form-control" {...register('gender', { required: 'Required' })}>
-                  <option value="">Select gender</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other</option>
-                </select>
+                <Controller name="gender" control={control} rules={{ required: 'Required' }}
+                  render={({ field }) => (
+                    <Select {...field} style={{ width: '100%' }} placeholder="Select gender" status={errors.gender ? 'error' : ''}
+                      options={[{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }, { value: 'other', label: 'Other' }]}
+                    />
+                  )}
+                />
                 {errors.gender && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.gender.message}</p>}
               </div>
               <div className="form-group">
@@ -650,11 +667,13 @@ function AddEditModal({
               </div>
               <div className="form-group">
                 <label className="form-label">Relationship <span style={{ color: '#ef4444' }}>*</span></label>
-                <select className="form-control" {...register('parentRelationship', { required: 'Required' })}>
-                  {['father', 'mother', 'guardian', 'other'].map(r => (
-                    <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
-                  ))}
-                </select>
+                <Controller name="parentRelationship" control={control} rules={{ required: 'Required' }}
+                  render={({ field }) => (
+                    <Select {...field} style={{ width: '100%' }} placeholder="Select relationship" status={errors.parentRelationship ? 'error' : ''}
+                      options={['father','mother','guardian','other'].map(r => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
+                    />
+                  )}
+                />
                 {errors.parentRelationship && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.parentRelationship.message}</p>}
               </div>
             </FormRow>
@@ -672,12 +691,22 @@ function AddEditModal({
             <FormRow>
               <div className="form-group">
                 <label className="form-label">Assign Transport</label>
-                <select className="form-control" value={selectedTransport} onChange={e => setSelectedTransport(e.target.value)}>
-                  <option value="">No transport</option>
-                  {(transports || []).map(t => (
-                    <option key={t._id} value={t._id}>{t.routeNumber ? `#${t.routeNumber}` : ''}{t.vehicleNumber ? ` · ${t.vehicleNumber}` : ''}{t.routeName ? ` — ${t.routeName}` : ''}</option>
-                  ))}
-                </select>
+                <Select
+                  style={{ width: '100%' }}
+                  placeholder="No transport"
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  value={selectedTransport || undefined}
+                  onChange={v => setSelectedTransport(v || '')}
+                  options={[
+                    { value: '', label: 'No transport' },
+                    ...(transports || []).map(t => ({
+                      value: t._id,
+                      label: `${t.routeNumber ? `#${t.routeNumber}` : ''}${t.vehicleNumber ? ` · ${t.vehicleNumber}` : ''}${t.routeName ? ` — ${t.routeName}` : ''}`.trim()
+                    }))
+                  ]}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label" style={{ display: 'block', marginBottom: 8 }}>Status <span style={{ color: '#ef4444' }}>*</span></label>
@@ -731,18 +760,28 @@ function AddEditModal({
             <FormRow>
               <div className="form-group">
                 <label className="form-label">Class <span style={{ color: '#ef4444' }}>*</span></label>
-                <select className="form-control" {...register('classGroup', { required: 'Required' })}>
-                  <option value="">Select class</option>
-                  {uniqueClassNames.map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
+                <Controller name="classGroup" control={control} rules={{ required: 'Required' }}
+                  render={({ field }) => (
+                    <Select {...field} style={{ width: '100%' }} placeholder="Select class" showSearch
+                      status={errors.classGroup ? 'error' : ''}
+                      onChange={v => { field.onChange(v); setValue('section', undefined); }}
+                      options={uniqueClassNames.map(n => ({ value: n, label: n }))}
+                    />
+                  )}
+                />
                 {errors.classGroup && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.classGroup.message}</p>}
               </div>
               <div className="form-group">
                 <label className="form-label">Section <span style={{ color: '#ef4444' }}>*</span></label>
-                <select className="form-control" {...register('section', { required: 'Required' })} disabled={!watchedClassGroup}>
-                  <option value="">Select section</option>
-                  {filteredSections.map(c => <option key={c._id} value={c.section}>{c.section}</option>)}
-                </select>
+                <Controller name="section" control={control} rules={{ required: 'Required' }}
+                  render={({ field }) => (
+                    <Select {...field} style={{ width: '100%' }} placeholder="Select section"
+                      disabled={!watchedClassGroup}
+                      status={errors.section ? 'error' : ''}
+                      options={filteredSections.map(c => ({ value: c.section, label: c.section }))}
+                    />
+                  )}
+                />
                 {errors.section && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.section.message}</p>}
               </div>
             </FormRow>
@@ -828,10 +867,13 @@ function AddEditModal({
             <FormRow>
               <div className="form-group">
                 <label className="form-label">Mother Tongue</label>
-                <select className="form-control" {...register('motherTongue')}>
-                  <option value="">Select</option>
-                  {['Tamil','Telugu','Kannada','Malayalam','Hindi','English','Urdu','Other'].map(l => <option key={l} value={l}>{l}</option>)}
-                </select>
+                <Controller name="motherTongue" control={control}
+                  render={({ field }) => (
+                    <Select {...field} style={{ width: '100%' }} placeholder="Select language" allowClear showSearch
+                      options={['Tamil','Telugu','Kannada','Malayalam','Hindi','English','Urdu','Other'].map(l => ({ value: l, label: l }))}
+                    />
+                  )}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Previous School Name</label>
@@ -870,9 +912,12 @@ function ParentFormInline({ draft, setDraft, onSave, onCancel }) {
         </div>
         <div className="form-group" style={{ marginBottom: 10 }}>
           <label className="form-label">Relationship <span style={{ color: '#ef4444' }}>*</span></label>
-          <select className="form-control" value={draft.relationship} onChange={e => setDraft(d => ({ ...d, relationship: e.target.value }))}>
-            {['father','mother','guardian','other'].map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
-          </select>
+          <Select
+            style={{ width: '100%' }}
+            value={draft.relationship}
+            onChange={v => setDraft(d => ({ ...d, relationship: v }))}
+            options={['father','mother','guardian','other'].map(r => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
+          />
         </div>
       </FormRow>
       <FormRow>

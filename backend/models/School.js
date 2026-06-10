@@ -173,6 +173,7 @@ const schoolSchema = new mongoose.Schema({
   libraryConfig: {
     finePerDay: { type: Number, default: 2 }, // ₹ per day overdue
   },
+  expenseCategories: { type: [String], default: [] },
   profileCompleted: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
