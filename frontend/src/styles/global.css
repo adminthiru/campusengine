@@ -804,10 +804,27 @@ tbody tr:last-child td { border-bottom: none; }
 .filter-bar .ant-select .ant-select-selection-item { font-size: 14px; line-height: 34px; }
 .filter-bar .ant-input-affix-wrapper { height: 36px !important; border-radius: 10px !important; font-size: 14px; padding: 0 14px !important; align-items: center; }
 .filter-bar .ant-input-affix-wrapper input { font-size: 14px; }
+.filter-bar .ant-picker { height: 36px !important; border-radius: 10px !important; }
 
 /* Salary page period selectors (month/year dropdowns in header) */
 .salary-period-select .ant-select-selector { height: 36px !important; border-radius: 10px !important; padding: 0 14px !important; align-items: center; }
 .salary-period-select .ant-select-selection-item { font-size: 14px; line-height: 34px; }
+
+/* Compact antd DatePicker calendar panel (the global theme inflates it) */
+.ant-picker-dropdown { font-size: 13px; }
+.ant-picker-dropdown .ant-picker-panel-container { border-radius: 12px; }
+.ant-picker-dropdown .ant-picker-header { padding: 6px 12px; }
+.ant-picker-dropdown .ant-picker-body { padding: 8px 12px 10px; }
+.ant-picker-dropdown .ant-picker-content th { height: 28px; font-size: 12px; }
+.ant-picker-dropdown .ant-picker-cell { padding: 3px 0; }
+.ant-picker-dropdown .ant-picker-cell .ant-picker-cell-inner { min-width: 28px; height: 28px; line-height: 28px; border-radius: 6px; }
+.ant-picker-dropdown .ant-picker-footer { line-height: 32px; }
+
+/* Header breadcrumb — vertically center icons, separators and labels */
+.header-breadcrumb ol { display: flex; align-items: center; flex-wrap: wrap; }
+.header-breadcrumb li { display: inline-flex; align-items: center; }
+.header-breadcrumb .ant-breadcrumb-separator { display: inline-flex; align-items: center; margin-inline: 8px; }
+.header-breadcrumb .ant-breadcrumb-link { display: inline-flex; align-items: center; font-size: 14px; font-weight: 500; }
 
 /* Tooltips */
 [data-tooltip] { position: relative; }

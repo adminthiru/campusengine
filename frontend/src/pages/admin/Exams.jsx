@@ -3,15 +3,18 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
-import { Select as AntSelect } from 'antd';
+import { Select as AntSelect, DatePicker } from 'antd';
+import dayjs from 'dayjs';
 import { Plus, FileText, Download, Edit2, Trash2, ChevronRight, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
-import { Modal, ConfirmDialog, StatusBadge, PageLoader, EmptyState, FormRow } from '../../components/ui';
+import { Modal, ConfirmDialog, StatusBadge, PageLoader, EmptyState, FormRow, SearchInput } from '../../components/ui';
 import { useAuth } from '../../store/AuthContext';
+import { useYear } from '../../store/YearContext';
 
 export function Exams() {
   const { user } = useAuth();
+  const { selectedYear } = useYear();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
@@ -21,13 +24,25 @@ export function Exams() {
   const [selectedClasses, setSelectedClasses] = useState([]);
   const [selected, setSelected] = useState([]);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [search, setSearch] = useState('');
   const { register, handleSubmit, reset, control } = useForm();
 
   const { data: classData } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes') });
   const classes = classData?.classes || [];
 
-  const { data, isLoading } = useQuery({ queryKey: ['exams'], queryFn: () => api.get('/exams') });
+  const { data, isLoading } = useQuery({
+    queryKey: ['exams', selectedYear],
+    queryFn: () => api.get(`/exams?academicYear=${encodeURIComponent(selectedYear)}`)
+  });
   const exams = data?.exams || [];
+  // Client-side search over exam name, type or academic year
+  const q = search.trim().toLowerCase();
+  const displayExams = q
+    ? exams.filter(ex =>
+        (ex.name || '').toLowerCase().includes(q) ||
+        (ex.type || '').toLowerCase().includes(q) ||
+        (ex.academicYear || '').toLowerCase().includes(q))
+    : exams;
 
   // Pre-fill form when editing
   useEffect(() => {
@@ -109,6 +124,13 @@ export function Exams() {
       {isLoading ? <PageLoader /> : exams.length === 0 ? (
         <div className="card"><EmptyState icon={FileText} message="No exams scheduled." /></div>
       ) : (
+        <>
+        <div className="filter-bar">
+          <SearchInput value={search} onChange={setSearch} placeholder="Search by exam name, type or year..." />
+        </div>
+        {displayExams.length === 0 ? (
+          <div className="card"><EmptyState icon={FileText} message="No exams match your search." /></div>
+        ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div className="table-container">
             <table>
@@ -116,8 +138,8 @@ export function Exams() {
                 <tr>
                   <th style={{ width: 40 }}>
                     <input type="checkbox"
-                      checked={selected.length === exams.length && exams.length > 0}
-                      onChange={e => setSelected(e.target.checked ? exams.map(ex => ex._id) : [])}
+                      checked={selected.length === displayExams.length && displayExams.length > 0}
+                      onChange={e => setSelected(e.target.checked ? displayExams.map(ex => ex._id) : [])}
                     />
                   </th>
                   <th>Exam Name</th>
@@ -131,7 +153,7 @@ export function Exams() {
                 </tr>
               </thead>
               <tbody>
-                {exams.map(exam => (
+                {displayExams.map(exam => (
                   <tr key={exam._id} onClick={() => navigate(`/exams/${exam._id}`)} style={{ cursor: 'pointer' }}>
                     <td onClick={e => e.stopPropagation()}>
                       <input type="checkbox"
@@ -183,6 +205,8 @@ export function Exams() {
             </table>
           </div>
         </div>
+        )}
+        </>
       )}
 
       {/* Create / Edit Modal */}
@@ -244,7 +268,18 @@ export function Exams() {
           <FormRow>
             <div className="form-group">
               <label className="form-label">Exam Date</label>
-              <input className="form-control" type="date" {...register('examDate')} />
+              <Controller name="examDate" control={control}
+                render={({ field }) => (
+                  <DatePicker
+                    style={{ width: '100%' }}
+                    format="DD MMM YYYY"
+                    placeholder="Select exam date"
+                    value={field.value ? dayjs(field.value) : null}
+                    onChange={(d) => field.onChange(d ? d.format('YYYY-MM-DD') : '')}
+                    getPopupContainer={() => document.body}
+                  />
+                )}
+              />
             </div>
             <div className="form-group">
               <label className="form-label">Status</label>

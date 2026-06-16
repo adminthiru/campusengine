@@ -9,9 +9,20 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: {
     type: String,
-    enum: ['super_admin', 'admin', 'principal', 'teacher', 'accountant', 'student', 'parent', 'maintenance', 'correspondent'],
+    enum: ['super_admin', 'admin', 'principal', 'teacher', 'accountant', 'student', 'parent', 'maintenance', 'correspondent', 'staff'],
     required: true
   },
+  // ── Custom RBAC (staff logins) ──────────────────────────────────────────────
+  // 'full'   → admin/correspondent (resolved at runtime; bypasses checks)
+  // 'custom' → delegated staff login gated by `permissions`
+  // 'legacy' → built-in roles (principal/teacher/accountant/...) — unchanged
+  accessType: { type: String, enum: ['full', 'custom', 'legacy'], default: 'legacy' },
+  accessRole: { type: mongoose.Schema.Types.ObjectId, ref: 'AccessRole' },
+  // Effective permissions snapshot: { <moduleKey>: { view, add, edit, delete } }
+  permissions: { type: mongoose.Schema.Types.Mixed, default: {} },
+  // True once a login is individually fine-tuned, so role re-syncs skip it
+  permissionsCustomized: { type: Boolean, default: false },
+  category: { type: String },   // display label, mirrors the access-role name
   language: { type: String, enum: ['en', 'ta'], default: 'en' },
   avatar: { type: String },
   isActive: { type: Boolean, default: true },

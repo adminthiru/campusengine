@@ -4,6 +4,7 @@ import { Banknote, Download, DollarSign, Search, Plus, Trash2, Edit2, RotateCcw 
 import toast from 'react-hot-toast';
 import { Select as AntSelect } from 'antd';
 import api from '../../utils/api';
+import { useYear } from '../../store/YearContext';
 import { StatusBadge, PageLoader, EmptyState, StatCard, Modal, FormRow, ConfirmDialog, SearchInput } from '../../components/ui';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -36,8 +37,30 @@ function SalaryAttChip({ label, count, color, bg }) {
 export default function Salary() {
   const qc = useQueryClient();
   const now = new Date();
+  const { selectedYear, isCurrent, months: ayMonths } = useYear();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+
+  // When a PAST academic year is selected in the header, jump the period
+  // pickers into that year. When the current year is selected (default),
+  // keep the real current month so the generate/pay workflow is unaffected.
+  useEffect(() => {
+    if (isCurrent) {
+      setMonth(now.getMonth() + 1);
+      setYear(now.getFullYear());
+    } else {
+      setMonth(ayMonths.fromMonth);
+      setYear(ayMonths.fromYear);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedYear]);
+
+  // Year options span the selected academic year's calendar years plus the
+  // usual current-year window, de-duplicated and sorted.
+  const yearOptions = [...new Set([
+    now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1,
+    ayMonths.fromYear, ayMonths.toYear,
+  ])].sort((a, b) => a - b);
   const [payModal, setPayModal] = useState(null);
   const [payMethod, setPayMethod] = useState('bank_transfer');
   const [txId, setTxId] = useState('');
@@ -169,7 +192,7 @@ export default function Salary() {
             style={{ width: 100, height: 36, fontSize: 14 }}
             value={year}
             onChange={val => setYear(val)}
-            options={[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map(y => ({ value: y, label: String(y) }))}
+            options={yearOptions.map(y => ({ value: y, label: String(y) }))}
             className="salary-period-select"
           />
           {selected.length > 0 && (

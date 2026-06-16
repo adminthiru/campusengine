@@ -157,7 +157,7 @@ const markEmployeeAttendance = async (req, res) => {
 // Get attendance
 const getAttendance = async (req, res) => {
   try {
-    const { type, classId, date, month, year, employeeId, studentId } = req.query;
+    const { type, classId, date, month, year, employeeId, studentId, startDate, endDate } = req.query;
     const query = { school: req.user.school };
     if (type) query.type = type;
     if (classId) query.class = classId;
@@ -167,6 +167,10 @@ const getAttendance = async (req, res) => {
         $gte: new Date(year, month - 1, 1),
         $lt: new Date(year, month, 1)
       };
+    } else if (startDate || endDate) {
+      query.date = {};
+      if (startDate) query.date.$gte = new Date(startDate);
+      if (endDate) { const e = new Date(endDate); e.setHours(23, 59, 59, 999); query.date.$lte = e; }
     }
 
     const attendance = await Attendance.find(query)

@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, Controller } from 'react-hook-form';
-import { Select } from 'antd';
+import { Select, DatePicker } from 'antd';
+import dayjs from 'dayjs';
 import { Plus, Download, Eye, Trash2, Users, ClipboardList, ChevronLeft, ChevronRight, Camera, Edit, ArrowLeft, Mail, MapPin, Briefcase, Phone, BookOpen, User as UserIcon, FileText, Upload, Banknote, ChevronDown, ChevronUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
@@ -112,7 +113,6 @@ export default function Employees() {
   // Form states
   const [formTab, setFormTab] = useState('personal');
   const [employeeStatus, setEmployeeStatus] = useState('active');
-  const [savedEmployee, setSavedEmployee] = useState(null);
   const [profilePreview, setProfilePreview] = useState(null);
   const imgInputRef = useRef(null);
 
@@ -135,10 +135,10 @@ export default function Employees() {
 
   const createMutation = useMutation({
     mutationFn: (d) => api.post('/employees', d),
-    onSuccess: (res) => {
+    onSuccess: () => {
       qc.invalidateQueries(['employees']);
       toast.success('Employee added!');
-      setSavedEmployee(res.employee || res);
+      closeModal();
     },
     onError: (err) => toast.error(err.message || 'Failed')
   });
@@ -153,26 +153,6 @@ export default function Employees() {
     },
     onError: (err) => toast.error(err.message || 'Failed to update employee')
   });
-
-  const resendMutation = useMutation({
-    mutationFn: (id) => api.put(`/employees/${id}`, { sendInvite: true }),
-    onSuccess: (res) => {
-      if (res.emailSent) toast.success('Login credentials resent successfully!');
-      else toast.error('Email failed — check Gmail App Password in server .env', { duration: 6000 });
-    },
-    onError: () => toast.error('Failed to resend credentials'),
-  });
-
-  const handleSendInviteToNew = () => {
-    resendMutation.mutate(savedEmployee._id, {
-      onSuccess: (res) => {
-        if (res.emailSent) toast.success('Login credentials sent successfully!');
-        else toast.error('Email failed — check Gmail App Password in server .env', { duration: 6000 });
-        closeModal();
-      },
-      onError: () => { toast.error('Failed to send credentials'); closeModal(); },
-    });
-  };
 
   const deleteMutation = useMutation({
     mutationFn: (id) => api.delete(`/employees/${id}`),
@@ -249,7 +229,6 @@ export default function Employees() {
     setFormTab('personal');
     setEmployeeStatus('active');
     setProfilePreview(null);
-    setSavedEmployee(null);
     setAcademics([]);
     setExperience([]);
     setEmergency([]);
@@ -314,10 +293,7 @@ export default function Employees() {
           profilePreview={profilePreview} setProfilePreview={setProfilePreview} imgInputRef={imgInputRef}
           academics={academics} setAcademics={setAcademics} experience={experience} setExperience={setExperience}
           emergency={emergency} setEmergency={setEmergency} documents={documents} setDocuments={setDocuments}
-          roles={roles} savedEmployee={savedEmployee}
-          onSendInviteToNew={handleSendInviteToNew}
-          onResend={() => resendMutation.mutate(editEmployee._id)}
-          isResending={resendMutation.isPending}
+          roles={roles}
         />
       </>
     );
@@ -451,10 +427,7 @@ export default function Employees() {
         experience={experience} setExperience={setExperience}
         emergency={emergency} setEmergency={setEmergency}
         documents={documents} setDocuments={setDocuments}
-        roles={roles} savedEmployee={savedEmployee}
-        onSendInviteToNew={handleSendInviteToNew}
-        onResend={() => resendMutation.mutate(editEmployee?._id)}
-        isResending={resendMutation.isPending}
+        roles={roles}
       />
 
 
@@ -483,7 +456,6 @@ function AddEditEmployeeModal({
   profilePreview, setProfilePreview, imgInputRef,
   academics, setAcademics, experience, setExperience,
   emergency, setEmergency, documents, setDocuments, roles,
-  savedEmployee, onSendInviteToNew, onResend, isResending
 }) {
   const watched = useWatch({
     control,
@@ -552,23 +524,12 @@ function AddEditEmployeeModal({
 
   return (
     <Modal open={open} onClose={onClose} title={editEmployee ? 'Edit Employee' : 'Add New Employee'} size="lg"
-      footer={savedEmployee ? null :
+      footer={
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button className="btn btn-secondary" onClick={() => tabIdx > 0 ? setFormTab(FORM_TABS[tabIdx - 1].key) : onClose()}>
               {tabIdx > 0 ? <><ChevronLeft size={15} /> Previous</> : 'Cancel'}
             </button>
-            {editEmployee && (
-              <button type="button" className="btn btn-secondary" onClick={onResend} disabled={isResending}
-                style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                {isResending ? (
-                  <>
-                    <span style={{ width: 14, height: 14, border: '2px solid #cbd5e1', borderTopColor: 'var(--text-secondary)', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />
-                    Sending...
-                  </>
-                ) : '↺ Resend Credentials'}
-              </button>
-            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {tabIdx < FORM_TABS.length - 1 && (
@@ -588,36 +549,6 @@ function AddEditEmployeeModal({
         </div>
       }
     >
-      {savedEmployee ? (
-        <div style={{ textAlign: 'center', padding: '40px 24px' }}>
-          <div style={{
-            width: 60, height: 60, borderRadius: '50%', background: '#d1fae5',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
-          }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          </div>
-          <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>Employee Added!</h3>
-          <p style={{ color: 'var(--text-muted)', margin: '0 0 28px', fontSize: 14 }}>
-            Send login credentials to <strong style={{ color: 'var(--text-primary)' }}>{savedEmployee.email}</strong>?
-          </p>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-            <button className="btn btn-primary" onClick={onSendInviteToNew} disabled={isResending}
-              style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {isResending ? (
-                <>
-                  <span style={{ width: 15, height: 15, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />
-                  Sending...
-                </>
-              ) : (
-                <><Mail size={15} /> Send Invite</>
-              )}
-            </button>
-            <button className="btn btn-secondary" onClick={onClose}>Close</button>
-          </div>
-        </div>
-      ) : (
       <>
       <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', marginBottom: 20, overflowX: 'auto' }}>
         {FORM_TABS.map((tab, i) => {
@@ -724,7 +655,19 @@ function AddEditEmployeeModal({
               </div>
               <div className="form-group">
                 <label className="form-label">Date of Birth</label>
-                <input className="form-control" type="date" {...register('dateOfBirth')} />
+                <Controller name="dateOfBirth" control={control}
+                  render={({ field }) => (
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      format="DD MMM YYYY"
+                      placeholder="Select date of birth"
+                      value={field.value ? dayjs(field.value) : null}
+                      onChange={(d) => field.onChange(d ? d.format('YYYY-MM-DD') : '')}
+                      disabledDate={(d) => d && d > dayjs().endOf('day')}
+                      getPopupContainer={() => document.body}
+                    />
+                  )}
+                />
               </div>
             </FormRow>
             <FormRow>
@@ -810,7 +753,18 @@ function AddEditEmployeeModal({
               </div>
               <div className="form-group">
                 <label className="form-label">Date of Joining</label>
-                <input className="form-control" type="date" {...register('dateOfJoining')} />
+                <Controller name="dateOfJoining" control={control}
+                  render={({ field }) => (
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      format="DD MMM YYYY"
+                      placeholder="Select date of joining"
+                      value={field.value ? dayjs(field.value) : null}
+                      onChange={(d) => field.onChange(d ? d.format('YYYY-MM-DD') : '')}
+                      getPopupContainer={() => document.body}
+                    />
+                  )}
+                />
               </div>
             </FormRow>
             <div className="form-group" style={{ maxWidth: '50%' }}>
@@ -909,11 +863,25 @@ function AddEditEmployeeModal({
                 <FormRow>
                   <div className="form-group">
                     <label className="form-label">Start Date</label>
-                    <input className="form-control" type="date" value={entry.startDate || ''} onChange={e => setExperience(a => a.map((x, i) => i === idx ? { ...x, startDate: e.target.value } : x))} />
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      format="DD MMM YYYY"
+                      placeholder="Start date"
+                      value={entry.startDate ? dayjs(entry.startDate) : null}
+                      onChange={(d) => setExperience(a => a.map((x, i) => i === idx ? { ...x, startDate: d ? d.format('YYYY-MM-DD') : '' } : x))}
+                      getPopupContainer={() => document.body}
+                    />
                   </div>
                   <div className="form-group">
                     <label className="form-label">End Date</label>
-                    <input className="form-control" type="date" value={entry.endDate || ''} onChange={e => setExperience(a => a.map((x, i) => i === idx ? { ...x, endDate: e.target.value } : x))} />
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      format="DD MMM YYYY"
+                      placeholder="End date"
+                      value={entry.endDate ? dayjs(entry.endDate) : null}
+                      onChange={(d) => setExperience(a => a.map((x, i) => i === idx ? { ...x, endDate: d ? d.format('YYYY-MM-DD') : '' } : x))}
+                      getPopupContainer={() => document.body}
+                    />
                   </div>
                 </FormRow>
               </div>
@@ -1044,7 +1012,6 @@ function AddEditEmployeeModal({
         )}
       </form>
       </>
-      )}
     </Modal>
   );
 }

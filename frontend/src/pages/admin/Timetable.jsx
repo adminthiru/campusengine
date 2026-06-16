@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Clock, Plus, Save, AlertTriangle, BookOpen, Users, UserX, ChevronRight, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Select as AntSelect } from 'antd';
+import { Select as AntSelect, DatePicker } from 'antd';
+import dayjs from 'dayjs';
 import api from '../../utils/api';
 import { PageLoader, EmptyState, Modal, FormRow } from '../../components/ui';
 import { useAuth } from '../../store/AuthContext';
+import { useYear } from '../../store/YearContext';
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const DAY_LABELS = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat' };
@@ -14,12 +16,13 @@ const DAY_FULL = { monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday',
 // ─── Root ──────────────────────────────────────────────────────────────────────
 export default function Timetable() {
   const { user } = useAuth();
+  const { selectedYear } = useYear();
   const [view, setView] = useState('class');
 
   const { data: schoolData } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
   const school = schoolData?.school;
 
-  const academicYear = school?.academicYear?.current || user?.school?.academicYear?.current || '2024-2025';
+  const academicYear = selectedYear || school?.academicYear?.current || user?.school?.academicYear?.current || '2024-2025';
   const periodsPerDay = school?.periodsPerDay || user?.school?.periodsPerDay || 8;
   const workingDays = school?.workingDays || user?.school?.workingDays;
 
@@ -585,8 +588,14 @@ function SubstitutionPanel({ teacherId, teacher, academicYear }) {
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
           <div className="form-group" style={{ margin: 0 }}>
             <label className="form-label">Absent Date</label>
-            <input type="date" className="form-control" style={{ maxWidth: 180 }} value={absentDate}
-              onChange={e => { setAbsentDate(e.target.value); setPickingPeriod(null); }} />
+            <DatePicker
+              style={{ width: 180 }}
+              format="DD MMM YYYY"
+              allowClear={false}
+              value={absentDate ? dayjs(absentDate) : null}
+              onChange={(d) => { setAbsentDate(d ? d.format('YYYY-MM-DD') : ''); setPickingPeriod(null); }}
+              getPopupContainer={() => document.body}
+            />
           </div>
           {absentDay && (
             <div style={{ padding: '6px 14px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 20, fontSize: 13, fontWeight: 600, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6 }}>

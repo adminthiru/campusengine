@@ -44,21 +44,7 @@ const createStudent = async (req, res) => {
         if (!parent) {
           parent = await Parent.create({ ...g, school: schoolId });
         }
-        // Create parent user if one doesn't exist yet (runs for new AND existing parents)
-        const existingParentUser = await User.findOne({ parentId: parent._id, school: schoolId });
-        if (!existingParentUser) {
-          const parentEmail = g.email || `${g.phone}@skl.internal`;
-          const parentUser = await User.create({
-            school: schoolId, name: g.name, email: parentEmail,
-            phone: g.phone, password: g.phone, role: 'parent', parentId: parent._id
-          });
-          parent.user = parentUser._id;
-          await parent.save();
-          if (g.email) {
-            const portalUrl = `${process.env.CLIENT_URL}?school=${school.code}`;
-            await sendEmail(invitationEmail(g.name, g.email, admissionNumber, portalUrl, 'parent'));
-          }
-        }
+        // Parent login accounts are created selectively in Settings → App Logins.
         guardianIds.push(parent._id);
       }
     }
@@ -79,19 +65,7 @@ const createStudent = async (req, res) => {
       await Parent.findByIdAndUpdate(gId, { $addToSet: { students: student._id } });
     }
 
-    // Create student user account — always, even without email
-    const studentEmail = req.body.email || `${admissionNumber.toLowerCase()}@skl.internal`;
-    const stuUser = await User.create({
-      school: schoolId, name: req.body.name, email: studentEmail,
-      phone: req.body.phone, password: admissionNumber,
-      role: 'student', studentId: student._id, admissionNumber,
-    });
-    student.user = stuUser._id;
-    await student.save();
-    if (req.body.email) {
-      const portalUrl = `${process.env.CLIENT_URL}?school=${school.code}`;
-      await sendEmail(invitationEmail(req.body.name, req.body.email, admissionNumber, portalUrl, 'student'));
-    }
+    // Student login accounts are created selectively in Settings → App Logins.
 
     const populated = await Student.findById(student._id)
       .populate('currentClass', 'name section')

@@ -942,4 +942,108 @@ const generateExpensesReport = (expensesData, schoolData, filters = {}) => {
   });
 };
 
-module.exports = { generateFeeReceipt, generatePaySlip, generateAdmissionLetter, generateJobOffer, generateResultCard, generateHallTicket, generateFeesReport, generateExpensesReport };
+// ── Student Out Pass / Gate Pass ────────────────────────────────────────────────
+const generateOutPass = (passData, schoolData) => {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const buffers = [];
+    doc.on('data', b => buffers.push(b));
+    doc.on('end', () => resolve(Buffer.concat(buffers)));
+    doc.on('error', reject);
+
+    const cfg     = schoolData.pdfConfig || {};
+    const primary = cfg.primaryColor    || '#1a56e8';
+    const light   = lighten(primary);
+    const W = doc.page.width, L = 50, R = W - 50;
+
+    let y = drawHeader(doc, schoolData, 'STUDENT OUT PASS');
+
+    // Pass meta row (pass no + issue date/time)
+    doc.rect(L, y, R - L, 28).fill('#f8fafc').stroke('#e2e8f0');
+    doc.fillColor('#374151').fontSize(10).font('Helvetica-Bold')
+      .text(`Pass No: ${passData.passNumber || '—'}`, L + 10, y + 9);
+    const exit = passData.exitDate ? new Date(passData.exitDate) : new Date();
+    doc.font('Helvetica').fillColor('#64748b').fontSize(9)
+      .text(`Exit: ${exit.toLocaleDateString('en-IN')}  ${exit.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`, R - 220, y + 9, { width: 210, align: 'right' });
+    y += 40;
+
+    // Optional student photo (top-right) from a data URL
+    let photoShown = false;
+    if (passData.studentPhoto && /^data:image\//.test(passData.studentPhoto)) {
+      try {
+        const b64 = passData.studentPhoto.split(',')[1];
+        const imgBuf = Buffer.from(b64, 'base64');
+        doc.image(imgBuf, R - 90, y, { width: 80, height: 80, fit: [80, 80] });
+        doc.rect(R - 90, y, 80, 80).stroke('#e2e8f0');
+        photoShown = true;
+      } catch (_) { /* ignore bad image */ }
+    }
+
+    const contentW = photoShown ? R - L - 100 : R - L;
+    // Section: Student
+    doc.fillColor(primary).fontSize(11).font('Helvetica-Bold').text('STUDENT DETAILS', L, y);
+    y += 18;
+    const stuRows = [
+      ['Name', passData.studentName || '—'],
+      ['Admission No', passData.admissionNumber || '—'],
+      ['Class', passData.className || '—'],
+    ];
+    stuRows.forEach(([k, v]) => {
+      doc.fillColor('#94a3b8').fontSize(8).font('Helvetica').text(k.toUpperCase(), L, y);
+      doc.fillColor('#1e293b').fontSize(11).font('Helvetica-Bold').text(v, L + 110, y - 1, { width: contentW - 110 });
+      y += 20;
+    });
+
+    y = Math.max(y, photoShown ? (y) : y) + 6;
+    doc.moveTo(L, y).lineTo(R, y).stroke('#e2e8f0');
+    y += 14;
+
+    // Section: Pickup person
+    doc.fillColor(primary).fontSize(11).font('Helvetica-Bold').text('COLLECTED BY', L, y);
+    y += 18;
+    const pickupRows = [
+      ['Name', passData.pickupName || '—'],
+      ['Relation', (passData.pickupRelation || '—')],
+      ['Type', passData.pickupType === 'guardian' ? 'Guardian (not registered parent)' : 'Registered Parent'],
+      ['Phone', passData.pickupPhone || '—'],
+      ...(passData.pickupIdProof ? [['ID Proof No.', passData.pickupIdProof]] : []),
+    ];
+    pickupRows.forEach(([k, v]) => {
+      doc.fillColor('#94a3b8').fontSize(8).font('Helvetica').text(k.toUpperCase(), L, y);
+      doc.fillColor('#1e293b').fontSize(10).font('Helvetica-Bold').text(String(v), L + 110, y - 1, { width: R - L - 110, textTransform: 'capitalize' });
+      y += 19;
+    });
+
+    y += 4;
+    doc.moveTo(L, y).lineTo(R, y).stroke('#e2e8f0');
+    y += 14;
+
+    // Section: Reason
+    doc.fillColor(primary).fontSize(11).font('Helvetica-Bold').text('REASON FOR LEAVING', L, y);
+    y += 18;
+    const reasonLabel = (passData.reason || 'early_leave').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    doc.rect(L, y, R - L, 44).fill(light).stroke('#e2e8f0');
+    doc.fillColor(primary).fontSize(11).font('Helvetica-Bold').text(reasonLabel, L + 12, y + 8);
+    if (passData.reasonDetail) {
+      doc.fillColor('#475569').fontSize(9).font('Helvetica').text(passData.reasonDetail, L + 12, y + 25, { width: R - L - 24 });
+    }
+    y += 56;
+
+    if (passData.expectedReturn) {
+      const er = new Date(passData.expectedReturn);
+      doc.fillColor('#64748b').fontSize(9).font('Helvetica')
+        .text(`Expected return: ${er.toLocaleDateString('en-IN')} ${er.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`, L, y);
+      y += 16;
+    }
+
+    // Security note
+    doc.rect(L, y, R - L, 30).fill('#fffbeb').stroke('#fde68a');
+    doc.fillColor('#92400e').fontSize(8.5).font('Helvetica')
+      .text('Security: Please verify the collecting person’s identity and phone number against this pass before allowing the student to exit.', L + 10, y + 8, { width: R - L - 20 });
+
+    drawFooter(doc, schoolData);
+    doc.end();
+  });
+};
+
+module.exports = { generateFeeReceipt, generatePaySlip, generateAdmissionLetter, generateJobOffer, generateResultCard, generateHallTicket, generateFeesReport, generateExpensesReport, generateOutPass };

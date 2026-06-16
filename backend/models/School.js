@@ -165,15 +165,19 @@ const schoolSchema = new mongoose.Schema({
     notifyOnAttendance:       { type: Boolean, default: true },
   },
   staffAttendanceTiming: {
+    enabled:     { type: Boolean, default: true },    // staff check-in feature on/off
     onTimeBy:    { type: String, default: '10:00' },  // check-in by this = present
     lateFrom:    { type: String, default: '11:00' },  // after this = late
     halfDayFrom: { type: String, default: '12:30' },  // after this = half day
     schoolEndTime: { type: String, default: '16:00' }, // auto check-out at this time
+    configured:  { type: Boolean, default: false },    // admin has explicitly set the rules
   },
   libraryConfig: {
     finePerDay: { type: Number, default: 2 }, // ₹ per day overdue
   },
   expenseCategories: { type: [String], default: [] },
+  inventoryCategories: { type: [String], default: [] },
+  inventoryLocations: { type: [String], default: [] },
   profileCompleted: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });

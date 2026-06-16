@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
-import { Select as AntSelect } from 'antd';
+import { Select as AntSelect, DatePicker } from 'antd';
+import dayjs from 'dayjs';
 import { Plus, Trash2, Edit2, Download, DollarSign, TrendingDown, Tag, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
-import { Modal, ConfirmDialog, StatusBadge, PageLoader, EmptyState, StatCard, FormRow, ColumnSelector, useColumnSelector } from '../../components/ui';
+import { useYear } from '../../store/YearContext';
+import { Modal, ConfirmDialog, StatusBadge, PageLoader, EmptyState, StatCard, FormRow, SearchInput, ColumnSelector, useColumnSelector } from '../../components/ui';
 import { format } from 'date-fns';
 
 const EXPENSE_COLS = [
@@ -18,10 +20,25 @@ const EXPENSE_COLS = [
 
 export default function Expenses() {
   const qc = useQueryClient();
-  const now = new Date();
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear] = useState(now.getFullYear());
+  const { selectedYear, isCurrent, range } = useYear();
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [category, setCategory] = useState('');
+  const [search, setSearch] = useState('');
+
+  // Global year scoping: a past academic year scopes expenses to that year's
+  // date range; the current (default) year shows all records (the manual
+  // From/To picker can still narrow either way).
+  useEffect(() => {
+    if (isCurrent) {
+      setStartDate('');
+      setEndDate('');
+    } else {
+      setStartDate(range.startDate);
+      setEndDate(range.endDate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedYear]);
   const [showModal, setShowModal] = useState(false);
   const [selected, setSelected] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -32,15 +49,30 @@ export default function Expenses() {
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['expenses', month, year, category],
-    queryFn: () => api.get(`/expenses?month=${month}&year=${year}&category=${category}`)
+    queryKey: ['expenses', startDate, endDate, category],
+    queryFn: () => {
+      const params = new URLSearchParams({ category });
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
+      return api.get(`/expenses?${params}`);
+    }
   });
   const expenses = data?.expenses || [];
   const total = data?.total || 0;
 
+  // Client-side search over the fetched list (title, vendor or category)
+  const displayExpenses = (() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return expenses;
+    return expenses.filter(e =>
+      e.title?.toLowerCase().includes(q) ||
+      e.vendor?.toLowerCase().includes(q) ||
+      e.category?.toLowerCase().includes(q));
+  })();
+  const displayTotal = displayExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+
   const { data: schoolData } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
 
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const DEFAULT_CATEGORIES = ['furniture','electronics','maintenance','stationery','transport','utilities','salary','events','other'];
   const customCategories = schoolData?.school?.expenseCategories || [];
   const categories = [...DEFAULT_CATEGORIES, ...customCategories.filter(c => !DEFAULT_CATEGORIES.includes(c.toLowerCase()))];
@@ -65,8 +97,8 @@ export default function Expenses() {
   const [visibleCols, setVisibleCols] = useColumnSelector('expenses', EXPENSE_COLS);
   const col = (key) => visibleCols.has(key);
 
-  const allSelected = expenses.length > 0 && expenses.every(e => selected.includes(e._id));
-  const toggleAll = (checked) => setSelected(checked ? expenses.map(e => e._id) : []);
+  const allSelected = displayExpenses.length > 0 && displayExpenses.every(e => selected.includes(e._id));
+  const toggleAll = (checked) => setSelected(checked ? displayExpenses.map(e => e._id) : []);
   const toggleOne = (id, checked) => setSelected(p => checked ? [...p, id] : p.filter(i => i !== id));
 
   // Category totals
@@ -96,7 +128,7 @@ export default function Expenses() {
           <button className="btn btn-secondary" onClick={() => setShowCatModal(true)}>
             <Tag size={16} /> Add Category
           </button>
-          <button className="btn btn-primary" onClick={() => { reset(); setShowModal(true); }}>
+          <button className="btn btn-primary" onClick={() => { reset({ date: format(new Date(), 'yyyy-MM-dd') }); setShowModal(true); }}>
             <Plus size={16} /> Add Expense
           </button>
         </div>
@@ -104,18 +136,7 @@ export default function Expenses() {
 
       {/* Filters */}
       <div className="filter-bar">
-        <AntSelect
-          style={{ minWidth: 90 }}
-          value={month}
-          onChange={val => setMonth(val)}
-          options={months.map((m, i) => ({ value: i + 1, label: m }))}
-        />
-        <AntSelect
-          style={{ minWidth: 90 }}
-          value={year}
-          onChange={val => setYear(val)}
-          options={[now.getFullYear() - 1, now.getFullYear()].map(y => ({ value: y, label: String(y) }))}
-        />
+        <SearchInput value={search} onChange={setSearch} placeholder="Search by title, vendor or category..." />
         <AntSelect
           style={{ minWidth: 160 }}
           value={category || undefined}
@@ -125,12 +146,32 @@ export default function Expenses() {
           options={categories.map(c => ({ value: c, label: c.charAt(0).toUpperCase() + c.slice(1) }))}
         />
         <ColumnSelector storageKey="expenses" cols={EXPENSE_COLS} visible={visibleCols} onChange={setVisibleCols} />
+        {/* Date range pushed to the end of the bar */}
+        <DatePicker.RangePicker
+          style={{ width: 280, marginLeft: 'auto' }}
+          format="DD MMM YYYY"
+          value={[startDate ? dayjs(startDate) : null, endDate ? dayjs(endDate) : null]}
+          onChange={(range) => {
+            setStartDate(range?.[0] ? range[0].format('YYYY-MM-DD') : '');
+            setEndDate(range?.[1] ? range[1].format('YYYY-MM-DD') : '');
+          }}
+          getPopupContainer={() => document.body}
+        />
       </div>
 
       {/* Stats */}
       <div style={{ marginBottom: 24, display: 'flex', gap: 16, alignItems: 'stretch' }}>
         <div style={{ minWidth: 260 }}>
-          <StatCard title="Total This Month" value={`₹${total.toLocaleString('en-IN')}`} icon={TrendingDown} color="#ef4444" bg="#fef2f2" sub={`${months[month - 1]} ${year}`} />
+          <StatCard
+            title={startDate || endDate ? 'Total for Selected Range' : 'Total (All Time)'}
+            value={`₹${total.toLocaleString('en-IN')}`}
+            icon={TrendingDown} color="#ef4444" bg="#fef2f2"
+            sub={startDate && endDate
+              ? `${format(new Date(startDate + 'T00:00'), 'dd MMM yyyy')} – ${format(new Date(endDate + 'T00:00'), 'dd MMM yyyy')}`
+              : startDate ? `From ${format(new Date(startDate + 'T00:00'), 'dd MMM yyyy')}`
+              : endDate   ? `Until ${format(new Date(endDate + 'T00:00'), 'dd MMM yyyy')}`
+              : 'All records'}
+          />
         </div>
       </div>
 
@@ -151,10 +192,10 @@ export default function Expenses() {
                 </tr>
               </thead>
               <tbody>
-                {expenses.length === 0 && (
-                  <tr><td colSpan={3 + visibleColCount}><EmptyState icon={DollarSign} message="No expenses recorded this month." /></td></tr>
+                {displayExpenses.length === 0 && (
+                  <tr><td colSpan={3 + visibleColCount}><EmptyState icon={DollarSign} message="No expenses recorded." /></td></tr>
                 )}
-                {expenses.map(exp => (
+                {displayExpenses.map(exp => (
                   <tr key={exp._id} style={{ cursor: 'pointer' }} onClick={() => setViewExpense(exp)}>
                     <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={selected.includes(exp._id)} onChange={e => toggleOne(exp._id, e.target.checked)} /></td>
                     <td className="text-14-medium">{exp.title}</td>
@@ -172,11 +213,11 @@ export default function Expenses() {
                     </td>
                   </tr>
                 ))}
-                {expenses.length > 0 && (
+                {displayExpenses.length > 0 && (
                   <tr className="text-14-bold" style={{ background: '#f8fafc' }}>
                     <td></td>
                     <td colSpan={1 + [col('category'), col('vendor'), col('date')].filter(Boolean).length} style={{ padding: '12px 16px' }}>Total</td>
-                    <td style={{ color: '#ef4444' }}>₹{total.toLocaleString('en-IN')}</td>
+                    <td style={{ color: '#ef4444' }}>₹{displayTotal.toLocaleString('en-IN')}</td>
                     <td colSpan={[col('method')].filter(Boolean).length + 1}></td>
                   </tr>
                 )}
@@ -222,7 +263,19 @@ export default function Expenses() {
           <FormRow>
             <div className="form-group">
               <label className="form-label">Date *</label>
-              <input className="form-control" type="date" {...register('date', { required: 'Required' })} defaultValue={format(new Date(), 'yyyy-MM-dd')} />
+              <Controller name="date" control={control} rules={{ required: 'Required' }}
+                render={({ field }) => (
+                  <DatePicker
+                    style={{ width: '100%' }}
+                    format="DD MMM YYYY"
+                    placeholder="Select date"
+                    status={errors.date ? 'error' : ''}
+                    value={field.value ? dayjs(field.value) : null}
+                    onChange={(d) => field.onChange(d ? d.format('YYYY-MM-DD') : '')}
+                    getPopupContainer={() => document.body}
+                  />
+                )}
+              />
             </div>
             <div className="form-group">
               <label className="form-label">Vendor / Supplier</label>
@@ -418,11 +471,25 @@ function ExpenseReportModal({ categories, onClose }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
         <div className="form-group" style={{ margin: 0 }}>
           <label className="form-label">From</label>
-          <input className="form-control" type="date" value={startDate} onChange={e => handleStartChange(e.target.value)} />
+          <DatePicker
+            style={{ width: '100%' }}
+            format="DD MMM YYYY"
+            placeholder="Start date"
+            value={startDate ? dayjs(startDate) : null}
+            onChange={(d) => handleStartChange(d ? d.format('YYYY-MM-DD') : '')}
+            getPopupContainer={() => document.body}
+          />
         </div>
         <div className="form-group" style={{ margin: 0 }}>
           <label className="form-label">To</label>
-          <input className="form-control" type="date" value={endDate} onChange={e => handleEndChange(e.target.value)} />
+          <DatePicker
+            style={{ width: '100%' }}
+            format="DD MMM YYYY"
+            placeholder="End date"
+            value={endDate ? dayjs(endDate) : null}
+            onChange={(d) => handleEndChange(d ? d.format('YYYY-MM-DD') : '')}
+            getPopupContainer={() => document.body}
+          />
         </div>
       </div>
 
@@ -587,7 +654,19 @@ function EditExpenseModal({ expense, categories, onClose, onSuccess }) {
         <FormRow>
           <div className="form-group">
             <label className="form-label">Date *</label>
-            <input className="form-control" type="date" {...register('date', { required: 'Required' })} />
+            <Controller name="date" control={controlEdit} rules={{ required: 'Required' }}
+              render={({ field }) => (
+                <DatePicker
+                  style={{ width: '100%' }}
+                  format="DD MMM YYYY"
+                  placeholder="Select date"
+                  status={errors.date ? 'error' : ''}
+                  value={field.value ? dayjs(field.value) : null}
+                  onChange={(d) => field.onChange(d ? d.format('YYYY-MM-DD') : '')}
+                  getPopupContainer={() => document.body}
+                />
+              )}
+            />
           </div>
           <div className="form-group">
             <label className="form-label">Vendor / Supplier</label>

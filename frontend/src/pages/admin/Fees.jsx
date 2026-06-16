@@ -5,6 +5,7 @@ import { Select as AntSelect } from 'antd';
 import { Plus, Download, MessageSquare, CreditCard, IndianRupee, Trash2, Edit2, Users, User, RotateCcw, Tag } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
+import { useYear } from '../../store/YearContext';
 import { Modal, ConfirmDialog, StatusBadge, Pagination, SearchInput, PageLoader, FormRow, EmptyState, StatCard, ColumnSelector, useColumnSelector } from '../../components/ui';
 
 const FEE_COLS = [
@@ -43,9 +44,11 @@ export default function Fees() {
   const { data: schoolData } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
   const feeTerms = schoolData?.school?.feeTerms || [];
 
+  const { selectedYear } = useYear();
+
   const { data, isLoading } = useQuery({
-    queryKey: ['fees', page, statusFilter, classFilter, search],
-    queryFn: () => api.get(`/fees?page=${page}&limit=20&status=${statusFilter}&classId=${classFilter}&search=${encodeURIComponent(search)}`)
+    queryKey: ['fees', page, statusFilter, classFilter, search, selectedYear],
+    queryFn: () => api.get(`/fees?page=${page}&limit=20&status=${statusFilter}&classId=${classFilter}&search=${encodeURIComponent(search)}&academicYear=${encodeURIComponent(selectedYear)}`)
   });
   const fees = data?.fees || [];
   const total = data?.total || 0;

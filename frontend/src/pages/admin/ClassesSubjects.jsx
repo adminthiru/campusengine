@@ -5,7 +5,7 @@ import { Select as AntSelect } from 'antd';
 import { Plus, Trash2, BookOpen, Users, Edit, GripVertical, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
-import { Modal, ConfirmDialog, EmptyState, PageLoader, FormRow, StatusBadge, Select } from '../../components/ui';
+import { Modal, ConfirmDialog, EmptyState, PageLoader, FormRow, StatusBadge, Select, SearchInput } from '../../components/ui';
 
 const CLASS_ORDER_KEY = 'sklproj_class_order';
 
@@ -450,6 +450,9 @@ export function Subjects() {
   const [showModal, setShowModal] = useState(false);
   const [editSubject, setEditSubject] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  const [selected, setSelected] = useState([]);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [search, setSearch] = useState('');
   const { register, handleSubmit, reset, control, setValue, watch, formState: { errors } } = useForm();
   const [customColor, setCustomColor] = useState('#000000');
 
@@ -475,6 +478,14 @@ export function Subjects() {
 
   const { data, isLoading } = useQuery({ queryKey: ['subjects'], queryFn: () => api.get('/subjects') });
   const subjects = data?.subjects || [];
+  // Client-side search over subject name, code or teacher name
+  const q = search.trim().toLowerCase();
+  const displaySubjects = q
+    ? subjects.filter(sub =>
+        (sub.name || '').toLowerCase().includes(q) ||
+        (sub.code || '').toLowerCase().includes(q) ||
+        (sub.teachers?.length ? sub.teachers : [sub.teacher]).some(t => (t?.name || '').toLowerCase().includes(q)))
+    : subjects;
 
   const createMutation = useMutation({
     mutationFn: (d) => api.post('/subjects', d),
@@ -486,6 +497,14 @@ export function Subjects() {
     mutationFn: (id) => api.delete(`/subjects/${id}`),
     onSuccess: () => { qc.invalidateQueries(['subjects']); toast.success('Subject removed'); }
   });
+
+  const bulkDeleteMutation = async () => {
+    await Promise.all(selected.map(id => api.delete(`/subjects/${id}`)));
+    qc.invalidateQueries(['subjects']);
+    setSelected([]);
+    setBulkDeleteConfirm(false);
+    toast.success(`${selected.length} subject(s) removed`);
+  };
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => api.put(`/subjects/${id}`, data),
@@ -511,47 +530,91 @@ export function Subjects() {
           <h1 className="page-title">Subjects</h1>
           <p className="page-subtitle">{subjects.length} subjects configured</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { codeAutoFill.current = true; reset(); setShowModal(true); }}>
-          <Plus size={16} /> Add Subject
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {selected.length > 0 && (
+            <button className="btn btn-danger" onClick={() => setBulkDeleteConfirm(true)}>
+              <Trash2 size={16} /> Delete ({selected.length})
+            </button>
+          )}
+          <button className="btn btn-primary" onClick={() => { codeAutoFill.current = true; reset(); setShowModal(true); }}>
+            <Plus size={16} /> Add Subject
+          </button>
+        </div>
       </div>
 
       {isLoading ? <PageLoader /> : (
-        <div className="grid-3">
-          {subjects.length === 0 && (
-            <div style={{ gridColumn: '1/-1' }}>
-              <div className="card">
-                <EmptyState icon={BookOpen} message="No subjects yet." action={<button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}><Plus size={14} /> Add Subject</button>} />
-              </div>
-            </div>
-          )}
-          {subjects.map((sub, idx) => (
-            <div key={sub._id} className="card" style={{ padding: 20, borderLeft: `4px solid ${sub.color || SUBJECT_COLORS[idx % 8]}` }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                <div>
-                  <div className="text-16-bold">{sub.name}</div>
-                  {sub.code && <span className="badge badge-secondary" style={{ marginTop: 4 }}>{sub.code}</span>}
-                </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openEdit(sub)}><Edit size={14} /></button>
-                  <button className="btn btn-danger btn-sm btn-icon" onClick={() => setDeleteId(sub._id)}><Trash2 size={14} /></button>
-                </div>
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 12 }}>
-                <span style={{ textTransform: 'capitalize' }}>{sub.type}</span>
-              </div>
-              {(sub.teachers?.length > 0 || sub.teacher) && (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
-                  {(sub.teachers?.length > 0 ? sub.teachers : [sub.teacher]).map(t => t?.name).filter(Boolean).join(', ')}
-                </div>
-              )}
-              <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {sub.classes?.slice(0, 4).map(c => <span key={c._id} className="badge badge-info" style={{ fontSize: 11 }}>{c.name} {c.section}</span>)}
-                {sub.classes?.length > 4 && <span className="badge badge-secondary" style={{ fontSize: 11 }}>+{sub.classes.length - 4}</span>}
-              </div>
-            </div>
-          ))}
+        <>
+        {subjects.length > 0 && (
+          <div className="filter-bar">
+            <SearchInput value={search} onChange={setSearch} placeholder="Search by subject, code or teacher..." />
+          </div>
+        )}
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 36 }}>
+                    <input type="checkbox"
+                      checked={displaySubjects.length > 0 && selected.length === displaySubjects.length}
+                      onChange={e => setSelected(e.target.checked ? displaySubjects.map(s => s._id) : [])} />
+                  </th>
+                  <th>Subject</th>
+                  <th>Code</th>
+                  <th>Type</th>
+                  <th>Teachers</th>
+                  <th>Classes</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displaySubjects.length === 0 && (
+                  <tr><td colSpan={7}>
+                    <EmptyState icon={BookOpen}
+                      message={subjects.length === 0 ? 'No subjects yet.' : 'No subjects match your search.'}
+                      action={subjects.length === 0 ? <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}><Plus size={14} /> Add Subject</button> : undefined} />
+                  </td></tr>
+                )}
+                {displaySubjects.map((sub, idx) => {
+                  const subTeachers = (sub.teachers?.length > 0 ? sub.teachers : [sub.teacher]).map(t => t?.name).filter(Boolean);
+                  return (
+                    <tr key={sub._id}>
+                      <td>
+                        <input type="checkbox" checked={selected.includes(sub._id)}
+                          onChange={e => setSelected(p => e.target.checked ? [...p, sub._id] : p.filter(id => id !== sub._id))} />
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ width: 4, height: 28, borderRadius: 4, background: sub.color || SUBJECT_COLORS[idx % 8], flexShrink: 0 }} />
+                          <span className="text-14-semibold">{sub.name}</span>
+                        </div>
+                      </td>
+                      <td>{sub.code ? <span className="badge badge-secondary">{sub.code}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                      <td style={{ fontSize: 13, textTransform: 'capitalize' }}>{sub.type}</td>
+                      <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{subTeachers.length ? subTeachers.join(', ') : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                      <td>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {sub.classes?.length
+                            ? <>
+                                {sub.classes.slice(0, 4).map(c => <span key={c._id} className="badge badge-info" style={{ fontSize: 11 }}>{c.name} {c.section}</span>)}
+                                {sub.classes.length > 4 && <span className="badge badge-secondary" style={{ fontSize: 11 }}>+{sub.classes.length - 4}</span>}
+                              </>
+                            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                          <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openEdit(sub)}><Edit size={14} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
+        </>
       )}
 
       <Modal open={showModal || !!editSubject} onClose={() => { setShowModal(false); setEditSubject(null); reset(); }} title={editSubject ? 'Edit Subject' : 'Add Subject'}
@@ -660,6 +723,10 @@ export function Subjects() {
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)}
         onConfirm={() => deleteMutation.mutate(deleteId)}
         title="Remove Subject" message="This will permanently delete the subject." danger />
+
+      <ConfirmDialog open={bulkDeleteConfirm} onClose={() => setBulkDeleteConfirm(false)}
+        onConfirm={bulkDeleteMutation}
+        title="Remove Subjects" message={`This will permanently delete ${selected.length} subject(s) and cannot be undone.`} danger />
     </div>
   );
 }

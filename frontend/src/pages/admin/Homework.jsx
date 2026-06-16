@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { BookMarked, Plus, Edit2, Bell, Calendar, Users, CheckCircle, ChevronLeft, Clock } from 'lucide-react';
+import { BookMarked, Plus, Edit2, Bell, Calendar, Users, CheckCircle, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Select as AntSelect } from 'antd';
+import { Select as AntSelect, DatePicker } from 'antd';
+import dayjs from 'dayjs';
 import { format } from 'date-fns';
 import api from '../../utils/api';
-import { PageLoader, EmptyState, Modal, FormRow, StatCard } from '../../components/ui';
+import { PageLoader, EmptyState, Modal, FormRow, StatCard, SearchInput } from '../../components/ui';
 import { useAuth } from '../../store/AuthContext';
 
 const STATUS_BADGE = { completed: 'badge-success', cancelled: 'badge-danger' };
@@ -26,6 +27,7 @@ export default function Homework() {
   const [activeClass, setActiveClass] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [search, setSearch] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [editHw, setEditHw] = useState(null);
   const [viewHwId, setViewHwId] = useState(null);
@@ -61,6 +63,16 @@ export default function Homework() {
     },
   });
   const homework = hwData?.homework || [];
+
+  // Client-side search over the fetched list (title or subject)
+  const displayHw = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return homework;
+    return homework.filter(hw =>
+      hw.title?.toLowerCase().includes(q) || hw.subject?.name?.toLowerCase().includes(q));
+  }, [homework, search]);
+
+  const stepDate = (delta) => setDateFilter(dayjs(dateFilter || undefined).add(delta, 'day').format('YYYY-MM-DD'));
 
   const classCounts = useMemo(() => {
     const map = {};
@@ -112,12 +124,7 @@ export default function Homework() {
       </div>
 
       <div className="filter-bar" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Calendar size={14} color="var(--text-muted)" />
-          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Date:</span>
-        </div>
-        <input type="date" className="form-control" style={{ maxWidth: 180 }} value={dateFilter}
-          onChange={e => setDateFilter(e.target.value)} />
+        <SearchInput value={search} onChange={setSearch} placeholder="Search homework by title or subject..." />
         <AntSelect
           style={{ width: 160 }}
           value={statusFilter || undefined}
@@ -130,9 +137,26 @@ export default function Homework() {
             { value: 'cancelled', label: 'Cancelled' },
           ]}
         />
-        {hasFilters && (
-          <button className="btn btn-secondary btn-sm" onClick={() => { setStatusFilter(''); setDateFilter(''); }}>Clear</button>
-        )}
+        {/* Date navigator pushed to the end of the bar */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button className="btn btn-secondary btn-sm btn-icon" title="Previous day" onClick={() => stepDate(-1)}>
+            <ChevronLeft size={16} />
+          </button>
+          <DatePicker
+            style={{ width: 170 }}
+            format="DD MMM YYYY"
+            placeholder="All dates"
+            value={dateFilter ? dayjs(dateFilter) : null}
+            onChange={(d) => setDateFilter(d ? d.format('YYYY-MM-DD') : '')}
+            getPopupContainer={() => document.body}
+          />
+          <button className="btn btn-secondary btn-sm btn-icon" title="Next day" onClick={() => stepDate(1)}>
+            <ChevronRight size={16} />
+          </button>
+          {dateFilter && (
+            <button className="btn btn-secondary btn-sm" onClick={() => setDateFilter('')}>Clear</button>
+          )}
+        </div>
       </div>
 
       <div className="tabs">
@@ -158,7 +182,7 @@ export default function Homework() {
       <div className="card" style={{ padding: 0, marginTop: 20 }}>
         {isLoading ? (
           <div style={{ padding: 48 }}><PageLoader /></div>
-        ) : homework.length === 0 ? (
+        ) : displayHw.length === 0 ? (
           <EmptyState icon={BookMarked} message={allHw.length === 0 ? 'No homework assigned yet' : 'No homework matches the current filters'} />
         ) : (
           <div className="table-container">
@@ -176,7 +200,7 @@ export default function Homework() {
                 </tr>
               </thead>
               <tbody>
-                {homework.map(hw => {
+                {displayHw.map(hw => {
                   const isOverdue = new Date(hw.dueDate) < new Date() && hw.status === 'active';
                   return (
                     <tr key={hw._id} onClick={() => setViewHwId(hw._id)} style={{ cursor: 'pointer' }}>
@@ -727,11 +751,26 @@ function AddEditModal({ hw, classes, onClose, onSaved }) {
       <FormRow>
         <div className="form-group">
           <label className="form-label">Assigned Date</label>
-          <input className="form-control" type="date" value={assignedDate} onChange={e => setAssignedDate(e.target.value)} />
+          <DatePicker
+            style={{ width: '100%' }}
+            format="DD MMM YYYY"
+            placeholder="Select assigned date"
+            value={assignedDate ? dayjs(assignedDate) : null}
+            onChange={(d) => setAssignedDate(d ? d.format('YYYY-MM-DD') : '')}
+            getPopupContainer={() => document.body}
+          />
         </div>
         <div className="form-group">
           <label className="form-label">Due Date *</label>
-          <input className="form-control" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+          <DatePicker
+            style={{ width: '100%' }}
+            format="DD MMM YYYY"
+            placeholder="Select due date"
+            value={dueDate ? dayjs(dueDate) : null}
+            onChange={(d) => setDueDate(d ? d.format('YYYY-MM-DD') : '')}
+            disabledDate={(d) => assignedDate && d && d < dayjs(assignedDate).startOf('day')}
+            getPopupContainer={() => document.body}
+          />
         </div>
       </FormRow>
 

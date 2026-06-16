@@ -35,6 +35,10 @@ class CheckInProvider extends ChangeNotifier {
   Map<String, dynamic> _timing = {};
   Map<String, dynamic> get timing => _timing;
 
+  /// Whether the staff check-in feature is enabled for this school.
+  /// Defaults to enabled until the config loads (avoids a flash of "disabled").
+  bool get checkInEnabled => _timing['enabled'] != false;
+
   Timer? _timer;
 
   /// Restore today's punch state from the server (call on dashboard load).

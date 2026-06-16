@@ -5,8 +5,9 @@ import {
   LayoutDashboard, Users, UserCheck, BookOpen, Clock,
   DollarSign, CreditCard, FileText, Truck,
   MessageSquare, Settings,
-  GraduationCap, Building2, ClipboardList, Banknote, School, BookMarked, UsersRound, Calendar, Library
+  GraduationCap, Building2, ClipboardList, Banknote, School, BookMarked, UsersRound, Calendar, Library, DoorOpen, LogOut, Package
 } from 'lucide-react';
+import { MODULES } from '../../config/modules';
 
 const navConfig = {
   super_admin: [
@@ -34,6 +35,9 @@ const navConfig = {
     { label: 'Salary', icon: Banknote, path: '/salary' },
     { label: 'Expenses', icon: DollarSign, path: '/expenses' },
     { section: 'Other' },
+    { label: 'Visits', icon: DoorOpen, path: '/visits' },
+    { label: 'Out Pass', icon: LogOut, path: '/outpass' },
+    { label: 'Inventory', icon: Package, path: '/inventory' },
     { label: 'Library', icon: Library, path: '/library' },
     { label: 'Transport', icon: Truck, path: '/transport' },
     { label: 'SMS Services', icon: MessageSquare, path: '/sms' },
@@ -59,6 +63,9 @@ const navConfig = {
     { label: 'Salary', icon: Banknote, path: '/salary' },
     { label: 'Expenses', icon: DollarSign, path: '/expenses' },
     { section: 'Other' },
+    { label: 'Visits', icon: DoorOpen, path: '/visits' },
+    { label: 'Out Pass', icon: LogOut, path: '/outpass' },
+    { label: 'Inventory', icon: Package, path: '/inventory' },
     { label: 'Library', icon: Library, path: '/library' },
     { label: 'Transport', icon: Truck, path: '/transport' },
     { label: 'SMS Services', icon: MessageSquare, path: '/sms' },
@@ -80,6 +87,9 @@ const navConfig = {
     { label: 'Fees', icon: CreditCard, path: '/fees' },
     { label: 'Salary', icon: Banknote, path: '/salary' },
     { section: 'Other' },
+    { label: 'Visits', icon: DoorOpen, path: '/visits' },
+    { label: 'Out Pass', icon: LogOut, path: '/outpass' },
+    { label: 'Inventory', icon: Package, path: '/inventory' },
     { label: 'Library', icon: Library, path: '/library' },
     { label: 'Settings', icon: Settings, path: '/settings' },
   ],
@@ -128,10 +138,22 @@ const navConfig = {
   ],
 };
 
+// Build the nav for a delegated staff login purely from their view-permissions.
+const customNav = (user) => {
+  const allowed = MODULES.filter(m => user?.permissions?.[m.key]?.view);
+  return [
+    { section: 'Modules' },
+    ...allowed.map(m => ({ label: m.label, icon: m.icon, path: m.path })),
+    { section: 'Account' },
+    { label: 'Settings', icon: Settings, path: '/settings' },
+  ];
+};
+
 export default function Sidebar({ open, onClose, collapsed }) {
   const { user } = useAuth();
   const { t } = useTranslation();
-  const items = navConfig[user?.role] || navConfig.admin;
+  const isCustom = user?.accessType === 'custom' || user?.role === 'staff';
+  const items = isCustom ? customNav(user) : (navConfig[user?.role] || navConfig.admin);
 
   return (
     <>

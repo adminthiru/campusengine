@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, CalendarDays, List, X, Settings2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Select as AntSelect } from 'antd';
+import { Select as AntSelect, DatePicker } from 'antd';
+import dayjs from 'dayjs';
 import api from '../../utils/api';
 
 const TYPE_CONFIG = {
@@ -210,11 +211,25 @@ export default function Calendar() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
                     <label className="form-label">Date *</label>
-                    <input className="form-control" type="date" value={form.date || ''} onChange={e => setForm(f => ({...f, date: e.target.value}))} required />
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      format="DD MMM YYYY"
+                      placeholder="Select date"
+                      value={form.date ? dayjs(form.date) : null}
+                      onChange={(d) => setForm(f => ({ ...f, date: d ? d.format('YYYY-MM-DD') : '' }))}
+                      getPopupContainer={() => document.body}
+                    />
                   </div>
                   <div>
                     <label className="form-label">End Date <span style={{color:'var(--text-muted)',fontSize:11}}>(optional)</span></label>
-                    <input className="form-control" type="date" value={form.endDate || ''} onChange={e => setForm(f => ({...f, endDate: e.target.value}))} />
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      format="DD MMM YYYY"
+                      placeholder="Select end date"
+                      value={form.endDate ? dayjs(form.endDate) : null}
+                      onChange={(d) => setForm(f => ({ ...f, endDate: d ? d.format('YYYY-MM-DD') : '' }))}
+                      getPopupContainer={() => document.body}
+                    />
                   </div>
                 </div>
                 <div>

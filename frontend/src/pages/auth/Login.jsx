@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../store/AuthContext';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
@@ -8,10 +8,14 @@ import { Eye, EyeOff, School, GraduationCap } from 'lucide-react';
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const { register, handleSubmit, formState: { errors } } = useForm();
+  // Prefill school code / email when arriving via a shared staff login link.
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    defaultValues: { schoolCode: params.get('code') || '', email: params.get('email') || '' },
+  });
 
   const onSubmit = async (data) => {
     setLoading(true);

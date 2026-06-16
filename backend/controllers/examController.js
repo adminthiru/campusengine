@@ -6,6 +6,7 @@ const School = require('../models/School');
 const { generateResultCard, generateHallTicket } = require('../utils/pdf');
 const { sendSMS } = require('../utils/sms');
 const { notifyParentUsers, notifyStudentUsers } = require('../utils/notify');
+const { academicYearForDate } = require('../utils/academicYear');
 
 // Get single exam by ID
 const getExamById = async (req, res) => {
@@ -67,10 +68,10 @@ const createExam = async (req, res) => {
     let { academicYear } = req.body;
     if (!academicYear) {
       const school = await School.findById(req.user.school);
-      academicYear = school?.academicYear?.current || (() => {
-        const now = new Date(), y = now.getFullYear();
-        return now.getMonth() >= 5 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
-      })();
+      const sm = school?.academicYear?.startMonth || 6;
+      const em = school?.academicYear?.endMonth || 3;
+      // Anchor to the exam date when available, else today.
+      academicYear = academicYearForDate(req.body.examDate || new Date(), sm, em);
     }
     const exam = await Exam.create({ ...req.body, academicYear, school: req.user.school, createdBy: req.user._id });
     // Notify parents of students in the exam's classes

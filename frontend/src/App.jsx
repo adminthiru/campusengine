@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './store/AuthContext';
 import AppLayout from './components/layout/AppLayout';
 import Login from './pages/auth/Login';
+import StaffLogin from './pages/auth/StaffLogin';
 import Register from './pages/auth/Register';
 import SchoolSetup from './pages/auth/SchoolSetup';
 import Dashboard from './pages/admin/Dashboard';
@@ -24,11 +25,26 @@ import Parents from './pages/admin/Parents';
 import { SuperAdminDashboard } from './pages/superadmin/Dashboard';
 import { TeacherDashboard, MySalary, MyTasks, StudentDashboard, ParentDashboard } from './pages/portals/index';
 import Library from './pages/admin/Library';
+import Visits from './pages/admin/Visits';
+import OutPass from './pages/admin/OutPass';
+import Inventory from './pages/admin/Inventory';
+import { MODULES } from './config/modules';
 
+// Delegated (custom) staff are gated by their module-view permission instead of
+// the role lists. Their landing page is the first module they can view.
+const isCustomUser = (user) => !!user && (user.accessType === 'custom' || user.role === 'staff');
+const firstAllowedPath = (user) => {
+  const m = MODULES.find(mm => user?.permissions?.[mm.key]?.view);
+  return m ? m.path : '/settings/profile';
+};
 
-function ProtectedRoute({ children, roles }) {
+function ProtectedRoute({ children, roles, module }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
+  if (isCustomUser(user)) {
+    if (module && !user.permissions?.[module]?.view) return <Navigate to={firstAllowedPath(user)} replace />;
+    return <AppLayout>{children}</AppLayout>;
+  }
   if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
   return <AppLayout>{children}</AppLayout>;
 }
@@ -38,6 +54,7 @@ function RoleRedirect() {
   if (!user) return <Navigate to="/login" replace />;
   if (user.role === 'super_admin') return <Navigate to="/super-admin" replace />;
   if (user.role === 'maintenance') return <Navigate to="/my-tasks" replace />;
+  if (isCustomUser(user)) return <Navigate to={firstAllowedPath(user)} replace />;
   return <Navigate to="/dashboard" replace />;
 }
 
@@ -49,6 +66,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={!user ? <Login /> : <RoleRedirect />} />
+      {/* Dedicated staff login link — always shows the form, even if a session exists */}
+      <Route path="/staff-login" element={<StaffLogin />} />
       <Route path="/register" element={!user ? <Register /> : <RoleRedirect />} />
       <Route path="/school-setup" element={user ? <AppLayout><SchoolSetup /></AppLayout> : <Navigate to="/login" />} />
       <Route path="/" element={<RoleRedirect />} />
@@ -62,24 +81,27 @@ export default function App() {
         </ProtectedRoute>
       } />
 
-      <Route path="/students" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Students /></ProtectedRoute>} />
-      <Route path="/parents" element={<ProtectedRoute roles={['admin','correspondent','principal']}><Parents /></ProtectedRoute>} />
-      <Route path="/employees" element={<ProtectedRoute roles={ADMIN}><Employees /></ProtectedRoute>} />
-      <Route path="/classes" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Classes /></ProtectedRoute>} />
-      <Route path="/subjects" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Subjects /></ProtectedRoute>} />
-      <Route path="/attendance" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Attendance /></ProtectedRoute>} />
+      <Route path="/students" element={<ProtectedRoute roles={[...ADMIN, 'teacher']} module="students"><Students /></ProtectedRoute>} />
+      <Route path="/parents" element={<ProtectedRoute roles={['admin','correspondent','principal']} module="parents"><Parents /></ProtectedRoute>} />
+      <Route path="/employees" element={<ProtectedRoute roles={ADMIN} module="employees"><Employees /></ProtectedRoute>} />
+      <Route path="/classes" element={<ProtectedRoute roles={[...ADMIN, 'teacher']} module="classes"><Classes /></ProtectedRoute>} />
+      <Route path="/subjects" element={<ProtectedRoute roles={[...ADMIN, 'teacher']} module="subjects"><Subjects /></ProtectedRoute>} />
+      <Route path="/attendance" element={<ProtectedRoute roles={[...ADMIN, 'teacher']} module="attendance"><Attendance /></ProtectedRoute>} />
       <Route path="/staff-tracking" element={<Navigate to="/attendance" replace />} />
-      <Route path="/fees" element={<ProtectedRoute roles={ADMIN}><Fees /></ProtectedRoute>} />
-      <Route path="/timetable" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Timetable /></ProtectedRoute>} />
-      <Route path="/calendar" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Calendar /></ProtectedRoute>} />
-      <Route path="/salary" element={<ProtectedRoute roles={ADMIN}><Salary /></ProtectedRoute>} />
-      <Route path="/exams" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Exams /></ProtectedRoute>} />
-      <Route path="/exams/:id" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><ExamDetail /></ProtectedRoute>} />
-      <Route path="/homework" element={<ProtectedRoute roles={[...ADMIN, 'teacher']}><Homework /></ProtectedRoute>} />
-      <Route path="/expenses" element={<ProtectedRoute roles={ADMIN}><Expenses /></ProtectedRoute>} />
-      <Route path="/library" element={<ProtectedRoute roles={['admin','correspondent','principal']}><Library /></ProtectedRoute>} />
-      <Route path="/transport" element={<ProtectedRoute roles={ADMIN}><Transport /></ProtectedRoute>} />
-      <Route path="/sms" element={<ProtectedRoute roles={['admin','correspondent','principal']}><SMS /></ProtectedRoute>} />
+      <Route path="/fees" element={<ProtectedRoute roles={ADMIN} module="fees"><Fees /></ProtectedRoute>} />
+      <Route path="/timetable" element={<ProtectedRoute roles={[...ADMIN, 'teacher']} module="timetable"><Timetable /></ProtectedRoute>} />
+      <Route path="/calendar" element={<ProtectedRoute roles={[...ADMIN, 'teacher']} module="calendar"><Calendar /></ProtectedRoute>} />
+      <Route path="/salary" element={<ProtectedRoute roles={ADMIN} module="salary"><Salary /></ProtectedRoute>} />
+      <Route path="/exams" element={<ProtectedRoute roles={[...ADMIN, 'teacher']} module="exams"><Exams /></ProtectedRoute>} />
+      <Route path="/exams/:id" element={<ProtectedRoute roles={[...ADMIN, 'teacher']} module="exams"><ExamDetail /></ProtectedRoute>} />
+      <Route path="/homework" element={<ProtectedRoute roles={[...ADMIN, 'teacher']} module="homework"><Homework /></ProtectedRoute>} />
+      <Route path="/expenses" element={<ProtectedRoute roles={ADMIN} module="expenses"><Expenses /></ProtectedRoute>} />
+      <Route path="/library" element={<ProtectedRoute roles={['admin','correspondent','principal']} module="library"><Library /></ProtectedRoute>} />
+      <Route path="/visits" element={<ProtectedRoute roles={['admin','correspondent','principal']} module="visits"><Visits /></ProtectedRoute>} />
+      <Route path="/outpass" element={<ProtectedRoute roles={['admin','correspondent','principal']} module="outpass"><OutPass /></ProtectedRoute>} />
+      <Route path="/inventory" element={<ProtectedRoute roles={['admin','correspondent','principal']} module="inventory"><Inventory /></ProtectedRoute>} />
+      <Route path="/transport" element={<ProtectedRoute roles={ADMIN} module="transport"><Transport /></ProtectedRoute>} />
+      <Route path="/sms" element={<ProtectedRoute roles={['admin','correspondent','principal']} module="sms"><SMS /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute roles={ALL}><Settings /></ProtectedRoute>} />
       <Route path="/settings/:tab" element={<ProtectedRoute roles={ALL}><Settings /></ProtectedRoute>} />
 

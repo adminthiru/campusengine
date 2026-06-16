@@ -3,14 +3,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { Select as AntSelect } from 'antd';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Settings as SettingsIcon, School, Key, CreditCard, Bell, Plus, Trash2, Check, Upload, CalendarCheck, ListOrdered, ShieldCheck, GraduationCap, BookOpen, UsersRound, UserCheck, KeyRound, Banknote, FileText } from 'lucide-react';
+import { Settings as SettingsIcon, School, Key, CreditCard, Bell, Plus, Trash2, Check, Upload, CalendarCheck, ListOrdered, ShieldCheck, GraduationCap, BookOpen, UsersRound, UserCheck, KeyRound, Banknote, FileText, CalendarRange, UserCog, Copy, RefreshCw, Power, Pencil, X, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useAuth } from '../../store/AuthContext';
-import { PageLoader, FormRow, StatCard } from '../../components/ui';
+import { PageLoader, FormRow, StatCard, Modal, ConfirmDialog, SearchInput, EmptyState } from '../../components/ui';
+import { MODULES, ACTIONS, emptyPermissions } from '../../config/modules';
 
 const TABS = [
   { id: 'school',        label: 'School Profile',   icon: School },
+  { id: 'academicyear',  label: 'Academic Year',    icon: CalendarRange },
   { id: 'grades',        label: 'Grade Config',     icon: Bell },
   { id: 'leaves',        label: 'Leave Config',     icon: CalendarCheck },
   { id: 'library',       label: 'Library Config',   icon: BookOpen },
@@ -20,7 +22,8 @@ const TABS = [
   { id: 'studentroles',  label: 'Student Roles',    icon: UserCheck },
   { id: 'pdftemplates', label: 'PDF Templates',     icon: FileText },
   { id: 'salaryconfig',  label: 'Salary & LOP',      icon: Banknote },
-  { id: 'credentials',   label: 'Login Credentials', icon: KeyRound },
+  { id: 'applogins',     label: 'App Logins',       icon: UserCheck },
+  { id: 'stafflogins',   label: 'Staff Logins',     icon: UserCog },
   { id: 'subscription',  label: 'Subscription',     icon: CreditCard },
   { id: 'password',      label: 'Change Password',  icon: Key },
   { id: 'profile',       label: 'My Profile',       icon: SettingsIcon },
@@ -32,8 +35,13 @@ export default function Settings() {
   const { user } = useAuth();
 
   const isAdmin = ['admin', 'correspondent', 'principal'].includes(user?.role);
+  // Only the full-access owner (admin/correspondent) manages delegated logins.
+  const isOwner = ['admin', 'correspondent'].includes(user?.role);
 
-  const visibleTabs = isAdmin ? TABS : TABS.filter(t => ['password', 'profile'].includes(t.id));
+  const ownerOnlyTabs = ['stafflogins', 'applogins'];
+  const visibleTabs = isAdmin
+    ? TABS.filter(t => !ownerOnlyTabs.includes(t.id) || isOwner)
+    : TABS.filter(t => ['password', 'profile'].includes(t.id));
 
   return (
     <div>
@@ -67,6 +75,7 @@ export default function Settings() {
         {/* Content */}
         <div style={{ flex: 1, minWidth: 0 }}>
           {activeTab === 'school'       && isAdmin && <SchoolSettings />}
+          {activeTab === 'academicyear' && isAdmin && <AcademicYearSettings />}
           {activeTab === 'grades'       && isAdmin && <GradeSettings />}
           {activeTab === 'leaves'       && isAdmin && <LeaveSettings />}
           {activeTab === 'library'      && isAdmin && <LibraryConfigSettings />}
@@ -76,7 +85,8 @@ export default function Settings() {
           {activeTab === 'studentroles' && isAdmin && <StudentRolesSettings />}
           {activeTab === 'pdftemplates' && isAdmin && <PdfTemplateSettings />}
           {activeTab === 'salaryconfig' && isAdmin && <SalaryConfigSettings />}
-          {activeTab === 'credentials'  && isAdmin && <CredentialsSettings />}
+          {activeTab === 'applogins'    && isOwner && <AppLoginsSettings />}
+          {activeTab === 'stafflogins'  && isOwner && <StaffLoginsSettings />}
           {activeTab === 'subscription' && isAdmin && <SubscriptionSettings />}
           {activeTab === 'password' && <PasswordSettings />}
           {activeTab === 'profile'  && <ProfileSettings />}
@@ -514,6 +524,89 @@ function LeaveSettings() {
       <button className="btn btn-primary" onClick={save} disabled={saving}>
         {saving ? 'Saving...' : 'Save Leave Config'}
       </button>
+    </div>
+  );
+}
+
+const MONTH_OPTIONS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+].map((m, i) => ({ value: i + 1, label: m }));
+
+function AcademicYearSettings() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
+  const school = data?.school;
+
+  const [startMonth, setStartMonth] = useState(null);
+  const [endMonth, setEndMonth] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const sm = startMonth ?? school?.academicYear?.startMonth ?? 6;
+  const em = endMonth ?? school?.academicYear?.endMonth ?? 3;
+
+  // Preview the academic-year label this configuration produces for the current year.
+  const spansTwo = em < sm;
+  const now = new Date();
+  const startCalYear = (now.getMonth() + 1) >= sm ? now.getFullYear() : now.getFullYear() - 1;
+  const previewLabel = spansTwo ? `${startCalYear}-${startCalYear + 1}` : `${startCalYear}`;
+  const monthName = (n) => MONTH_OPTIONS[n - 1].label;
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.put('/school/academic-year', { startMonth: sm, endMonth: em, current: previewLabel });
+      qc.invalidateQueries(['school']);
+      toast.success('Academic year settings saved!');
+    } catch { toast.error('Failed to save'); }
+    finally { setSaving(false); }
+  };
+
+  if (isLoading) return <PageLoader />;
+
+  return (
+    <div className="card">
+      <div style={{ marginBottom: 24 }}>
+        <h2 className="text-18-bold">Academic Year</h2>
+        <p className="text-14-regular" style={{ color: 'var(--text-secondary)', marginTop: 4 }}>
+          Set the months your academic year starts and ends. This defines the year options in the
+          header selector, letting you view data from past academic years.
+        </p>
+      </div>
+
+      <FormRow>
+        <div className="form-group">
+          <label className="form-label">Academic year starts in</label>
+          <AntSelect
+            style={{ width: '100%' }}
+            value={sm}
+            onChange={setStartMonth}
+            options={MONTH_OPTIONS}
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Academic year ends in</label>
+          <AntSelect
+            style={{ width: '100%' }}
+            value={em}
+            onChange={setEndMonth}
+            options={MONTH_OPTIONS}
+          />
+        </div>
+      </FormRow>
+
+      <div style={{ marginTop: 8, padding: '12px 16px', borderRadius: 8, background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+        <span style={{ fontSize: 13, color: '#1d4ed8', fontWeight: 500 }}>
+          Each academic year runs <strong>{monthName(sm)}</strong> to <strong>{monthName(em)}</strong>
+          {spansTwo ? ' of the following year' : ''}. Current year will be labelled <strong>{previewLabel}</strong>.
+        </span>
+      </div>
+
+      <div style={{ marginTop: 20 }}>
+        <button className="btn btn-primary" onClick={save} disabled={saving} style={{ height: 42 }}>
+          {saving ? 'Saving...' : 'Save Academic Year'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -1096,61 +1189,177 @@ function SalaryConfigSettings() {
   );
 }
 
-function CredentialsSettings() {
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
+// ── App Logins (portal accounts for students / parents / teachers) ────────────
+const APP_LOGIN_TYPES = [
+  { key: 'teacher', label: 'Teachers / Staff', idLabel: 'Email',         endpoint: '/employees?limit=500', respKey: 'employees', optionLabel: e => `${e.name}${e.email ? ' · ' + e.email : ''}` },
+  { key: 'parent',  label: 'Parents',          idLabel: 'Mobile Number', endpoint: '/parents',             respKey: 'parents',   optionLabel: p => `${p.name}${p.phone ? ' · ' + p.phone : ''}${p.students?.length ? ' · ' + p.students.length + (p.students.length > 1 ? ' children' : ' child') : ''}` },
+  { key: 'student', label: 'Students',         idLabel: 'Admission No.',  endpoint: '/students?limit=500',  respKey: 'students',  optionLabel: s => `${s.name} · ${s.admissionNumber}` },
+];
 
-  const handleGenerate = async () => {
-    setLoading(true);
-    setResult(null);
-    try {
-      const res = await api.post('/admin/repair-credentials');
-      setResult(res.data);
-      if (res.data.studentsFixed > 0 || res.data.parentsFixed > 0) {
-        toast.success(`Done! ${res.data.studentsFixed} students, ${res.data.parentsFixed} parents updated`);
-      } else {
-        toast.success('All students and parents already have credentials');
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to generate credentials');
-    }
-    setLoading(false);
-  };
+const STAFF_ROLE_OPTS = [
+  { value: 'teacher', label: 'Teacher' }, { value: 'principal', label: 'Principal' },
+  { value: 'accountant', label: 'Accountant' }, { value: 'maintenance', label: 'Maintenance' },
+  { value: 'correspondent', label: 'Correspondent' }, { value: 'admin', label: 'Admin' },
+];
+
+function AppLoginsSettings() {
+  const qc = useQueryClient();
+  const [type, setType] = useState('teacher');
+  const [filter, setFilter] = useState('');         // role (teacher) or classId (parent/student)
+  const [createOpen, setCreateOpen] = useState(false);
+  const [pwResult, setPwResult] = useState(null);   // { login:{name,identifier}, password }
+  const [confirm, setConfirm] = useState(null);     // { kind:'delete'|'cleanup', id, name }
+
+  const cfg = APP_LOGIN_TYPES.find(t => t.key === type);
+  const { data, isLoading } = useQuery({ queryKey: ['app-logins', type], queryFn: () => api.get(`/app-logins?type=${type}`) });
+  const { data: classesData } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes') });
+  const logins = data?.logins || [];
+  const classes = classesData?.classes || [];
+
+  const switchType = (t) => { setType(t); setFilter(''); };
+  const filterOptions = type === 'teacher'
+    ? STAFF_ROLE_OPTS
+    : classes.map(c => ({ value: String(c._id), label: `${c.name}${c.section ? ' - ' + c.section : ''}` }));
+  const filtered = logins.filter(l => {
+    if (!filter) return true;
+    if (type === 'teacher') return l.role === filter;
+    if (type === 'student') return l.classId === filter;
+    if (type === 'parent') return (l.classIds || []).includes(filter);
+    return true;
+  });
+
+  const invalidate = () => qc.invalidateQueries(['app-logins', type]);
+
+  const resetPw = useMutation({
+    mutationFn: (id) => api.post(`/app-logins/${id}/reset-password`),
+    onSuccess: (res) => setPwResult({ login: { name: res.login?.name, identifier: res.identifier }, password: res.tempPassword }),
+    onError: (e) => toast.error(e?.response?.data?.message || 'Reset failed'),
+  });
+  const toggleActive = useMutation({
+    mutationFn: ({ id, isActive }) => api.put(`/app-logins/${id}`, { isActive }),
+    onSuccess: () => { invalidate(); toast.success('Updated'); },
+    onError: (e) => toast.error(e?.response?.data?.message || 'Update failed'),
+  });
+  const delLogin = useMutation({
+    mutationFn: (id) => api.delete(`/app-logins/${id}`),
+    onSuccess: () => { invalidate(); toast.success('Login removed'); setConfirm(null); },
+    onError: (e) => { toast.error(e?.response?.data?.message || 'Delete failed'); setConfirm(null); },
+  });
+  const cleanup = useMutation({
+    mutationFn: () => api.post('/app-logins/cleanup-legacy'),
+    onSuccess: (res) => { qc.invalidateQueries(['app-logins']); toast.success(`Removed ${res.removed} legacy login(s)`); setConfirm(null); },
+    onError: (e) => { toast.error(e?.response?.data?.message || 'Cleanup failed'); setConfirm(null); },
+  });
 
   return (
     <div>
-      <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 600 }}>Login Credentials</h3>
-      <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-muted)' }}>
-        Generate login credentials for all existing students and parents who don't have an account yet.
-      </p>
-
-      <div style={{ background: 'var(--bg-secondary,#f8fafc)', border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 20 }}>
-        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Credential rules</div>
-        <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 2 }}>
-          <div>🎓 <b>Student:</b> Username = Admission Number &nbsp;·&nbsp; Password = Admission Number</div>
-          <div>👨‍👩‍👧 <b>Parent:</b> Username = Mobile Number &nbsp;·&nbsp; Password = Mobile Number</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div>
+          <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 600 }}>App Logins</h3>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>Create portal logins for students, parents and teachers — only for those who need access.</p>
         </div>
+        <button className="btn btn-primary" onClick={() => setCreateOpen(true)}><Plus size={15} /> Create Login</button>
       </div>
 
-      <button className="btn btn-primary" onClick={handleGenerate} disabled={loading} style={{ minWidth: 220 }}>
-        {loading ? 'Generating...' : '⚡ Generate Credentials for All'}
-      </button>
+      {/* Type segmented control + filter */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 2, background: 'white', border: '1px solid var(--border)', borderRadius: 10, padding: 4, width: 'fit-content' }}>
+          {APP_LOGIN_TYPES.map(t => (
+            <button key={t.key} onClick={() => switchType(t.key)}
+              style={{ padding: '7px 16px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: type === t.key ? 600 : 400,
+                background: type === t.key ? 'var(--primary)' : 'transparent', color: type === t.key ? 'white' : 'var(--text-secondary)' }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <AntSelect allowClear showSearch optionFilterProp="label" style={{ minWidth: 190 }}
+          value={filter || undefined} onChange={(v) => setFilter(v ?? '')}
+          placeholder={type === 'teacher' ? 'All roles' : 'All classes'}
+          getPopupContainer={() => document.body} options={filterOptions} />
+      </div>
 
-      {result && (
-        <div style={{ marginTop: 16, padding: 16, borderRadius: 10, border: '1px solid var(--border)', background: result.errors?.length ? '#fff7ed' : '#f0fdf4' }}>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>
-            {result.errors?.length ? '⚠️ Done with some errors' : '✅ Done!'}
-          </div>
-          <div style={{ fontSize: 13, lineHeight: 1.9 }}>
-            <div>Students updated: <b>{result.studentsFixed}</b></div>
-            <div>Parents updated: <b>{result.parentsFixed}</b></div>
-            {result.errors?.length > 0 && result.errors.map((e, i) => (
-              <div key={i} style={{ color: 'var(--danger)', fontSize: 12 }}>{e}</div>
-            ))}
-          </div>
+      {isLoading ? <PageLoader /> : logins.length === 0 ? (
+        <EmptyState icon={UserCheck} message={`No ${cfg.label.toLowerCase()} logins yet. Create one to grant app access.`} />
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={UserCheck} message={`No ${cfg.label.toLowerCase()} logins match this filter.`} />
+      ) : (
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <table style={{ width: '100%' }}>
+            <thead><tr><th>Name</th><th>{cfg.idLabel}</th>{type !== 'teacher' && <th>Class</th>}{type === 'teacher' && <th>Role</th>}<th>Status</th><th></th></tr></thead>
+            <tbody>
+              {filtered.map(l => (
+                <tr key={l._id}>
+                  <td style={{ fontWeight: 600, fontSize: 13 }}>{l.name}</td>
+                  <td style={{ fontSize: 13, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{l.identifier}</td>
+                  {type !== 'teacher' && <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{l.className || '—'}</td>}
+                  {type === 'teacher' && <td style={{ fontSize: 13, color: 'var(--text-muted)', textTransform: 'capitalize' }}>{l.role}</td>}
+                  <td>
+                    <span className={`badge badge-${l.isActive ? 'success' : 'secondary'}`}>{l.isActive ? 'Active' : 'Inactive'}</span>
+                    {l.firstLogin && l.isActive && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-muted)' }}>· not logged in</span>}
+                  </td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <button className="btn btn-secondary btn-sm btn-icon" title="Reset password" onClick={() => resetPw.mutate(l._id)}><RefreshCw size={13} /></button>
+                    <button className="btn btn-secondary btn-sm btn-icon" title={l.isActive ? 'Deactivate' : 'Activate'} style={{ marginLeft: 4 }} onClick={() => toggleActive.mutate({ id: l._id, isActive: !l.isActive })}><Power size={13} /></button>
+                    <button className="btn btn-danger btn-sm btn-icon" title="Remove" style={{ marginLeft: 4 }} onClick={() => setConfirm({ kind: 'delete', id: l._id, name: l.name })}><Trash2 size={13} /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
+
+      {/* Legacy cleanup */}
+      <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+        <button className="btn btn-secondary btn-sm" onClick={() => setConfirm({ kind: 'cleanup' })}>
+          <Trash2 size={13} /> Remove legacy auto-logins
+        </button>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>Deletes all old auto-generated student &amp; parent logins (admission-number / mobile passwords). Recreate selectively above.</div>
+      </div>
+
+      {createOpen && <AppLoginCreateModal type={type} cfg={cfg} onClose={() => setCreateOpen(false)} onCreated={(r) => { setCreateOpen(false); invalidate(); setPwResult(r); }} />}
+      {pwResult && <PasswordModal login={pwResult.login} password={pwResult.password} showUrl={false} onClose={() => setPwResult(null)} />}
+      <ConfirmDialog open={!!confirm} danger
+        title={confirm?.kind === 'cleanup' ? 'Remove legacy auto-logins?' : 'Remove login?'}
+        message={confirm?.kind === 'cleanup'
+          ? 'This deletes all auto-generated student and parent logins for your school. They can be recreated individually. Continue?'
+          : `Remove the login for ${confirm?.name}? They will no longer be able to sign in.`}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => confirm?.kind === 'cleanup' ? cleanup.mutate() : delLogin.mutate(confirm.id)} />
     </div>
+  );
+}
+
+function AppLoginCreateModal({ type, cfg, onClose, onCreated }) {
+  const [personId, setPersonId] = useState('');
+  const { data } = useQuery({ queryKey: ['applogin-people', type], queryFn: () => api.get(cfg.endpoint) });
+  // Only people without an existing login. For parents, `/parents` already returns
+  // just the primary guardians (the main parent from the add-student form), one
+  // entry per parent — so a parent with several children appears only once.
+  const people = (data?.[cfg.respKey] || []).filter(p => !p.user);
+
+  const create = useMutation({
+    mutationFn: () => api.post('/app-logins', { type, personId }),
+    onSuccess: (res) => onCreated({ login: { name: res.login?.name, identifier: res.identifier }, password: res.tempPassword }),
+    onError: (e) => toast.error(e?.response?.data?.message || 'Create failed'),
+  });
+
+  const submit = () => { if (!personId) return toast.error(`Select a ${type}`); create.mutate(); };
+
+  return (
+    <Modal open onClose={onClose} size="md"
+      title={`Create ${cfg.label.replace(/s$/, '')} Login`}
+      footer={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={create.isPending}>{create.isPending ? 'Creating…' : 'Create Login'}</button></>}>
+      <div className="form-group">
+        <label className="form-label">Select {cfg.label.replace(/s$/, '')} <span style={{ color: '#ef4444' }}>*</span></label>
+        <AntSelect showSearch style={{ width: '100%' }} value={personId || undefined} onChange={setPersonId}
+          placeholder={`Search ${type} by name…`} optionFilterProp="label" getPopupContainer={() => document.body}
+          options={people.map(p => ({ value: p._id, label: cfg.optionLabel(p) }))} />
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
+        Login ID will be the {cfg.idLabel.toLowerCase()}. A temporary password is generated and shown once; the user changes it on first login and lands in their {type} portal.
+      </div>
+    </Modal>
   );
 }
 
@@ -1829,5 +2038,393 @@ function StudentRolesSettings() {
         {saveMutation.isPending ? 'Saving...' : 'Save Permissions'}
       </button>
     </div>
+  );
+}
+
+// ── Staff Logins (custom RBAC) ────────────────────────────────────────────────
+const blankPerm = () => ({ view: false, add: false, edit: false, delete: false });
+
+// A single on/off cell in the permission matrix.
+function CheckCell({ on, onClick, disabled }) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled}
+      style={{ width: 24, height: 24, borderRadius: 6, border: `1.5px solid ${on ? 'var(--primary)' : 'var(--border)'}`,
+        background: on ? 'var(--primary)' : 'white', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.12s', margin: '0 auto' }}>
+      {on && <Check size={14} color="white" />}
+    </button>
+  );
+}
+
+// The module × (View/Add/Edit/Delete) permission matrix editor.
+function PermMatrix({ value, onChange }) {
+  const cell = (mk) => value[mk] || blankPerm();
+  const set = (mk, action, val) => {
+    const next = { ...value, [mk]: { ...cell(mk), [action]: val } };
+    if (val && action !== 'view') next[mk].view = true;                  // any write implies view
+    if (!val && action === 'view') next[mk] = blankPerm();              // no view → no access
+    onChange(next);
+  };
+  const colAllOn = (action) => MODULES.every(m => cell(m.key)[action]);
+  const toggleCol = (action) => {
+    const target = !colAllOn(action);
+    const next = { ...value };
+    MODULES.forEach(m => {
+      const c = { ...(next[m.key] || blankPerm()), [action]: target };
+      if (target && action !== 'view') c.view = true;
+      next[m.key] = (!target && action === 'view') ? blankPerm() : c;
+    });
+    onChange(next);
+  };
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(4, 64px)', alignItems: 'center', padding: '10px 16px', background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Module</div>
+        {ACTIONS.map(a => (
+          <button key={a.key} type="button" onClick={() => toggleCol(a.key)} title={`Toggle ${a.label} for all`}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+              color: colAllOn(a.key) ? 'var(--primary)' : 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+            {a.label}
+          </button>
+        ))}
+      </div>
+      <div style={{ maxHeight: 340, overflowY: 'auto' }}>
+        {MODULES.map((m, i) => {
+          const c = cell(m.key);
+          const Icon = m.icon;
+          return (
+            <div key={m.key} style={{ display: 'grid', gridTemplateColumns: '1fr repeat(4, 64px)', alignItems: 'center', padding: '8px 16px', borderBottom: i < MODULES.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13, fontWeight: 500 }}>
+                <Icon size={15} color="var(--text-muted)" /> {m.label}
+              </div>
+              {ACTIONS.map(a => <CheckCell key={a.key} on={!!c[a.key]} onClick={() => set(m.key, a.key, !c[a.key])} />)}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Reusable "show generated password once" modal.
+function PasswordModal({ login, password, onClose, showUrl = true }) {
+  const { user } = useAuth();
+  const code = user?.school?.code || '';
+  // Identity is the email for staff/teacher, admission number for students, mobile for parents.
+  const identifier = login?.identifier || login?.email || '';
+  const loginUrl = `${window.location.origin}/staff-login?code=${encodeURIComponent(code)}${identifier ? `&id=${encodeURIComponent(identifier)}` : ''}`;
+  const copyAll = () => {
+    const lines = [showUrl ? `Login URL: ${loginUrl}` : null, `Login ID: ${identifier}`, `Temporary Password: ${password}`].filter(Boolean);
+    navigator.clipboard?.writeText(lines.join('\n'));
+    toast.success('Credentials copied');
+  };
+  return (
+    <Modal open onClose={onClose} size="md"
+      title={<span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Lock size={16} color="var(--primary)" /> Login Created</span>}
+      footer={<><button className="btn btn-secondary" onClick={copyAll}><Copy size={14} /> Copy All</button><button className="btn btn-primary" onClick={onClose}>Done</button></>}>
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14, lineHeight: 1.5 }}>
+        Share these credentials with <strong>{login?.name}</strong>. They’ll be asked to set a new password on first login. This temporary password is shown only once.
+      </div>
+      <div style={{ background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 10, padding: 16 }}>
+        {showUrl && (
+          <>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Login URL</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <a href={loginUrl} target="_blank" rel="noreferrer" style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 500, color: 'var(--primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loginUrl}</a>
+              <button className="btn btn-secondary btn-sm" style={{ flexShrink: 0 }} onClick={() => { navigator.clipboard?.writeText(loginUrl); toast.success('Link copied'); }}>
+                <Copy size={13} /> Copy
+              </button>
+            </div>
+          </>
+        )}
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Login ID</div>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{identifier}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Temporary Password</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <code style={{ fontSize: 16, fontWeight: 700, letterSpacing: '0.04em', color: 'var(--primary)', background: '#eff6ff', padding: '6px 12px', borderRadius: 8 }}>{password}</code>
+          <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard?.writeText(password); toast.success('Copied'); }}>
+            <Copy size={13} /> Copy
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function StaffLoginsSettings() {
+  const qc = useQueryClient();
+  const [view, setView] = useState('logins');   // 'logins' | 'roles'
+  const [search, setSearch] = useState('');
+  const [roleModal, setRoleModal] = useState(null);   // { mode:'create'|'edit', role }
+  const [loginModal, setLoginModal] = useState(null); // { mode:'create'|'edit', login }
+  const [pwResult, setPwResult] = useState(null);     // { login, password }
+  const [confirm, setConfirm] = useState(null);       // { kind, id, name }
+
+  const { data: rolesData, isLoading: rolesLoading } = useQuery({ queryKey: ['access-roles'], queryFn: () => api.get('/access-roles') });
+  const { data: loginsData, isLoading: loginsLoading } = useQuery({ queryKey: ['staff-logins'], queryFn: () => api.get('/staff-logins') });
+  const roles  = rolesData?.roles || [];
+  const logins = loginsData?.logins || [];
+
+  const delRole = useMutation({
+    mutationFn: (id) => api.delete(`/access-roles/${id}`),
+    onSuccess: () => { qc.invalidateQueries(['access-roles']); toast.success('Role deleted'); setConfirm(null); },
+    onError: (e) => { toast.error(e?.response?.data?.message || 'Delete failed'); setConfirm(null); },
+  });
+  const delLogin = useMutation({
+    mutationFn: (id) => api.delete(`/staff-logins/${id}`),
+    onSuccess: () => { qc.invalidateQueries(['staff-logins']); qc.invalidateQueries(['access-roles']); toast.success('Login removed'); setConfirm(null); },
+    onError: (e) => { toast.error(e?.response?.data?.message || 'Delete failed'); setConfirm(null); },
+  });
+  const resetPw = useMutation({
+    mutationFn: (id) => api.post(`/staff-logins/${id}/reset-password`),
+    onSuccess: (res, id) => { const l = logins.find(x => x._id === id); setPwResult({ login: l, password: res.tempPassword }); },
+    onError: (e) => toast.error(e?.response?.data?.message || 'Reset failed'),
+  });
+  const toggleActive = useMutation({
+    mutationFn: ({ id, isActive }) => api.put(`/staff-logins/${id}`, { isActive }),
+    onSuccess: () => { qc.invalidateQueries(['staff-logins']); toast.success('Updated'); },
+    onError: (e) => toast.error(e?.response?.data?.message || 'Update failed'),
+  });
+
+  const filtered = logins.filter(l =>
+    !search || l.name?.toLowerCase().includes(search.toLowerCase()) || l.email?.toLowerCase().includes(search.toLowerCase()));
+
+  if (rolesLoading || loginsLoading) return <PageLoader />;
+
+  const permCount = (p) => MODULES.reduce((n, m) => n + (p?.[m.key]?.view ? 1 : 0), 0);
+
+  return (
+    <div>
+      {/* Header + sub-tabs */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+        <div style={{ display: 'flex', gap: 2, background: 'white', border: '1px solid var(--border)', borderRadius: 10, padding: 4 }}>
+          {[{ k: 'logins', label: 'Logins' }, { k: 'roles', label: 'Access Roles' }].map(t => (
+            <button key={t.k} onClick={() => setView(t.k)}
+              style={{ padding: '7px 16px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: view === t.k ? 600 : 400,
+                background: view === t.k ? 'var(--primary)' : 'transparent', color: view === t.k ? 'white' : 'var(--text-secondary)' }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {view === 'logins'
+          ? <button className="btn btn-primary" onClick={() => { if (!roles.length) return toast.error('Create an access role first'); setLoginModal({ mode: 'create' }); }}><Plus size={15} /> Create Login</button>
+          : <button className="btn btn-primary" onClick={() => setRoleModal({ mode: 'create' })}><Plus size={15} /> New Access Role</button>}
+      </div>
+
+      {/* ── Logins ── */}
+      {view === 'logins' && (
+        <>
+          <div style={{ marginBottom: 14, maxWidth: 320 }}>
+            <SearchInput value={search} onChange={setSearch} placeholder="Search name or email..." />
+          </div>
+          {filtered.length === 0 ? (
+            <EmptyState icon={UserCog} message={logins.length ? 'No logins match your search.' : 'No staff logins yet. Create one to delegate module access.'} />
+          ) : (
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              <table style={{ width: '100%' }}>
+                <thead><tr><th>Name</th><th>Email</th><th>Access Role</th><th>Modules</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                  {filtered.map(l => (
+                    <tr key={l._id}>
+                      <td style={{ fontWeight: 600, fontSize: 13 }}>
+                        {l.name}
+                        {l.permissionsCustomized && <span title="Permissions fine-tuned for this login" style={{ marginLeft: 6, fontSize: 10, color: '#d97706', background: '#fffbeb', padding: '1px 6px', borderRadius: 10 }}>custom</span>}
+                      </td>
+                      <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{l.email}</td>
+                      <td style={{ fontSize: 13 }}>{l.accessRole?.name || l.category || '—'}</td>
+                      <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{permCount(l.permissions)}</td>
+                      <td>
+                        <span className={`badge badge-${l.isActive ? 'success' : 'secondary'}`}>{l.isActive ? 'Active' : 'Inactive'}</span>
+                        {l.firstLogin && l.isActive && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-muted)' }}>· not logged in</span>}
+                      </td>
+                      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => setLoginModal({ mode: 'edit', login: l })}><Pencil size={13} /></button>
+                        <button className="btn btn-secondary btn-sm btn-icon" title="Reset password" style={{ marginLeft: 4 }} onClick={() => resetPw.mutate(l._id)}><RefreshCw size={13} /></button>
+                        <button className="btn btn-secondary btn-sm btn-icon" title={l.isActive ? 'Deactivate' : 'Activate'} style={{ marginLeft: 4 }} onClick={() => toggleActive.mutate({ id: l._id, isActive: !l.isActive })}><Power size={13} /></button>
+                        <button className="btn btn-danger btn-sm btn-icon" title="Remove" style={{ marginLeft: 4 }} onClick={() => setConfirm({ kind: 'login', id: l._id, name: l.name })}><Trash2 size={13} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Access Roles ── */}
+      {view === 'roles' && (
+        roles.length === 0 ? (
+          <EmptyState icon={ShieldCheck} message="No access roles yet. Create one (e.g. Librarian) to define module access." />
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
+            {roles.map(r => (
+              <div key={r._id} className="card" style={{ padding: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <div>
+                    <div className="text-14-semibold">{r.name}</div>
+                    {r.description && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{r.description}</div>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => setRoleModal({ mode: 'edit', role: r })}><Pencil size={13} /></button>
+                    <button className="btn btn-danger btn-sm btn-icon" title="Delete" onClick={() => setConfirm({ kind: 'role', id: r._id, name: r.name })}><Trash2 size={13} /></button>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 14, fontSize: 12, color: 'var(--text-muted)' }}>
+                  <span><strong style={{ color: 'var(--text-primary)' }}>{permCount(r.permissions)}</strong> modules</span>
+                  <span><strong style={{ color: 'var(--text-primary)' }}>{r.loginCount}</strong> login{r.loginCount === 1 ? '' : 's'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+
+      {roleModal && <AccessRoleModal data={roleModal} onClose={() => setRoleModal(null)} />}
+      {loginModal && <StaffLoginModal data={loginModal} roles={roles} onClose={() => setLoginModal(null)} onCreated={setPwResult} />}
+      {pwResult && <PasswordModal login={pwResult.login} password={pwResult.password} onClose={() => setPwResult(null)} />}
+      <ConfirmDialog open={!!confirm} danger
+        title={confirm?.kind === 'role' ? 'Delete access role?' : 'Remove login?'}
+        message={confirm?.kind === 'role' ? `Delete the "${confirm?.name}" role? Logins using it must be reassigned first.` : `Remove the login for ${confirm?.name}? They will no longer be able to sign in.`}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => confirm?.kind === 'role' ? delRole.mutate(confirm.id) : delLogin.mutate(confirm.id)} />
+    </div>
+  );
+}
+
+function AccessRoleModal({ data, onClose }) {
+  const qc = useQueryClient();
+  const editing = data.mode === 'edit';
+  const [name, setName] = useState(data.role?.name || '');
+  const [description, setDescription] = useState(data.role?.description || '');
+  const [perms, setPerms] = useState(() => ({ ...emptyPermissions(), ...(data.role?.permissions || {}) }));
+
+  const save = useMutation({
+    mutationFn: (body) => editing ? api.put(`/access-roles/${data.role._id}`, body) : api.post('/access-roles', body),
+    onSuccess: () => { qc.invalidateQueries(['access-roles']); qc.invalidateQueries(['staff-logins']); toast.success(editing ? 'Role updated' : 'Role created'); onClose(); },
+    onError: (e) => toast.error(e?.response?.data?.message || 'Save failed'),
+  });
+
+  const submit = () => {
+    if (!name.trim()) return toast.error('Role name is required');
+    save.mutate({ name, description, permissions: perms });
+  };
+
+  return (
+    <Modal open onClose={onClose} size="lg"
+      title={editing ? `Edit Role — ${data.role.name}` : 'New Access Role'}
+      footer={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save Role'}</button></>}>
+      <FormRow>
+        <div className="form-group">
+          <label className="form-label">Role Name <span style={{ color: '#ef4444' }}>*</span></label>
+          <input className="form-control" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Librarian" />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Description</label>
+          <input className="form-control" value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional" />
+        </div>
+      </FormRow>
+      <div className="form-label" style={{ marginBottom: 8 }}>Module Access</div>
+      <PermMatrix value={perms} onChange={setPerms} />
+      {editing && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>Saving re-applies this matrix to all logins under this role (except those individually fine-tuned).</div>}
+    </Modal>
+  );
+}
+
+function StaffLoginModal({ data, roles, onClose, onCreated }) {
+  const qc = useQueryClient();
+  const editing = data.mode === 'edit';
+  const l = data.login;
+  const [name, setName]   = useState(l?.name || '');
+  const [email, setEmail] = useState(l?.email || '');
+  const [phone, setPhone] = useState(l?.phone || '');
+  const [employeeId, setEmployeeId] = useState('');
+  const [roleId, setRoleId] = useState(l?.accessRole?._id || (roles[0]?._id || ''));
+  const [fineTune, setFineTune] = useState(false);
+  const [perms, setPerms] = useState(() => ({ ...emptyPermissions(), ...(l?.permissions || {}) }));
+
+  // Employees are already on record — pick one to auto-fill the login details.
+  const { data: empData } = useQuery({ queryKey: ['employees-all'], queryFn: () => api.get('/employees?limit=500'), enabled: !editing });
+  const employees = empData?.employees || [];
+  const pickEmployee = (id) => {
+    setEmployeeId(id);
+    const emp = employees.find(e => e._id === id);
+    if (emp) { setName(emp.name || ''); setEmail(emp.email || ''); setPhone(emp.phone || ''); }
+  };
+
+  const create = useMutation({
+    mutationFn: (body) => api.post('/staff-logins', body),
+    onSuccess: (res) => { qc.invalidateQueries(['staff-logins']); qc.invalidateQueries(['access-roles']); onClose(); onCreated({ login: { name, email }, password: res.tempPassword }); },
+    onError: (e) => toast.error(e?.response?.data?.message || 'Create failed'),
+  });
+  const update = useMutation({
+    mutationFn: (body) => api.put(`/staff-logins/${l._id}`, body),
+    onSuccess: () => { qc.invalidateQueries(['staff-logins']); toast.success('Login updated'); onClose(); },
+    onError: (e) => toast.error(e?.response?.data?.message || 'Update failed'),
+  });
+
+  const submit = () => {
+    if (!name.trim()) return toast.error('Name is required');
+    if (!editing && !email.trim()) return toast.error('Email is required');
+    if (!roleId) return toast.error('Select an access role');
+    if (editing) {
+      const body = { name, phone, accessRoleId: roleId };
+      if (fineTune) body.permissions = perms;
+      update.mutate(body);
+    } else {
+      create.mutate({ name, email, phone, accessRoleId: roleId, employeeId: employeeId || undefined });
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} size={fineTune ? 'lg' : 'md'}
+      title={editing ? `Edit Login — ${l.name}` : 'Create Staff Login'}
+      footer={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={create.isPending || update.isPending}>{(create.isPending || update.isPending) ? 'Saving…' : editing ? 'Save Changes' : 'Create Login'}</button></>}>
+      {!editing && (
+        <div className="form-group">
+          <label className="form-label">Select Employee <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}>— auto-fills the details below</span></label>
+          <AntSelect showSearch style={{ width: '100%' }} value={employeeId || undefined} onChange={pickEmployee}
+            placeholder="Choose from the employee list…" optionFilterProp="label" getPopupContainer={() => document.body}
+            options={employees.map(e => ({ value: e._id, label: `${e.name}${e.email ? ' · ' + e.email : ''}` }))} />
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Or enter the details manually below.</div>
+        </div>
+      )}
+      <FormRow>
+        <div className="form-group">
+          <label className="form-label">Full Name <span style={{ color: '#ef4444' }}>*</span></label>
+          <input className="form-control" value={name} onChange={e => setName(e.target.value)} placeholder="Staff name" />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Email (username) <span style={{ color: '#ef4444' }}>*</span></label>
+          <input className="form-control" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@school.com" disabled={editing} />
+        </div>
+      </FormRow>
+      <FormRow>
+        <div className="form-group">
+          <label className="form-label">Phone</label>
+          <input className="form-control" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Optional" />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Access Role <span style={{ color: '#ef4444' }}>*</span></label>
+          <AntSelect style={{ width: '100%' }} value={roleId || undefined} onChange={setRoleId} placeholder="Select role"
+            options={roles.map(r => ({ value: r._id, label: r.name }))} getPopupContainer={() => document.body} />
+        </div>
+      </FormRow>
+      {!editing && (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
+          A temporary password will be generated and shown once. The staff member changes it on first login.
+        </div>
+      )}
+      {editing && (
+        <div style={{ marginTop: 6 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+            <input type="checkbox" checked={fineTune} onChange={e => setFineTune(e.target.checked)} style={{ accentColor: 'var(--primary)', width: 15, height: 15 }} />
+            Fine-tune permissions for this login (overrides the role)
+          </label>
+          {fineTune && <div style={{ marginTop: 10 }}><PermMatrix value={perms} onChange={setPerms} /></div>}
+        </div>
+      )}
+    </Modal>
   );
 }

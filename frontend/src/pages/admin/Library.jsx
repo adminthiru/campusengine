@@ -3,12 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, BookOpen, RefreshCw, AlertTriangle, CheckCircle, BookMarked, RotateCcw, Search, LayoutGrid, List, Barcode, Edit, Trash2, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
-import { Select as AntSelect } from 'antd';
+import { Select as AntSelect, DatePicker } from 'antd';
+import dayjs from 'dayjs';
 import api from '../../utils/api';
 import {
   Modal, ConfirmDialog, StatusBadge, PageLoader, EmptyState,
   FormRow, Avatar, SearchInput,
 } from '../../components/ui';
+import { usePermissions } from '../../store/usePermissions';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -45,6 +47,7 @@ const borrowerName = (issue) => {
 
 export default function Library() {
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const [tab, setTab] = useState('books');
   const [addBookSignal, setAddBookSignal] = useState(0);
   const [showIssueModal, setShowIssueModal] = useState(false);
@@ -57,12 +60,16 @@ export default function Library() {
           <p className="page-subtitle">Manage books, issues, returns and renewals</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary" onClick={() => setShowIssueModal(true)}>
-            <BookMarked size={16} /> Issue Book
-          </button>
-          <button className="btn btn-primary" onClick={() => { setTab('books'); setAddBookSignal(s => s + 1); }}>
-            <Plus size={16} /> Add Book
-          </button>
+          {can('library', 'edit') && (
+            <button className="btn btn-secondary" onClick={() => setShowIssueModal(true)}>
+              <BookMarked size={16} /> Issue Book
+            </button>
+          )}
+          {can('library', 'add') && (
+            <button className="btn btn-primary" onClick={() => { setTab('books'); setAddBookSignal(s => s + 1); }}>
+              <Plus size={16} /> Add Book
+            </button>
+          )}
         </div>
       </div>
 
@@ -108,6 +115,7 @@ export default function Library() {
 
 function BooksTab({ addBookSignal = 0 }) {
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [status, setStatus] = useState('');
@@ -177,7 +185,7 @@ function BooksTab({ addBookSignal = 0 }) {
             { value: 'unavailable', label: 'Unavailable' },
           ]}
         />
-        {selected.length > 0 && (
+        {selected.length > 0 && can('library', 'delete') && (
           <button className="btn btn-danger btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setBulkDeleteConfirm(true)}>
             <Trash2 size={15} /> Delete ({selected.length})
           </button>
@@ -280,9 +288,11 @@ function BooksTab({ addBookSignal = 0 }) {
                       </span>
                     </td>
                     <td>
-                      <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => { setEditBook(book); setShowModal(true); }}>
-                        <Edit size={15} />
-                      </button>
+                      {can('library', 'edit') && (
+                        <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => { setEditBook(book); setShowModal(true); }}>
+                          <Edit size={15} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -546,6 +556,7 @@ const CAT_COLORS = {
 };
 
 function BookShelfCard({ book, onEdit }) {
+  const { can } = usePermissions();
   const color = CAT_COLORS[book.category] || '#1a56e8';
   const availPct = book.totalCopies > 0 ? (book.availableCopies / book.totalCopies) * 100 : 0;
   const availColor = book.availableCopies === 0 ? '#ef4444' : book.availableCopies < book.totalCopies ? '#f59e0b' : '#10b981';
@@ -609,9 +620,11 @@ function BookShelfCard({ book, onEdit }) {
       </div>
 
       {/* Actions */}
-      <div style={{ borderTop: '1px solid #f1f5f9', padding: '8px 12px' }}>
-        <button className="btn btn-secondary btn-sm" style={{ width: '100%' }} onClick={onEdit}>Edit</button>
-      </div>
+      {can('library', 'edit') && (
+        <div style={{ borderTop: '1px solid #f1f5f9', padding: '8px 12px' }}>
+          <button className="btn btn-secondary btn-sm" style={{ width: '100%' }} onClick={onEdit}>Edit</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1088,12 +1101,14 @@ function IssueBookModal({ onClose, onSuccess }) {
 
       <div className="form-group">
         <label className="form-label">Due Date *</label>
-        <input
-          className="form-control"
-          type="date"
-          value={dueDate}
-          min={new Date().toISOString().split('T')[0]}
-          onChange={e => setDueDate(e.target.value)}
+        <DatePicker
+          style={{ width: '100%' }}
+          format="DD MMM YYYY"
+          placeholder="Select due date"
+          value={dueDate ? dayjs(dueDate) : null}
+          onChange={(d) => setDueDate(d ? d.format('YYYY-MM-DD') : '')}
+          disabledDate={(d) => d && d < dayjs().startOf('day')}
+          getPopupContainer={() => document.body}
         />
       </div>
     </Modal>
@@ -1392,11 +1407,14 @@ function ApproveRenewalModal({ issue, renewal, onClose, onSuccess }) {
       </div>
       <div className="form-group">
         <label className="form-label">New Due Date *</label>
-        <input
-          className="form-control"
-          type="date"
-          value={newDueDate}
-          onChange={e => setNewDueDate(e.target.value)}
+        <DatePicker
+          style={{ width: '100%' }}
+          format="DD MMM YYYY"
+          placeholder="Select new due date"
+          value={newDueDate ? dayjs(newDueDate) : null}
+          onChange={(d) => setNewDueDate(d ? d.format('YYYY-MM-DD') : '')}
+          disabledDate={(d) => d && d < dayjs().startOf('day')}
+          getPopupContainer={() => document.body}
         />
       </div>
       <div className="form-group">

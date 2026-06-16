@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Upload, Save, Send, CheckCircle, Edit2, EyeOff, FileDown, Search, CalendarDays, Ticket } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
-import { Select as AntSelect } from 'antd';
+import { Select as AntSelect, DatePicker } from 'antd';
+import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { PageLoader, StatusBadge, Modal, FormRow, SearchInput } from '../../components/ui';
@@ -855,9 +856,15 @@ export default function ExamDetail() {
                     <div style={{ fontSize: 13, fontWeight: 600, color: included ? 'var(--text-primary)' : 'var(--text-muted)' }}>{s.name}</div>
                     {s.code && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.code}</div>}
                   </div>
-                  <input type="date" className="form-control" disabled={!included} style={{ fontSize: 12, padding: '5px 8px' }}
-                    value={scheduleState[s._id]?.date || ''}
-                    onChange={e => setField('date', e.target.value)} />
+                  <DatePicker
+                    size="small"
+                    disabled={!included}
+                    style={{ width: '100%', fontSize: 12 }}
+                    format="DD MMM YYYY"
+                    placeholder="Date"
+                    value={scheduleState[s._id]?.date ? dayjs(scheduleState[s._id].date) : null}
+                    onChange={(d) => setField('date', d ? d.format('YYYY-MM-DD') : '')}
+                    getPopupContainer={() => document.body} />
                   <input type="time" className="form-control" disabled={!included} style={{ fontSize: 12, padding: '5px 8px' }}
                     value={scheduleState[s._id]?.startTime || ''}
                     onChange={e => setField('startTime', e.target.value)} />
@@ -920,7 +927,18 @@ export default function ExamDetail() {
           <FormRow>
             <div className="form-group">
               <label className="form-label">Exam Date</label>
-              <input className="form-control" type="date" {...regEdit('examDate')} />
+              <Controller name="examDate" control={controlEdit}
+                render={({ field }) => (
+                  <DatePicker
+                    style={{ width: '100%' }}
+                    format="DD MMM YYYY"
+                    placeholder="Select exam date"
+                    value={field.value ? dayjs(field.value) : null}
+                    onChange={(d) => field.onChange(d ? d.format('YYYY-MM-DD') : '')}
+                    getPopupContainer={() => document.body}
+                  />
+                )}
+              />
             </div>
             <div className="form-group">
               <label className="form-label">Status</label>

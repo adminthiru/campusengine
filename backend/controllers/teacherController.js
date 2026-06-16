@@ -21,7 +21,11 @@ const getMyProfile = async (req, res) => {
       'subjectTeachers.teacher': employee._id
     }).populate('subjectTeachers.subject', 'name code color');
 
-    // Flatten to { class, subject } pairs for this specific employee only
+    // Flatten to { class, subject } pairs for this specific employee only.
+    // Per-class `Class.subjectTeachers` is the authoritative source — so removing
+    // a teacher from a class here removes their access to it. (We intentionally do
+    // NOT expand the global `Subject.teacher` to every class that contains the
+    // subject, which previously re-granted classes the admin had removed.)
     const subjectTeacherAssignments = [];
     for (const cls of subjectTeacherClasses) {
       for (const st of cls.subjectTeachers) {
@@ -34,26 +38,29 @@ const getMyProfile = async (req, res) => {
       }
     }
 
-    // Also include subjects assigned directly via the Subjects module (Subject.teacher field)
-    const directSubjects = await Subject.find({ school: req.user.school, teacher: employee._id });
-    if (directSubjects.length > 0) {
-      const subjectIds = directSubjects.map(s => s._id);
-      const classesWithSubjects = await Class.find({
+    // Add subjects assigned to this teacher globally (Subjects module → Subject.teacher),
+    // but ONLY within classes the teacher is actually connected to (their own class as
+    // class teacher, or a class they already teach a subject in). This keeps global
+    // assignments working for the teacher's classes, without re-granting classes the
+    // admin removed them from (e.g. a class they don't belong to but which happens to
+    // include the subject).
+    const globalSubjects = await Subject.find({ school: req.user.school, teacher: employee._id });
+    if (globalSubjects.length > 0) {
+      const globalSubjMap = new Map(globalSubjects.map(s => [String(s._id), s]));
+      const connectedClasses = await Class.find({
         school: req.user.school,
-        subjects: { $in: subjectIds }
-      }).select('name section subjects');
-
-      for (const cls of classesWithSubjects) {
-        for (const subj of directSubjects) {
-          const inClass = cls.subjects.some(s => String(s) === String(subj._id));
-          if (!inClass) continue;
-          const alreadyExists = subjectTeacherAssignments.some(
+        $or: [{ classTeacher: employee._id }, { 'subjectTeachers.teacher': employee._id }],
+      }).populate('subjects', 'name code color');
+      for (const cls of connectedClasses) {
+        for (const subj of (cls.subjects || [])) {
+          if (!globalSubjMap.has(String(subj._id))) continue;
+          const exists = subjectTeacherAssignments.some(
             a => String(a.class._id) === String(cls._id) && String(a.subject._id) === String(subj._id)
           );
-          if (!alreadyExists) {
+          if (!exists) {
             subjectTeacherAssignments.push({
               class: { _id: cls._id, name: cls.name, section: cls.section },
-              subject: { _id: subj._id, name: subj.name, code: subj.code, color: subj.color }
+              subject: { _id: subj._id, name: subj.name, code: subj.code, color: subj.color },
             });
           }
         }

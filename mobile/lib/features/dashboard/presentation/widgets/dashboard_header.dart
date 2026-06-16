@@ -139,6 +139,7 @@ class _DashboardHeaderState extends State<DashboardHeader> {
 
     final checkIn = context.watch<CheckInProvider>();
     final isIn = checkIn.isCheckedIn;
+    final checkInEnabled = checkIn.checkInEnabled;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -177,7 +178,9 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                         height: 1.1,
                       ),
                     ),
-                    if (subtitle != null) ...[
+                    // Shown above only while check-in is enabled; when disabled
+                    // it moves into the card below.
+                    if (subtitle != null && checkInEnabled) ...[
                       const SizedBox(height: 4),
                       Text(
                         subtitle,
@@ -238,6 +241,8 @@ class _DashboardHeaderState extends State<DashboardHeader> {
             ),
             child: Column(
               children: [
+                // Check-in UI — only when the feature is enabled by the school.
+                if (checkInEnabled) ...[
                 Row(
                   children: [
                     Container(
@@ -348,6 +353,42 @@ class _DashboardHeaderState extends State<DashboardHeader> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                ],
+                ] else if (subtitle != null) ...[
+                  // Check-in disabled → show the role / class here instead.
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.badge_rounded,
+                            color: AppColors.primary, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          subtitle,
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color:
+                                isDark ? Colors.white : AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Divider(
+                      height: 1,
+                      color: isDark
+                          ? AppColors.borderDark
+                          : AppColors.borderLight),
                   const SizedBox(height: 12),
                 ],
                 Row(

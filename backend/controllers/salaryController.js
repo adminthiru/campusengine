@@ -131,12 +131,24 @@ const generateSalary = async (req, res) => {
 // Get salaries
 const getSalaries = async (req, res) => {
   try {
-    const { month, year, employeeId, status } = req.query;
+    const { month, year, employeeId, status, fromYear, fromMonth, toYear, toMonth } = req.query;
     const query = { school: req.user.school };
     if (month) query.month = Number(month);
     if (year) query.year = Number(year);
     if (employeeId) query.employee = employeeId;
     if (status) query.status = status;
+    // Academic-year range: filter on a numeric (year*100 + month) key so the
+    // Jun–Mar span across two calendar years is captured precisely.
+    if (fromYear && fromMonth && toYear && toMonth) {
+      const fromKey = Number(fromYear) * 100 + Number(fromMonth);
+      const toKey   = Number(toYear) * 100 + Number(toMonth);
+      query.$expr = {
+        $and: [
+          { $gte: [{ $add: [{ $multiply: ['$year', 100] }, '$month'] }, fromKey] },
+          { $lte: [{ $add: [{ $multiply: ['$year', 100] }, '$month'] }, toKey] },
+        ]
+      };
+    }
 
     const salaries = await Salary.find(query)
       .populate('employee', 'name employeeId role designation department photo')

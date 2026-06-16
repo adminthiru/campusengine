@@ -101,6 +101,11 @@ const login = async (req, res) => {
         language: user.language,
         firstLogin: user.firstLogin,
         avatar: user.avatar,
+        // Custom RBAC — needed by the frontend to gate sidebar/routes immediately
+        accessType: user.accessType,
+        permissions: user.permissions,
+        accessRole: user.accessRole,
+        category: user.category,
         school: school ? {
           id: school._id,
           name: school.name,

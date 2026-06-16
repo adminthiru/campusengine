@@ -37,42 +37,10 @@ const createEmployee = async (req, res) => {
 
     const employee = await Employee.create({ ...req.body, school: schoolId, employeeId });
 
-    // Create user account
-    const tempPassword = `Temp@${uuidv4().slice(0, 6)}`;
-    const userRole = req.body.role === 'teacher' ? 'teacher' :
-                     req.body.role === 'principal' ? 'principal' :
-                     req.body.role === 'accountant' ? 'accountant' :
-                     req.body.role === 'maintenance' ? 'maintenance' :
-                     req.body.role === 'correspondent' ? 'correspondent' : 'admin';
-
-    const existingUser = await User.findOne({ email: req.body.email, school: schoolId });
-    if (!existingUser) {
-      const user = await User.create({
-        school: schoolId, name: req.body.name, email: req.body.email,
-        phone: req.body.phone, password: tempPassword, role: userRole, employeeId: employee._id
-      });
-      employee.user = user._id;
-      await employee.save();
-
-      // Send invitation email with login credentials (only if sendInvite !== false)
-      const portalUrl = `${process.env.CLIENT_URL}`;
-      let emailSent = false;
-      if (req.body.sendInvite !== false && req.body.email) {
-        const emailResult = await sendEmail(invitationEmail(req.body.name, req.body.email, tempPassword, portalUrl, userRole, school.name));
-        emailSent = emailResult.success;
-        if (!emailResult.success) console.warn('Invitation email failed:', emailResult.error);
-      }
-      if (req.body.phone) {
-        await sendSMS(schoolId, req.body.phone, 'invitation',
-          [req.body.name, portalUrl, req.body.email, tempPassword],
-          school.language, { employee: employee._id }
-        ).catch(e => console.warn('SMS failed:', e.message));
-      }
-      employee._emailSent = emailSent; // pass to response
-    }
-
+    // Login accounts are NOT created here — the admin creates them selectively in
+    // Settings → App Logins (temp password shown once, changed on first login).
     const populated = await Employee.findById(employee._id).populate('subjects', 'name');
-    res.status(201).json({ success: true, employee: populated, emailSent: employee._emailSent ?? null });
+    res.status(201).json({ success: true, employee: populated });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -119,7 +87,7 @@ const getEmployee = async (req, res) => {
 // Update employee
 const updateEmployee = async (req, res) => {
   try {
-    const { sendInvite, ...updateData } = req.body;
+    const { sendInvite, ...updateData } = req.body;   // sendInvite ignored (handled in App Logins)
 
     const employee = await Employee.findOneAndUpdate(
       { _id: req.params.id, school: req.user.school },
@@ -127,23 +95,7 @@ const updateEmployee = async (req, res) => {
     ).populate('subjects', 'name code');
     if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
 
-    let emailSent = null;
-    if (sendInvite === true && employee.user) {
-      // Generate new temp password and reset user account
-      const school = await School.findById(req.user.school);
-      const tempPassword = `Temp@${uuidv4().slice(0, 6)}`;
-      const userDoc = await User.findById(employee.user);
-      if (userDoc) {
-        userDoc.password = tempPassword;
-        await userDoc.save();
-        const portalUrl = `${process.env.CLIENT_URL}`;
-        const emailResult = await sendEmail(invitationEmail(employee.name, userDoc.email, tempPassword, portalUrl, userDoc.role, school.name));
-        emailSent = emailResult.success;
-        if (!emailResult.success) console.warn('Resend invite email failed:', emailResult.error);
-      }
-    }
-
-    res.json({ success: true, employee, emailSent });
+    res.json({ success: true, employee });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

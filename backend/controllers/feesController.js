@@ -12,12 +12,13 @@ const getRazorpay = () => new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET
 });
 
+const { academicYearForDate } = require('../utils/academicYear');
+
 const getAcademicYear = async (schoolId) => {
   const school = await School.findById(schoolId);
-  return school?.academicYear?.current || (() => {
-    const now = new Date(), y = now.getFullYear();
-    return now.getMonth() >= 5 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
-  })();
+  const sm = school?.academicYear?.startMonth || 6;
+  const em = school?.academicYear?.endMonth || 3;
+  return academicYearForDate(new Date(), sm, em);
 };
 
 // Build per-term objects from input array

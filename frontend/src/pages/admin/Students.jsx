@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, Controller } from 'react-hook-form';
-import { Select } from 'antd';
+import { Select, DatePicker } from 'antd';
+import dayjs from 'dayjs';
 import {
   Plus, Download, Trash2, GraduationCap, ArrowLeft,
   Edit, Phone, Mail, MapPin, BookOpen, Camera, ChevronLeft, ChevronRight, Upload,
@@ -139,7 +140,9 @@ export default function Students() {
     const firstName = (data.firstName || '').trim();
     const lastName  = (data.lastName  || '').trim();
     const name = [firstName, lastName].filter(Boolean).join(' ');
-    const classDoc = classes.find(c => c.name === data.classGroup && c.section === data.section);
+    const classDoc = data.section
+      ? classes.find(c => c.name === data.classGroup && c.section === data.section)
+      : classes.find(c => c.name === data.classGroup);
 
     // Explicitly build a plain array to avoid React dev-mode Proxy serialisation issues
     // Primary guardian always comes from personal tab fields
@@ -483,7 +486,7 @@ function AddEditModal({
   const watched = useWatch({
     control,
     name: ['firstName', 'lastName', 'gender', 'dateOfBirth', 'parentName', 'parentRelationship',
-           'mobile', 'address', 'admissionNumber', 'admissionDate', 'classGroup', 'section', 'rollNumber']
+           'mobile', 'address', 'admissionNumber', 'admissionDate', 'classGroup', 'rollNumber']
   });
   const isFormReady = watched.every(v => v !== undefined && v !== null && String(v).trim() !== '');
   const saveParent = () => {
@@ -535,7 +538,6 @@ function AddEditModal({
         { key: 'admissionNumber', label: 'Admission Number' },
         { key: 'admissionDate', label: 'Admission Date' },
         { key: 'classGroup', label: 'Class Group' },
-        { key: 'section', label: 'Section' },
         { key: 'rollNumber', label: 'Roll Number' }
       ];
       for (const f of req) {
@@ -655,7 +657,20 @@ function AddEditModal({
               </div>
               <div className="form-group">
                 <label className="form-label">Date of Birth <span style={{ color: '#ef4444' }}>*</span></label>
-                <input className="form-control" type="date" {...register('dateOfBirth', { required: 'Required' })} />
+                <Controller name="dateOfBirth" control={control} rules={{ required: 'Required' }}
+                  render={({ field }) => (
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      format="DD MMM YYYY"
+                      placeholder="Select date of birth"
+                      status={errors.dateOfBirth ? 'error' : ''}
+                      value={field.value ? dayjs(field.value) : null}
+                      onChange={(d) => field.onChange(d ? d.format('YYYY-MM-DD') : '')}
+                      disabledDate={(d) => d && d > dayjs().endOf('day')}
+                      getPopupContainer={() => document.body}
+                    />
+                  )}
+                />
                 {errors.dateOfBirth && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.dateOfBirth.message}</p>}
               </div>
             </FormRow>
@@ -753,7 +768,19 @@ function AddEditModal({
               </div>
               <div className="form-group">
                 <label className="form-label">Admission Date <span style={{ color: '#ef4444' }}>*</span></label>
-                <input className="form-control" type="date" {...register('admissionDate', { required: 'Required' })} />
+                <Controller name="admissionDate" control={control} rules={{ required: 'Required' }}
+                  render={({ field }) => (
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      format="DD MMM YYYY"
+                      placeholder="Select admission date"
+                      status={errors.admissionDate ? 'error' : ''}
+                      value={field.value ? dayjs(field.value) : null}
+                      onChange={(d) => field.onChange(d ? d.format('YYYY-MM-DD') : '')}
+                      getPopupContainer={() => document.body}
+                    />
+                  )}
+                />
                 {errors.admissionDate && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.admissionDate.message}</p>}
               </div>
             </FormRow>
@@ -772,17 +799,16 @@ function AddEditModal({
                 {errors.classGroup && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.classGroup.message}</p>}
               </div>
               <div className="form-group">
-                <label className="form-label">Section <span style={{ color: '#ef4444' }}>*</span></label>
-                <Controller name="section" control={control} rules={{ required: 'Required' }}
+                <label className="form-label">Section</label>
+                <Controller name="section" control={control}
                   render={({ field }) => (
                     <Select {...field} style={{ width: '100%' }} placeholder="Select section"
                       disabled={!watchedClassGroup}
-                      status={errors.section ? 'error' : ''}
+                      allowClear
                       options={filteredSections.map(c => ({ value: c.section, label: c.section }))}
                     />
                   )}
                 />
-                {errors.section && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.section.message}</p>}
               </div>
             </FormRow>
             <div className="form-group" style={{ maxWidth: '50%' }}>

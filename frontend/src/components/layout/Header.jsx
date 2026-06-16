@@ -1,14 +1,67 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Menu, Search, ChevronDown, Check, Globe } from 'lucide-react';
+import {
+  Bell, Menu, Search, ChevronDown, Check, Globe, CalendarRange, Home,
+  LayoutDashboard, GraduationCap, UsersRound, Users, BookOpen, ClipboardList, Clock, Calendar,
+  UserCheck, FileText, BookMarked, CreditCard, Banknote, DollarSign, Library, DoorOpen, Truck,
+  MessageSquare, Settings, Building2, LogOut, Package,
+} from 'lucide-react';
+import { Select, Breadcrumb } from 'antd';
 import { useAuth } from '../../store/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useYear } from '../../store/YearContext';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
 
+// Path segment → readable label for the header breadcrumb.
+const ROUTE_LABELS = {
+  dashboard: 'Dashboard', students: 'Students', parents: 'Parents', employees: 'Employees',
+  classes: 'Classes', subjects: 'Subjects', timetable: 'Timetable', calendar: 'My Calendar',
+  attendance: 'Attendance', exams: 'Exams', homework: 'Homework', fees: 'Fees', salary: 'Salary',
+  expenses: 'Expenses', library: 'Library', visits: 'Visits', outpass: 'Out Pass', inventory: 'Inventory', transport: 'Transport',
+  sms: 'SMS Services', settings: 'Settings', 'super-admin': 'Schools', 'my-classes': 'My Classes',
+  'my-salary': 'My Salary', 'my-tasks': 'My Tasks', 'my-children': 'My Children',
+};
+const labelFor = (seg) =>
+  /^[0-9a-fA-F]{24}$/.test(seg) ? 'Detail' : (ROUTE_LABELS[seg] || seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' '));
+
+// Same icons used in the sidebar nav, keyed by path segment.
+const ROUTE_ICONS = {
+  dashboard: LayoutDashboard, students: GraduationCap, parents: UsersRound, employees: Users,
+  classes: BookOpen, subjects: ClipboardList, timetable: Clock, calendar: Calendar,
+  attendance: UserCheck, exams: FileText, homework: BookMarked, fees: CreditCard, salary: Banknote,
+  expenses: DollarSign, library: Library, visits: DoorOpen, outpass: LogOut, inventory: Package, transport: Truck, sms: MessageSquare,
+  settings: Settings, 'super-admin': Building2, 'my-classes': BookOpen, 'my-salary': Banknote,
+  'my-tasks': ClipboardList, 'my-children': GraduationCap,
+};
+const CrumbLabel = ({ seg, label }) => {
+  const Icon = ROUTE_ICONS[seg];
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 14, fontWeight: 500, lineHeight: 1 }}>
+      {Icon && <Icon size={16} />}{label}
+    </span>
+  );
+};
+
 export default function Header({ onMenuClick, sidebarCollapsed }) {
   const { user, logout, updateUser } = useAuth();
+  const { selectedYear, setSelectedYear, availableYears, isCurrent } = useYear();
   const navigate = useNavigate();
+  const location = useLocation();
   const { i18n } = useTranslation();
+
+  // Build a navigation breadcrumb from the current path.
+  const segments = location.pathname.split('/').filter(Boolean);
+  const crumbItems = [
+    { title: <span onClick={() => navigate('/dashboard')} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}><Home size={16} /></span> },
+    ...segments.map((seg, i) => {
+      const isLast = i === segments.length - 1;
+      const path = '/' + segments.slice(0, i + 1).join('/');
+      const inner = <CrumbLabel seg={seg} label={labelFor(seg)} />;
+      return { title: isLast ? inner : <span onClick={() => navigate(path)} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>{inner}</span> };
+    }),
+  ];
+
+  const canSwitchYear = ['admin', 'correspondent', 'principal', 'accountant'].includes(user?.role) && availableYears.length > 0;
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const notifRef = useRef();
@@ -72,12 +125,34 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
           <button className="btn-icon btn btn-secondary mobile-menu-btn" onClick={onMenuClick}>
             <Menu size={20} />
           </button>
-          <div className="text-18-bold" style={{ color: 'var(--text-primary)' }}>
-            {user?.school?.name || 'School Management'}
-          </div>
+          <Breadcrumb className="header-breadcrumb" items={crumbItems} style={{ fontSize: 14 }} />
         </div>
 
         <div className="header-right">
+          {/* Academic year selector */}
+          {canSwitchYear && (
+            <div
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: isCurrent ? '#fff' : '#fffbeb',
+                border: `1px solid ${isCurrent ? 'var(--border)' : '#fcd34d'}`,
+                borderRadius: 10, padding: '0 6px 0 10px', height: 36,
+              }}
+              data-tooltip={isCurrent ? 'Academic year' : 'Viewing a past academic year'}
+            >
+              <CalendarRange size={15} color={isCurrent ? 'var(--text-muted)' : '#d97706'} />
+              <Select
+                variant="borderless"
+                size="small"
+                value={selectedYear}
+                onChange={setSelectedYear}
+                popupMatchSelectWidth={false}
+                style={{ minWidth: 92 }}
+                options={availableYears.map(y => ({ value: y.value, label: y.label }))}
+              />
+            </div>
+          )}
+
           {/* Language toggle */}
           <button
             onClick={toggleLanguage}

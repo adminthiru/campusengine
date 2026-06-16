@@ -222,10 +222,29 @@ const twilioWebhook = async (req, res) => {
   } catch (err) { res.status(200).send(''); }
 };
 
+// ── Recipient preview ───────────────────────────────────────────────────────
+// Resolves the current Compose target selection into the actual list of people
+// (name + phone) who will receive the message — powers the live "Recipients"
+// list in the Compose tab. Capped so a school-wide blast doesn't return 5k rows.
+const PREVIEW_CAP = 200;
+const previewRecipients = async (req, res) => {
+  try {
+    if (!req.user.school) return res.status(400).json({ success: false, message: 'School not associated with user' });
+    const { targetType, targetFilter } = req.body || {};
+    if (!targetType) return res.json({ success: true, total: 0, recipients: [] });
+    const recipients = await buildRecipients(req.user.school, targetType, targetFilter || {});
+    res.json({
+      success: true,
+      total: recipients.length,
+      recipients: recipients.slice(0, PREVIEW_CAP).map(r => ({ name: r.name || '', phone: r.phone })),
+    });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+};
+
 module.exports = {
   getSettings, updateSettings, testSms,
   getTemplates, createTemplate, updateTemplate, deleteTemplate,
   sendBulk, getBatches, getBatchLogs, getScheduled, cancelScheduled,
-  getLogs, getStats, retryMessage,
+  getLogs, getStats, retryMessage, previewRecipients,
   sendOTPCtrl, verifyOTPCtrl, twilioWebhook
 };

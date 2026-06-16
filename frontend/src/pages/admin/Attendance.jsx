@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { UserCheck, Save, ChevronLeft, ChevronRight, Edit2, Settings, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { UserCheck, Save, ChevronLeft, ChevronRight, Edit2, Settings, Clock, CheckCircle, XCircle, CalendarDays } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Select as AntSelect } from 'antd';
+import { Select as AntSelect, DatePicker } from 'antd';
+import dayjs from 'dayjs';
 import api from '../../utils/api';
-import { PageLoader, Avatar, SearchInput } from '../../components/ui';
+import { useYear } from '../../store/YearContext';
+import { PageLoader, Avatar, SearchInput, Modal } from '../../components/ui';
 
 const BASE_STATUS_CONFIG = [
   { key: 'present',  label: 'P',  fullLabel: 'Present',  color: '#10b981', bg: '#f0fdf4' },
@@ -89,7 +91,15 @@ function AmPmTimePicker({ value = '10:00', onChange }) {
 
 export default function Attendance() {
   const qc = useQueryClient();
+  const { selectedYear, isCurrent, range } = useYear();
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+
+  // When a past academic year is selected in the header, move the working
+  // date into that year so the summaries reflect it; current year stays today.
+  useEffect(() => {
+    setDate(isCurrent ? format(new Date(), 'yyyy-MM-dd') : range.startDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedYear]);
   const [classId, setClassId] = useState('');
   const [empRole, setEmpRole] = useState('');
   const [tab, setTab] = useState('student');
@@ -137,6 +147,15 @@ export default function Attendance() {
     });
   })();
 
+  // Initially select the first class (e.g. PRE-KG) on the Student Attendance tab.
+  const didInitClass = useRef(false);
+  useEffect(() => {
+    if (!didInitClass.current && tab === 'student' && !classId && classes.length > 0) {
+      setClassId(classes[0]._id);
+      didInitClass.current = true;
+    }
+  }, [classes, tab, classId]);
+
   const { data: studentData, isLoading: loadingStudents } = useQuery({
     queryKey: ['students-attendance', classId],
     enabled: tab === 'student' && !!classId,
@@ -161,6 +180,14 @@ export default function Attendance() {
     queryFn:  () => api.get(`/leaves${leaveFilter !== 'all' ? `?status=${leaveFilter}` : ''}`),
   });
   const leaves = leavesData?.leaves ?? [];
+  // Client-side search over leave requests (employee name/ID or reason)
+  const leaveQuery = search.trim().toLowerCase();
+  const displayLeaves = leaveQuery
+    ? leaves.filter(lv =>
+        (lv.employee?.name || '').toLowerCase().includes(leaveQuery) ||
+        (lv.employee?.employeeId || '').toLowerCase().includes(leaveQuery) ||
+        (lv.reason || '').toLowerCase().includes(leaveQuery))
+    : leaves;
 
   const leaveAction = useMutation({
     mutationFn: ({ id, status, adminNote }) =>
@@ -174,7 +201,7 @@ export default function Attendance() {
 
   // ── Staff Check-in tab state ──────────────────────────────────────────────
   const [showTimingForm, setShowTimingForm] = useState(false);
-  const [timingForm, setTimingForm] = useState({ onTimeBy: '10:00', lateFrom: '11:00', halfDayFrom: '12:30', schoolEndTime: '16:00' });
+  const [timingForm, setTimingForm] = useState({ onTimeBy: '10:00', lateFrom: '11:00', halfDayFrom: '12:30', schoolEndTime: '16:00', enabled: true });
   const [savingTiming, setSavingTiming] = useState(false);
 
   const { data: checkinData, isLoading: loadingCheckins } = useQuery({
@@ -193,6 +220,7 @@ export default function Attendance() {
         lateFrom:      checkinTiming.lateFrom      || '11:00',
         halfDayFrom:   checkinTiming.halfDayFrom   || '12:30',
         schoolEndTime: checkinTiming.schoolEndTime || '16:00',
+        enabled:       checkinTiming.enabled !== false,
       });
     }
   }, [checkinTiming]);
@@ -388,12 +416,33 @@ export default function Attendance() {
           <h1 className="page-title">Attendance</h1>
           <p className="page-subtitle">Mark daily attendance</p>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {workingDaysInfo?.workingDays != null && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 4,
+              background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 20,
+              padding: '4px 12px', fontSize: 12.5, color: '#475569', fontWeight: 500, whiteSpace: 'nowrap',
+            }}>
+              <CalendarDays size={13} style={{ color: '#94a3b8' }} />
+              {new Date(date).toLocaleString('default', { month: 'long', year: 'numeric' })}
+              <span style={{ color: '#cbd5e1' }}>·</span>
+              <b style={{ color: '#334155' }}>{workingDaysInfo.workingDays}</b> working days
+              {workingDaysInfo.holidayCount > 0 && <><span style={{ color: '#cbd5e1' }}>·</span><b style={{ color: '#334155' }}>{workingDaysInfo.holidayCount}</b> holiday{workingDaysInfo.holidayCount !== 1 ? 's' : ''}</>}
+              {workingDaysInfo.weekendCount > 0 && <><span style={{ color: '#cbd5e1' }}>·</span><b style={{ color: '#334155' }}>{workingDaysInfo.weekendCount}</b> weekend day{workingDaysInfo.weekendCount !== 1 ? 's' : ''}</>}
+            </span>
+          )}
           <button className="btn btn-secondary btn-sm btn-icon" onClick={() => {
             const d = new Date(date); d.setDate(d.getDate() - 1); setDate(format(d, 'yyyy-MM-dd'));
           }}><ChevronLeft size={16} /></button>
-          <input type="date" className="form-control" style={{ width: 'auto' }} value={date}
-            onChange={e => setDate(e.target.value)} max={format(new Date(), 'yyyy-MM-dd')} />
+          <DatePicker
+            style={{ width: 150, height: 36 }}
+            format="DD MMM YYYY"
+            allowClear={false}
+            value={date ? dayjs(date) : null}
+            onChange={(d) => d && setDate(d.format('YYYY-MM-DD'))}
+            disabledDate={(d) => d && d > dayjs().endOf('day')}
+            getPopupContainer={() => document.body}
+          />
           <button className="btn btn-secondary btn-sm btn-icon" onClick={() => {
             const d = new Date(date); d.setDate(d.getDate() + 1); setDate(format(d, 'yyyy-MM-dd'));
           }}><ChevronRight size={16} /></button>
@@ -410,7 +459,7 @@ export default function Attendance() {
             { key: 'leaves',   label: 'Leave Requests' },
           ].map(({ key, label }) => (
             <button key={key}
-              onClick={() => { setTab(key); setSearch(''); if (key !== 'student') setClassId(''); if (key === 'student') setEmpRole(''); window.scrollTo({ top: 0, behavior: 'instant' }); }}
+              onClick={() => { setTab(key); setSearch(''); if (key === 'student') setEmpRole(''); window.scrollTo({ top: 0, behavior: 'instant' }); }}
               style={{
                 padding: '10px 20px', border: 'none', background: 'none', cursor: 'pointer',
                 fontSize: 14, fontWeight: tab === key ? 700 : 500,
@@ -484,28 +533,6 @@ export default function Attendance() {
         </div>
       </div>}
 
-      {/* Working days info bar */}
-      {tab !== 'checkin' && tab !== 'leaves' && workingDaysInfo?.workingDays != null && (
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '8px 16px', marginBottom: 12, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 13, color: '#1d4ed8', fontWeight: 600 }}>
-            📅 {new Date(date).toLocaleString('default', { month: 'long', year: 'numeric' })}
-          </span>
-          <span style={{ fontSize: 13, color: '#1e293b' }}>
-            <b style={{ color: '#1d4ed8' }}>{workingDaysInfo.workingDays}</b> working days
-          </span>
-          {workingDaysInfo.holidayCount > 0 && (
-            <span style={{ fontSize: 12, color: '#64748b' }}>
-              🎌 {workingDaysInfo.holidayCount} holiday{workingDaysInfo.holidayCount !== 1 ? 's' : ''}
-            </span>
-          )}
-          {workingDaysInfo.weekendCount > 0 && (
-            <span style={{ fontSize: 12, color: '#64748b' }}>
-              🗓 {workingDaysInfo.weekendCount} weekend day{workingDaysInfo.weekendCount !== 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
-      )}
-
       {/* Stats cards — full width equal columns */}
       {tab !== 'checkin' && tab !== 'leaves' && people.length > 0 && (
         <div style={{
@@ -528,58 +555,33 @@ export default function Attendance() {
 
       {/* ── Staff Check-in tab ─────────────────────────────────────────────── */}
       {tab === 'checkin' && (() => {
-        const checkedIn   = allEmployees.filter(e => checkinByEmpId[e._id]);
-        const notCheckedIn = allEmployees.filter(e => !checkinByEmpId[e._id]);
-        const onTime  = checkedIn.filter(e => getCheckinStatus(checkinByEmpId[e._id]?.checkIn?.time)?.status === 'present').length;
-        const late    = checkedIn.filter(e => getCheckinStatus(checkinByEmpId[e._id]?.checkIn?.time)?.status === 'late').length;
-        const halfDay = checkedIn.filter(e => getCheckinStatus(checkinByEmpId[e._id]?.checkIn?.time)?.status === 'half_day').length;
+        const allCheckedIn    = allEmployees.filter(e => checkinByEmpId[e._id]);
+        const allNotCheckedIn = allEmployees.filter(e => !checkinByEmpId[e._id]);
+        const onTime  = allCheckedIn.filter(e => getCheckinStatus(checkinByEmpId[e._id]?.checkIn?.time)?.status === 'present').length;
+        const late    = allCheckedIn.filter(e => getCheckinStatus(checkinByEmpId[e._id]?.checkIn?.time)?.status === 'late').length;
+        const halfDay = allCheckedIn.filter(e => getCheckinStatus(checkinByEmpId[e._id]?.checkIn?.time)?.status === 'half_day').length;
+        // Search filter (display only — stats reflect all staff)
+        const q = search.trim().toLowerCase();
+        const matchStaff = (e) => !q || e.name?.toLowerCase().includes(q) || e.employeeId?.toLowerCase().includes(q);
+        const checkedIn    = allCheckedIn.filter(matchStaff);
+        const notCheckedIn = allNotCheckedIn.filter(matchStaff);
+        const rulesConfigured = !!checkinTiming?.configured;
 
         return (
           <div>
-            {/* Timing config */}
-            <div className="card" style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div className="text-14-semibold" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Settings size={15} /> Attendance Timing Rules
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
-                    On time by <b>{toAmPm(timingForm.onTimeBy)}</b> · Late from <b>{toAmPm(timingForm.lateFrom)}</b> · Half day from <b>{toAmPm(timingForm.halfDayFrom)}</b> · School ends <b>{toAmPm(timingForm.schoolEndTime)}</b>
-                  </div>
-                </div>
-                <button className="btn btn-secondary btn-sm" onClick={() => setShowTimingForm(v => !v)}>
-                  {showTimingForm ? 'Cancel' : 'Edit'}
-                </button>
-              </div>
-
-              {showTimingForm && (
-                <div style={{ marginTop: 16, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                  {[
-                    { key: 'onTimeBy',      label: 'On time by (Present)' },
-                    { key: 'lateFrom',      label: 'Late starts from' },
-                    { key: 'halfDayFrom',   label: 'Half day starts from' },
-                    { key: 'schoolEndTime', label: 'School ends (auto check-out)' },
-                  ].map(({ key, label }) => (
-                    <div key={key} className="form-group" style={{ flex: '1 1 180px', minWidth: 160, marginBottom: 0 }}>
-                      <label className="form-label" style={{ fontSize: 12 }}>{label}</label>
-                      <AmPmTimePicker
-                        value={timingForm[key] || '10:00'}
-                        onChange={val => setTimingForm(f => ({ ...f, [key]: val }))}
-                      />
-                    </div>
-                  ))}
-                  <button className="btn btn-primary btn-sm" onClick={saveTimingConfig} disabled={savingTiming} style={{ height: 38 }}>
-                    {savingTiming ? 'Saving...' : <><Save size={13} /> Save Rules</>}
-                  </button>
-                </div>
-              )}
+            {/* Search + timing rules CTA */}
+            <div className="filter-bar" style={{ marginBottom: 16 }}>
+              <SearchInput value={search} onChange={setSearch} placeholder="Search staff by name or ID..." />
+              <button className="btn btn-secondary" style={{ marginLeft: 'auto' }} onClick={() => setShowTimingForm(true)}>
+                <Settings size={15} /> {rulesConfigured ? 'Edit Time Rules' : 'Set Time Rules'}
+              </button>
             </div>
 
             {/* Summary stats */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 16 }}>
               {[
                 { label: 'Total Staff',    val: allEmployees.length, color: 'var(--text-primary)' },
-                { label: 'Checked In',     val: checkedIn.length,    color: '#1a56e8' },
+                { label: 'Checked In',     val: allCheckedIn.length, color: '#1a56e8' },
                 { label: 'On Time',        val: onTime,              color: '#10b981' },
                 { label: 'Late',           val: late,                color: '#f59e0b' },
                 { label: 'Half Day',       val: halfDay,             color: '#f97316' },
@@ -664,14 +666,61 @@ export default function Attendance() {
                         </tr>
                       ))}
 
-                      {allEmployees.length === 0 && (
-                        <tr><td colSpan={5} style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>No employees found</td></tr>
+                      {checkedIn.length === 0 && notCheckedIn.length === 0 && (
+                        <tr><td colSpan={5} style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
+                          {q ? 'No staff match your search' : 'No employees found'}
+                        </td></tr>
                       )}
                     </tbody>
                   </table>
                 </div>
               </div>
             )}
+
+            {/* Timing rules modal */}
+            <Modal open={showTimingForm} onClose={() => setShowTimingForm(false)} title="Attendance Timing Rules"
+              footer={<>
+                <button className="btn btn-secondary" onClick={() => setShowTimingForm(false)}>Cancel</button>
+                <button className="btn btn-primary" onClick={saveTimingConfig} disabled={savingTiming}>
+                  {savingTiming ? 'Saving...' : <><Save size={14} /> Save Rules</>}
+                </button>
+              </>}>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 0, marginBottom: 16 }}>
+                Set the check-in time thresholds used to mark staff as present, late or half-day.
+              </p>
+
+              {/* Active / Inactive toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 14px', border: '1px solid var(--border)', borderRadius: 10, background: '#f8fafc', marginBottom: 18 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>Staff Check-in</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>
+                    {timingForm.enabled ? 'Teachers can check in/out from their app.' : 'Check-in is hidden in the teacher app.'}
+                  </div>
+                </div>
+                <button type="button" onClick={() => setTimingForm(f => ({ ...f, enabled: !f.enabled }))}
+                  style={{ flexShrink: 0, width: 46, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer',
+                    background: timingForm.enabled ? 'var(--primary)' : '#cbd5e1', position: 'relative', transition: 'background 0.2s' }}>
+                  <span style={{ position: 'absolute', top: 3, left: timingForm.enabled ? 23 : 3, width: 20, height: 20, borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, opacity: timingForm.enabled ? 1 : 0.5, pointerEvents: timingForm.enabled ? 'auto' : 'none' }}>
+                {[
+                  { key: 'onTimeBy',      label: 'On time by (Present)' },
+                  { key: 'lateFrom',      label: 'Late starts from' },
+                  { key: 'halfDayFrom',   label: 'Half day starts from' },
+                  { key: 'schoolEndTime', label: 'School ends (auto check-out)' },
+                ].map(({ key, label }) => (
+                  <div key={key} className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: 13 }}>{label}</label>
+                    <AmPmTimePicker
+                      value={timingForm[key] || '10:00'}
+                      onChange={val => setTimingForm(f => ({ ...f, [key]: val }))}
+                    />
+                  </div>
+                ))}
+              </div>
+            </Modal>
           </div>
         );
       })()}
@@ -679,23 +728,27 @@ export default function Attendance() {
       {/* ── Leave Requests tab ──────────────────────────────────────────────── */}
       {tab === 'leaves' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Filter pills */}
-          <div style={{ display: 'flex', gap: 8 }}>
-            {['all', 'pending', 'approved', 'rejected'].map(f => (
-              <button key={f} onClick={() => setLeaveFilter(f)} style={{
-                padding: '6px 18px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                background: leaveFilter === f ? 'var(--primary)' : 'white',
-                color: leaveFilter === f ? '#fff' : 'var(--text-secondary)',
-                border: `1.5px solid ${leaveFilter === f ? 'var(--primary)' : 'var(--border)'}`,
-              }}>{f.charAt(0).toUpperCase() + f.slice(1)}</button>
-            ))}
+          {/* Search + status filter */}
+          <div className="filter-bar" style={{ margin: 0 }}>
+            <SearchInput value={search} onChange={setSearch} placeholder="Search by employee or reason..." />
+            <AntSelect
+              style={{ width: 170 }}
+              value={leaveFilter}
+              onChange={val => setLeaveFilter(val)}
+              options={[
+                { value: 'all',      label: 'All Status' },
+                { value: 'pending',  label: 'Pending' },
+                { value: 'approved', label: 'Approved' },
+                { value: 'rejected', label: 'Rejected' },
+              ]}
+            />
           </div>
 
-          {loadingLeaves ? <PageLoader /> : leaves.length === 0 ? (
+          {loadingLeaves ? <PageLoader /> : displayLeaves.length === 0 ? (
             <div className="card">
               <div className="empty-state">
                 <div className="empty-state-icon"><CheckCircle size={28} /></div>
-                <p>No {leaveFilter === 'all' ? '' : leaveFilter} leave requests</p>
+                <p>{leaveQuery ? 'No leave requests match your search' : `No ${leaveFilter === 'all' ? '' : leaveFilter} leave requests`}</p>
               </div>
             </div>
           ) : (
@@ -716,7 +769,7 @@ export default function Attendance() {
                     </tr>
                   </thead>
                   <tbody>
-                    {leaves.map((lv, idx) => {
+                    {displayLeaves.map((lv, idx) => {
                       const statusColor = { pending: '#f59e0b', approved: '#10b981', rejected: '#ef4444' }[lv.status];
                       const statusBg    = { pending: '#fffbeb', approved: '#f0fdf4', rejected: '#fef2f2' }[lv.status];
                       return (

@@ -75,33 +75,41 @@ const safeFormat = (dateVal, fmt) => {
 const statusColor = { sent: '#10b981', failed: '#ef4444', pending: '#f59e0b', delivered: '#1a56e8', undelivered: '#94a3b8' };
 const statusIcon  = { sent: CheckCircle, failed: XCircle, pending: Clock, delivered: CheckCircle, undelivered: XCircle };
 
-function SMSSetupGate({ onEnabled }) {
+// Twilio connection modal — opened from the "Connect Twilio" CTA. Pre-fills from
+// the current config so it doubles as a "Manage connection" editor.
+function ConnectTwilioModal({ config, onClose, onConnected }) {
   const qc = useQueryClient();
-  const [step, setStep]         = useState(1); // 1 = pick channels, 2 = credentials
-  const [smsOn, setSmsOn]       = useState(false);
-  const [waOn,  setWaOn]        = useState(false);
-  const [creds, setCreds]       = useState({ twilioSid: '', twilioToken: '', messagingServiceSid: '', whatsappNumber: '' });
+  const [smsOn, setSmsOn] = useState(!!config?.smsEnabled);
+  const [waOn,  setWaOn]  = useState(!!config?.whatsappEnabled);
+  const [creds, setCreds] = useState({
+    twilioSid:           config?.twilioSid || '',
+    twilioToken:         config?.twilioToken || '',
+    messagingServiceSid: config?.messagingServiceSid || '',
+    whatsappNumber:      config?.whatsappNumber || '',
+  });
 
   const saveMutation = useMutation({
     mutationFn: (d) => api.put('/sms/settings', d),
-    onSuccess: () => { qc.invalidateQueries(['sms-settings']); onEnabled(); },
-    onError:   () => {
-      // Even if the API call fails, still unlock the UI — user can fix credentials in Settings
-      qc.invalidateQueries(['sms-settings']);
-      onEnabled();
-    },
+    onSuccess: () => { qc.invalidateQueries(['sms-settings']); toast.success('Twilio connected!'); onConnected(); },
+    onError:   (err) => toast.error(err?.response?.data?.message || err.message || 'Failed to connect Twilio'),
   });
 
-  const handleFinish = () => {
-    saveMutation.mutate({ smsEnabled: smsOn, whatsappEnabled: waOn, ...creds, notifications: {} });
+  const handleConnect = () => {
+    if (!smsOn && !waOn) return toast.error('Enable at least one channel (SMS or WhatsApp)');
+    if (!creds.twilioSid || !creds.twilioToken) return toast.error('Account SID and Auth Token are required');
+    if (smsOn && !creds.messagingServiceSid) return toast.error('Messaging Service SID is required for SMS');
+    if (waOn && !creds.whatsappNumber) return toast.error('WhatsApp number is required for WhatsApp');
+    // Note: omit `notifications` so the dot-notation $set on the backend preserves
+    // any auto-notification messages already configured.
+    saveMutation.mutate({ smsEnabled: smsOn, whatsappEnabled: waOn, ...creds });
   };
 
   const channelCard = (icon, label, desc, color, bg, on, setOn) => (
     <div onClick={() => setOn(v => !v)}
-      style={{ flex: 1, padding: '20px 18px', borderRadius: 12, border: `2px solid ${on ? color : 'var(--border)'}`,
+      style={{ flex: 1, padding: '16px 16px', borderRadius: 12, border: `2px solid ${on ? color : 'var(--border)'}`,
         background: on ? bg : 'white', cursor: 'pointer', transition: 'all 0.18s', userSelect: 'none' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-        <div style={{ width: 40, height: 40, borderRadius: 10, background: on ? color : '#f1f5f9',
+        <div style={{ width: 38, height: 38, borderRadius: 10, background: on ? color : '#f1f5f9',
           display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.18s' }}>
           {icon}
         </div>
@@ -116,96 +124,62 @@ function SMSSetupGate({ onEnabled }) {
   );
 
   return (
-    <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: '100%', maxWidth: 520 }}>
-
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ width: 56, height: 56, borderRadius: 16, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
-            <MessageSquare size={26} color="var(--primary)" />
-          </div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 6px', letterSpacing: '-0.02em' }}>Set up SMS Services</h2>
-          <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>Choose your messaging channels and connect your Twilio account to get started.</p>
-        </div>
-
-        {/* Step indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 28 }}>
-          {[1, 2].map(s => (
-            <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700,
-                background: step >= s ? 'var(--primary)' : '#f1f5f9', color: step >= s ? 'white' : 'var(--text-muted)', transition: 'all 0.2s' }}>
-                {step > s ? <CheckCircle size={14} /> : s}
-              </div>
-              <span style={{ fontSize: 12, fontWeight: step === s ? 600 : 400, color: step === s ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                {s === 1 ? 'Choose Channels' : 'Connect Twilio'}
-              </span>
-              {s < 2 && <div style={{ width: 32, height: 1, background: 'var(--border)' }} />}
-            </div>
-          ))}
-        </div>
-
-        <div className="card" style={{ padding: 24 }}>
-          {step === 1 && (
-            <>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14, color: 'var(--text-primary)' }}>Which channels do you want to enable?</div>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-                {channelCard(<Smartphone size={20} color={smsOn ? 'white' : 'var(--text-muted)'} />, 'SMS', 'Send text messages via Twilio to any phone number.', 'var(--primary)', '#eff6ff', smsOn, setSmsOn)}
-                {channelCard(<MessageCircle size={20} color={waOn ? 'white' : 'var(--text-muted)'} />, 'WhatsApp', 'Send rich messages via WhatsApp Business API.', '#25d366', '#f0fdf4', waOn, setWaOn)}
-              </div>
-              <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
-                disabled={!smsOn && !waOn} onClick={() => setStep(2)}>
-                Continue →
-              </button>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16, color: 'var(--text-primary)' }}>Twilio Credentials</div>
-              <div className="form-group">
-                <label className="form-label">Account SID <span style={{ color: '#ef4444' }}>*</span></label>
-                <input className="form-control" type="password" placeholder="ACxxxxxxxxxxxxxxxx" value={creds.twilioSid} onChange={e => setCreds(p => ({ ...p, twilioSid: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Auth Token <span style={{ color: '#ef4444' }}>*</span></label>
-                <input className="form-control" type="password" placeholder="Your auth token" value={creds.twilioToken} onChange={e => setCreds(p => ({ ...p, twilioToken: e.target.value }))} />
-              </div>
-              {smsOn && (
-                <div className="form-group">
-                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Smartphone size={13} color="var(--primary)" /> Messaging Service SID <span style={{ color: '#ef4444' }}>*</span>
-                  </label>
-                  <input className="form-control" placeholder="MGxxxxxxxxxxxxxxxx" value={creds.messagingServiceSid} onChange={e => setCreds(p => ({ ...p, messagingServiceSid: e.target.value }))} />
-                </div>
-              )}
-              {waOn && (
-                <div className="form-group">
-                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <MessageCircle size={13} color="#25d366" /> WhatsApp Number <span style={{ color: '#ef4444' }}>*</span>
-                  </label>
-                  <input className="form-control" placeholder="+14155238886" value={creds.whatsappNumber} onChange={e => setCreds(p => ({ ...p, whatsappNumber: e.target.value }))} />
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Twilio sandbox: +14155238886</div>
-                </div>
-              )}
-              <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-                <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setStep(1)}>← Back</button>
-                <button className="btn btn-primary" style={{ flex: 2, justifyContent: 'center' }}
-                  onClick={handleFinish} disabled={saveMutation.isLoading}>
-                  {saveMutation.isLoading ? 'Saving…' : 'Enable & Get Started'}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+    <Modal open onClose={onClose} size="md"
+      title={<span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><MessageSquare size={16} color="var(--primary)" /> Connect Twilio</span>}
+      footer={
+        <>
+          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleConnect} disabled={saveMutation.isLoading}>
+            {saveMutation.isLoading ? 'Connecting…' : 'Connect & Enable'}
+          </button>
+        </>
+      }>
+      <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.5 }}>
+        Choose the channels you want to send through, then enter your Twilio credentials. Once connected you can start sending messages.
       </div>
-    </div>
+
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: 'var(--text-primary)' }}>Channels</div>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+        {channelCard(<Smartphone size={19} color={smsOn ? 'white' : 'var(--text-muted)'} />, 'SMS', 'Send text messages via Twilio to any phone number.', 'var(--primary)', '#eff6ff', smsOn, setSmsOn)}
+        {channelCard(<MessageCircle size={19} color={waOn ? 'white' : 'var(--text-muted)'} />, 'WhatsApp', 'Send rich messages via WhatsApp Business API.', '#25d366', '#f0fdf4', waOn, setWaOn)}
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text-primary)' }}>Twilio Credentials</div>
+      <FormRow>
+        <div className="form-group">
+          <label className="form-label">Account SID <span style={{ color: '#ef4444' }}>*</span></label>
+          <input className="form-control" type="password" placeholder="ACxxxxxxxxxxxxxxxx" value={creds.twilioSid} onChange={e => setCreds(p => ({ ...p, twilioSid: e.target.value }))} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Auth Token <span style={{ color: '#ef4444' }}>*</span></label>
+          <input className="form-control" type="password" placeholder="Your auth token" value={creds.twilioToken} onChange={e => setCreds(p => ({ ...p, twilioToken: e.target.value }))} />
+        </div>
+      </FormRow>
+      {smsOn && (
+        <div className="form-group">
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Smartphone size={13} color="var(--primary)" /> Messaging Service SID <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <input className="form-control" placeholder="MGxxxxxxxxxxxxxxxx" value={creds.messagingServiceSid} onChange={e => setCreds(p => ({ ...p, messagingServiceSid: e.target.value }))} />
+        </div>
+      )}
+      {waOn && (
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <MessageCircle size={13} color="#25d366" /> WhatsApp Number <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <input className="form-control" placeholder="+14155238886" value={creds.whatsappNumber} onChange={e => setCreds(p => ({ ...p, whatsappNumber: e.target.value }))} />
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Twilio sandbox: +14155238886</div>
+        </div>
+      )}
+    </Modal>
   );
 }
 
 export default function SMS() {
   const qc = useQueryClient();
-  const [tab, setTab]           = useState('compose');
-  const [unlocked, setUnlocked] = useState(false); // instantly unlocks after setup
+  const [tab, setTab]               = useState('compose');
+  const [connectOpen, setConnectOpen] = useState(false);
 
   const { data: settingsData, isLoading: settingsLoading } = useQuery({
     queryKey: ['sms-settings'],
@@ -215,32 +189,49 @@ export default function SMS() {
   const cfg        = settingsData?.smsConfig || {};
   const smsEnabled = !!cfg.smsEnabled;
   const waEnabled  = !!cfg.whatsappEnabled;
-  const isEnabled  = unlocked || smsEnabled || waEnabled;
+  const connected  = smsEnabled || waEnabled;
 
   if (settingsLoading) return <PageLoader />;
 
-  if (!isEnabled) {
-    return (
-      <div>
-        <div className="page-header">
-          <div>
-            <h1 className="page-title">SMS Services</h1>
-            <p className="page-subtitle">Manage notifications, templates, and bulk messaging</p>
-          </div>
-        </div>
-        <SMSSetupGate onEnabled={() => { setUnlocked(true); qc.invalidateQueries(['sms-settings']); }} />
-      </div>
-    );
-  }
-
   return (
     <div>
-      <div className="page-header">
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h1 className="page-title">SMS Services</h1>
           <p className="page-subtitle">Manage notifications, templates, and bulk messaging</p>
         </div>
+        {/* Connection status / CTA */}
+        {connected ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#10b981', background: '#ecfdf5', border: '1px solid #a7f3d0', padding: '5px 11px', borderRadius: 20 }}>
+              <CheckCircle size={13} /> Twilio Connected
+            </span>
+            <button className="btn btn-secondary btn-sm" onClick={() => setConnectOpen(true)}>
+              <Settings size={13} /> Manage
+            </button>
+          </div>
+        ) : (
+          <button className="btn btn-primary" onClick={() => setConnectOpen(true)}>
+            <MessageSquare size={15} /> Connect Twilio
+          </button>
+        )}
       </div>
+
+      {/* Not-connected banner */}
+      {!connected && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', marginBottom: 20, borderRadius: 12, background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <AlertCircle size={18} color="var(--primary)" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Connect Twilio to start sending</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 1 }}>You can compose messages and build templates now — connect your Twilio account to actually send them.</div>
+          </div>
+          <button className="btn btn-primary btn-sm" style={{ flexShrink: 0 }} onClick={() => setConnectOpen(true)}>
+            <MessageSquare size={13} /> Connect Twilio
+          </button>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 4, marginBottom: 24, background: 'white', padding: 6, borderRadius: 12, border: '1px solid var(--border)', width: 'fit-content' }}>
         {TABS.map(t => {
@@ -261,10 +252,18 @@ export default function SMS() {
         })}
       </div>
 
-      {tab === 'compose'   && <ComposeTab smsEnabled={smsEnabled} waEnabled={waEnabled} />}
+      {tab === 'compose'   && <ComposeTab smsEnabled={smsEnabled} waEnabled={waEnabled} connected={connected} onConnect={() => setConnectOpen(true)} />}
       {tab === 'templates' && <TemplatesTab />}
       {tab === 'logs'      && <LogsTab />}
       {tab === 'settings'  && <SettingsTab />}
+
+      {connectOpen && (
+        <ConnectTwilioModal
+          config={cfg}
+          onClose={() => setConnectOpen(false)}
+          onConnected={() => { setConnectOpen(false); qc.invalidateQueries(['sms-settings']); }}
+        />
+      )}
     </div>
   );
 }
@@ -664,6 +663,65 @@ function PersonMultiSelect({ queryKey, endpoint, responseKey, value = [], onChan
   );
 }
 
+// ── Live Phone Preview ────────────────────────────────────────────────────────
+// A small phone mockup showing how the composed message lands on a recipient's
+// device — styled per channel (SMS bubble vs. WhatsApp bubble).
+function PhonePreview({ channel, message, schoolName }) {
+  const isWa   = channel === 'whatsapp';
+  const isBoth = channel === 'both';
+  const time   = new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const empty  = !message.trim();
+  const body   = empty ? 'Your message preview will appear here as you type…' : message;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
+        {isBoth ? 'SMS + WhatsApp Preview' : isWa ? 'WhatsApp Preview' : 'SMS Preview'}
+      </div>
+
+      {/* Phone frame */}
+      <div style={{ width: 268, border: '9px solid #1e293b', borderRadius: 38, overflow: 'hidden', boxShadow: 'var(--shadow-md)', background: '#1e293b' }}>
+        {/* Notch */}
+        <div style={{ height: 20, background: '#1e293b', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div style={{ width: 74, height: 5, borderRadius: 6, background: '#0f172a' }} />
+        </div>
+
+        {/* Screen */}
+        <div style={{ height: 408, background: isWa ? '#e5ddd5' : '#f1f5f9', display: 'flex', flexDirection: 'column' }}>
+          {/* App header */}
+          <div style={{ background: isWa ? '#075e54' : '#f8fafc', borderBottom: isWa ? 'none' : '1px solid #e2e8f0', padding: '9px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ChevronLeft size={16} color={isWa ? 'white' : 'var(--primary)'} style={{ flexShrink: 0 }} />
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: isWa ? 'rgba(255,255,255,0.22)' : '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {isWa ? <MessageCircle size={15} color="white" /> : <Smartphone size={14} color="var(--text-muted)" />}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: isWa ? 'white' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{schoolName}</div>
+              <div style={{ fontSize: 10, color: isWa ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)' }}>{isWa ? 'online' : 'Text Message'}</div>
+            </div>
+          </div>
+
+          {/* Conversation */}
+          <div style={{ flex: 1, padding: '14px 12px', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+              <span style={{ fontSize: 10, background: isWa ? 'rgba(255,255,255,0.75)' : '#e2e8f0', color: 'var(--text-muted)', padding: '2px 10px', borderRadius: 10 }}>Today</span>
+            </div>
+            <div style={{ display: 'flex' }}>
+              <div style={{ maxWidth: '88%', background: isWa ? 'white' : '#e9e9eb', color: empty ? 'var(--text-muted)' : '#0f172a', padding: '8px 11px', borderRadius: isWa ? '0 9px 9px 9px' : 14, fontSize: 12.5, lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word', boxShadow: isWa ? '0 1px 0.5px rgba(0,0,0,0.13)' : 'none', fontStyle: empty ? 'italic' : 'normal' }}>
+                {body}
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'right', marginTop: 3 }}>{time}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, textAlign: 'center' }}>
+        How recipients will see your message
+      </div>
+    </div>
+  );
+}
+
 // ── Compose ───────────────────────────────────────────────────────────────────
 const GROUPS_WITH_SUBTYPE = ['students', 'parents', 'teachers', 'staff'];
 
@@ -674,7 +732,7 @@ const PERSON_MULTISELECT_CONFIG = {
   staff:    { queryKey: 'search-staff',    endpoint: '/employees',                          responseKey: 'employees', placeholder: 'Search staff name...' },
 };
 
-function ComposeTab({ smsEnabled = true, waEnabled = false }) {
+function ComposeTab({ smsEnabled = true, waEnabled = false, connected = true, onConnect }) {
   const [targetGroup, setTargetGroup]     = useState('students');
   const [targetSubtype, setTargetSubtype] = useState('all');   // 'all' | 'selected'
   const [selectedPeople, setSelectedPeople] = useState([]);
@@ -685,7 +743,7 @@ function ComposeTab({ smsEnabled = true, waEnabled = false }) {
   const [scheduledAt, setScheduledAt]     = useState('');
   const [pickerOpen,  setPickerOpen]      = useState(false);
   const [templateId, setTemplateId]       = useState('');
-  const [channel, setChannel]             = useState(() => smsEnabled ? 'sms' : 'whatsapp');
+  const [channel, setChannel]             = useState(() => (!smsEnabled && waEnabled) ? 'whatsapp' : 'sms');
   const [sending, setSending]             = useState(false);
 
   // If the active channel gets disabled in settings, fall back to an available one
@@ -697,8 +755,10 @@ function ComposeTab({ smsEnabled = true, waEnabled = false }) {
 
   const { data: classesData }   = useQuery({ queryKey: ['classes'],       queryFn: () => api.get('/classes') });
   const { data: templatesData } = useQuery({ queryKey: ['sms-templates'], queryFn: () => api.get('/sms/templates') });
-  const classes   = classesData?.classes || [];
-  const templates = templatesData?.templates || [];
+  const { data: schoolData }    = useQuery({ queryKey: ['school'],        queryFn: () => api.get('/school') });
+  const classes    = classesData?.classes || [];
+  const templates  = templatesData?.templates || [];
+  const schoolName = schoolData?.school?.name || 'Your School';
 
   // Character limits per Twilio
   const MAX_SMS_CHARS = 1600;
@@ -729,6 +789,7 @@ function ComposeTab({ smsEnabled = true, waEnabled = false }) {
   };
 
   const handleSend = async () => {
+    if (!connected) { onConnect?.(); return toast.error('Connect Twilio to send messages'); }
     if (!message.trim()) return toast.error('Message cannot be empty');
     if (isOverLimit) return toast.error(`Message exceeds ${maxChars.toLocaleString()} character limit`);
     // Validate target selection completeness
@@ -752,8 +813,27 @@ function ComposeTab({ smsEnabled = true, waEnabled = false }) {
 
   const msConfig = PERSON_MULTISELECT_CONFIG[targetGroup];
 
+  // ── Live recipients (senders) list ──────────────────────────────────────────
+  // Is the current audience selection complete enough to resolve recipients?
+  const targetReady = (() => {
+    if (targetGroup === 'class')         return !!classFilter.className;
+    if (targetGroup === 'class_section') return !!classFilter.classId;
+    if (GROUPS_WITH_SUBTYPE.includes(targetGroup) && targetSubtype === 'selected') return selectedPeople.length > 0;
+    return true; // everyone, or all_<group>
+  })();
+
+  const apiTarget = getApiTarget();
+  const { data: previewData, isFetching: previewLoading } = useQuery({
+    queryKey: ['sms-recipients', apiTarget.targetType, JSON.stringify(apiTarget.targetFilter)],
+    queryFn: () => api.post('/sms/recipients/preview', apiTarget),
+    enabled: targetReady,
+    keepPreviousData: true,
+  });
+  const recipients      = previewData?.recipients || [];
+  const totalRecipients = previewData?.total || 0;
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20 }}>
       <div>
         {/* Target audience + Channel */}
         <div className="card" style={{ padding: 20, marginBottom: 16 }}>
@@ -830,23 +910,75 @@ function ComposeTab({ smsEnabled = true, waEnabled = false }) {
             {/* Channel */}
             <div style={{ minWidth: 152 }}>
               <h3 className="text-14-semibold" style={{ marginBottom: 12 }}>Channel</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {[
-                  { value: 'sms',      label: 'SMS',      icon: Smartphone,    color: 'var(--primary)', bg: '#eff6ff', show: smsEnabled },
-                  { value: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, color: '#25d366',        bg: '#f0fdf4', show: waEnabled  },
-                  { value: 'both',     label: 'Both',     icon: Send,          color: '#f59e0b',        bg: '#fffbeb', show: smsEnabled && waEnabled },
-                ].filter(c => c.show).map(c => {
-                  const Icon = c.icon;
-                  const active = channel === c.value;
-                  return (
-                    <button key={c.value} type="button" onClick={() => setChannel(c.value)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 8, border: `1.5px solid ${active ? c.color : 'var(--border)'}`, background: active ? c.bg : 'white', cursor: 'pointer', fontSize: 13, fontWeight: active ? 600 : 400, color: active ? c.color : 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                      <Icon size={14} /> {c.label}
-                    </button>
-                  );
-                })}
-              </div>
+              {connected ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {[
+                    { value: 'sms',      label: 'SMS',      icon: Smartphone,    color: 'var(--primary)', bg: '#eff6ff', show: smsEnabled },
+                    { value: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, color: '#25d366',        bg: '#f0fdf4', show: waEnabled  },
+                    { value: 'both',     label: 'Both',     icon: Send,          color: '#f59e0b',        bg: '#fffbeb', show: smsEnabled && waEnabled },
+                  ].filter(c => c.show).map(c => {
+                    const Icon = c.icon;
+                    const active = channel === c.value;
+                    return (
+                      <button key={c.value} type="button" onClick={() => setChannel(c.value)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 8, border: `1.5px solid ${active ? c.color : 'var(--border)'}`, background: active ? c.bg : 'white', cursor: 'pointer', fontSize: 13, fontWeight: active ? 600 : 400, color: active ? c.color : 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                        <Icon size={14} /> {c.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ padding: '12px 14px', borderRadius: 8, border: '1px dashed var(--border)', background: '#f8fafc', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  No channel connected.
+                  <button type="button" onClick={onConnect} style={{ display: 'block', marginTop: 6, background: 'none', border: 'none', padding: 0, color: 'var(--primary)', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                    Connect Twilio →
+                  </button>
+                </div>
+              )}
             </div>
+          </div>
+        </div>
+
+        {/* Recipients (senders) list */}
+        <div className="card" style={{ padding: 0, marginBottom: 16, overflow: 'hidden' }}>
+          <div style={{ padding: '13px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Users size={15} color="var(--primary)" />
+              <span className="text-14-semibold">Recipients</span>
+            </div>
+            {targetReady && (
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary)', background: '#eff6ff', padding: '3px 11px', borderRadius: 20, fontVariantNumeric: 'tabular-nums' }}>
+                {previewLoading && recipients.length === 0 ? '…' : `${totalRecipients.toLocaleString()} ${totalRecipients === 1 ? 'number' : 'numbers'}`}
+              </span>
+            )}
+          </div>
+          <div style={{ maxHeight: 224, overflowY: 'auto' }}>
+            {!targetReady ? (
+              <div style={{ padding: '20px 18px', fontSize: 12.5, color: 'var(--text-muted)' }}>Select an audience above to see who will receive this message.</div>
+            ) : previewLoading && recipients.length === 0 ? (
+              <div style={{ padding: '20px 18px', fontSize: 12.5, color: 'var(--text-muted)' }}>Loading recipients…</div>
+            ) : totalRecipients === 0 ? (
+              <div style={{ padding: '20px 18px', fontSize: 12.5, color: 'var(--text-muted)' }}>No recipients with a mobile number match this selection.</div>
+            ) : (
+              <>
+                {recipients.map((r, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 18px', borderBottom: '1px solid #f1f5f9' }}>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#eff6ff', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                      {(r.name || '?').charAt(0).toUpperCase()}
+                    </div>
+                    <div style={{ minWidth: 0, flex: 1, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {r.name || 'Unknown'}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{r.phone}</div>
+                  </div>
+                ))}
+                {totalRecipients > recipients.length && (
+                  <div style={{ padding: '10px 18px', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
+                    + {(totalRecipients - recipients.length).toLocaleString()} more recipient{totalRecipients - recipients.length === 1 ? '' : 's'}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
 
@@ -915,15 +1047,28 @@ function ComposeTab({ smsEnabled = true, waEnabled = false }) {
           </div>
         </div>
 
-        <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px' }}
-          onClick={handleSend} disabled={sending || isOverLimit}>
-          <Send size={16} /> {sending ? 'Sending...' : (scheduleMode && scheduledAt) ? 'Schedule Send' : 'Send Now'}
-        </button>
+        {connected ? (
+          <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px' }}
+            onClick={handleSend} disabled={sending || isOverLimit}>
+            <Send size={16} /> {sending ? 'Sending...' : (scheduleMode && scheduledAt) ? 'Schedule Send' : 'Send Now'}
+          </button>
+        ) : (
+          <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px' }}
+            onClick={onConnect}>
+            <MessageSquare size={16} /> Connect Twilio to Send
+          </button>
+        )}
       </div>
 
-      {/* Templates sidebar */}
-      <div>
-        <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 220px)', position: 'sticky', top: 20 }}>
+      {/* Right rail — live phone preview + quick templates */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 20, alignSelf: 'start' }}>
+        {/* Live phone preview */}
+        <div className="card" style={{ padding: 18 }}>
+          <PhonePreview channel={channel} message={message} schoolName={schoolName} />
+        </div>
+
+        {/* Quick templates */}
+        <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', maxHeight: 360 }}>
           <h3 className="text-14-semibold" style={{ marginBottom: 12, flexShrink: 0 }}>Quick Templates</h3>
           {templates.length === 0 && <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No templates yet. Create one in the Templates tab.</p>}
           <div style={{ overflowY: 'auto', flex: 1 }}>

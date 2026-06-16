@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { ConfigProvider } from 'antd';
 import { AuthProvider } from './store/AuthContext';
+import { YearProvider } from './store/YearContext';
 import App from './App';
 import './i18n/index';
 import './styles/global.css';
@@ -44,8 +45,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <QueryClientProvider client={queryClient}>
         <ConfigProvider theme={antdTheme}>
           <AuthProvider>
-            <App />
-            <Toaster position="top-right" toastOptions={{ duration: 4000, style: { fontFamily: 'Inter, sans-serif', fontSize: 14 } }} />
+            <YearProvider>
+              <App />
+              <Toaster position="top-right" toastOptions={{ duration: 4000, style: { fontFamily: 'Inter, sans-serif', fontSize: 14 } }} />
+            </YearProvider>
           </AuthProvider>
         </ConfigProvider>
       </QueryClientProvider>

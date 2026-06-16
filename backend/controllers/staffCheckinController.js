@@ -109,6 +109,9 @@ const checkIn = async (req, res) => {
     // Enforce check-in window: only between onTimeBy and schoolEndTime
     const school   = await School.findById(schoolId).select('staffAttendanceTiming');
     const timing   = school?.staffAttendanceTiming || {};
+    if (timing.enabled === false) {
+      return res.status(403).json({ success: false, code: 'CHECKIN_DISABLED', message: 'Staff check-in is turned off for your school.' });
+    }
     const startMin = toMinutes(timing.onTimeBy    || '10:00');
     const endMin   = toMinutes(timing.schoolEndTime || '16:00');
     const now      = new Date();
