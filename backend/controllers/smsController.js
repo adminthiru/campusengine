@@ -81,7 +81,7 @@ const createTemplate = async (req, res) => {
 
 const updateTemplate = async (req, res) => {
   try {
-    const template = await SmsTemplate.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, req.body, { new: true });
+    const template = await SmsTemplate.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, req.body, { returnDocument: 'after' });
     if (!template) return res.status(404).json({ success: false, message: 'Not found' });
     res.json({ success: true, template });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -152,7 +152,7 @@ const cancelScheduled = async (req, res) => {
     const campaign = await SmsCampaign.findOneAndUpdate(
       { _id: req.params.id, school: req.user.school, status: 'scheduled' },
       { status: 'cancelled', $push: { statusHistory: { status: 'cancelled', at: new Date(), note: 'Cancelled by user' } } },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!campaign) return res.status(404).json({ success: false, message: 'Scheduled send not found' });
     res.json({ success: true, campaign });

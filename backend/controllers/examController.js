@@ -114,7 +114,7 @@ const getExams = async (req, res) => {
 const updateExam = async (req, res) => {
   try {
     const exam = await Exam.findOneAndUpdate(
-      { _id: req.params.id, school: req.user.school }, req.body, { new: true }
+      { _id: req.params.id, school: req.user.school }, req.body, { returnDocument: 'after' }
     );
     // Cascade unpublish to all results when reverting
     if (req.body.isResultPublished === false) {
@@ -217,7 +217,7 @@ const publishResults = async (req, res) => {
     const { examId } = req.params;
     const exam = await Exam.findOneAndUpdate(
       { _id: examId, school: req.user.school },
-      { isResultPublished: true, status: 'completed' }, { new: true }
+      { isResultPublished: true, status: 'completed' }, { returnDocument: 'after' }
     );
     await ExamResult.updateMany({ exam: examId, school: req.user.school }, { isPublished: true });
 

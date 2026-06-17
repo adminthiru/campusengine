@@ -169,7 +169,7 @@ const changePassword = async (req, res) => {
 const updateProfile = async (req, res) => {
   try {
     const { name, phone, language, avatar } = req.body;
-    const user = await User.findByIdAndUpdate(req.user._id, { name, phone, language, avatar }, { new: true }).select('-password');
+    const user = await User.findByIdAndUpdate(req.user._id, { name, phone, language, avatar }, { returnDocument: 'after' }).select('-password');
     res.json({ success: true, user });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

@@ -92,7 +92,7 @@ const saveTimetable = async (req, res) => {
     const timetable = await Timetable.findOneAndUpdate(
       { school: schoolId, class: classId, academicYear },
       { school: schoolId, class: classId, academicYear, term, schedule, isActive: true },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     ).populate('class', 'name section')
      .populate('schedule.periods.subject', 'name code color')
      .populate('schedule.periods.teacher', 'name');

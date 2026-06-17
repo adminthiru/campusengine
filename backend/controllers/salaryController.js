@@ -33,7 +33,7 @@ const syncAdvanceExpense = async ({ school, employeeId, employeeName, advanceAmo
         billNumber: slipNumber,
       }
     },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: 'after' }
   );
 };
 
@@ -212,7 +212,7 @@ const updateSalary = async (req, res) => {
   try {
     const salary = await Salary.findOneAndUpdate(
       { _id: req.params.id, school: req.user.school },
-      req.body, { new: true }
+      req.body, { returnDocument: 'after' }
     ).populate('employee', 'name employeeId');
     if (!salary) return res.status(404).json({ success: false, message: 'Not found' });
 
@@ -451,7 +451,7 @@ const recalculateSalary = async (req, res) => {
       earnings: { basic, hra, da, otherAllowances: other, overtime: existing.earnings?.overtime || 0, bonus: existing.earnings?.bonus || 0 },
       deductions: { pf, esi, tax: existing.deductions?.tax || 0, loan: existing.deductions?.loan || 0, lossOfPay: lop, other: existing.deductions?.other || 0 },
       grossSalary, totalDeductions, netSalary
-    }, { new: true }).populate('employee', 'name employeeId role');
+    }, { returnDocument: 'after' }).populate('employee', 'name employeeId role');
 
     res.json({ success: true, salary: updated });
   } catch (err) {

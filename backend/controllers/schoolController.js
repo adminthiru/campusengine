@@ -12,7 +12,7 @@ const setupSchool = async (req, res) => {
   try {
     const schoolId = req.user.school;
     const updateData = { ...req.body, profileCompleted: true };
-    const school = await School.findByIdAndUpdate(schoolId, updateData, { new: true, runValidators: true });
+    const school = await School.findByIdAndUpdate(schoolId, updateData, { returnDocument: 'after', runValidators: true });
     res.json({ success: true, school });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -32,7 +32,7 @@ const getSchool = async (req, res) => {
 // Update school
 const updateSchool = async (req, res) => {
   try {
-    const school = await School.findByIdAndUpdate(req.user.school, req.body, { new: true });
+    const school = await School.findByIdAndUpdate(req.user.school, req.body, { returnDocument: 'after' });
     res.json({ success: true, school });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

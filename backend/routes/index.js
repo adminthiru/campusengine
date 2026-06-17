@@ -95,7 +95,7 @@ router.get('/school/pdf-preview', protect, authorize('admin', 'correspondent', '
 // Grade config
 router.put('/school/grade-config', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
   try {
-    const school = await School.findByIdAndUpdate(req.user.school, { gradeConfig: req.body }, { new: true });
+    const school = await School.findByIdAndUpdate(req.user.school, { gradeConfig: req.body }, { returnDocument: 'after' });
     res.json({ success: true, school });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -103,7 +103,7 @@ router.put('/school/grade-config', protect, authorize('admin', 'correspondent', 
 // Leave config
 router.put('/school/leave-config', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
   try {
-    const school = await School.findByIdAndUpdate(req.user.school, { leaveTypes: req.body.leaveTypes }, { new: true });
+    const school = await School.findByIdAndUpdate(req.user.school, { leaveTypes: req.body.leaveTypes }, { returnDocument: 'after' });
     res.json({ success: true, school });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -146,7 +146,7 @@ router.put('/school/academic-year', protect, authorize('admin', 'correspondent',
     if (startMonth != null) update['academicYear.startMonth'] = Number(startMonth);
     if (endMonth != null) update['academicYear.endMonth'] = Number(endMonth);
     if (current != null) update['academicYear.current'] = current;
-    const school = await School.findByIdAndUpdate(req.user.school, update, { new: true });
+    const school = await School.findByIdAndUpdate(req.user.school, update, { returnDocument: 'after' });
 
     // Re-derive existing records' academicYear from their dates under the new
     // boundary so changing the start/end months never strands historical data.
@@ -163,7 +163,7 @@ router.put('/school/academic-year', protect, authorize('admin', 'correspondent',
 
 router.put('/school/fee-terms', protect, authorize('admin', 'correspondent'), async (req, res) => {
   try {
-    const school = await School.findByIdAndUpdate(req.user.school, { feeTerms: req.body.feeTerms }, { new: true });
+    const school = await School.findByIdAndUpdate(req.user.school, { feeTerms: req.body.feeTerms }, { returnDocument: 'after' });
     res.json({ success: true, school });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -174,7 +174,7 @@ router.put('/school/staff-attendance-timing', protect, authorize('admin', 'corre
     const school = await School.findByIdAndUpdate(
       req.user.school,
       { staffAttendanceTiming: { onTimeBy, lateFrom, halfDayFrom, schoolEndTime, enabled: enabled !== false, configured: true } },
-      { new: true }
+      { returnDocument: 'after' }
     );
     res.json({ success: true, school });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -350,7 +350,7 @@ const StudentLeave = require('../models/StudentLeave');
 // Parent permissions update
 router.put('/school/parent-permissions', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
   try {
-    const school = await School.findByIdAndUpdate(req.user.school, { parentPermissions: req.body }, { new: true });
+    const school = await School.findByIdAndUpdate(req.user.school, { parentPermissions: req.body }, { returnDocument: 'after' });
     res.json({ success: true, school });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -419,7 +419,7 @@ router.put('/student-leaves/:id', protect, authorize('admin', 'correspondent', '
     const leave = await StudentLeave.findOneAndUpdate(
       { _id: req.params.id, school: req.user.school },
       { status, adminNote: adminNote || '', approvedBy: req.user._id, approvedAt: new Date() },
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('student', 'name admissionNumber').populate('parent', 'name phone');
     if (!leave) return res.status(404).json({ success: false, message: 'Not found' });
     res.json({ success: true, leave });
@@ -431,7 +431,7 @@ router.put('/student-leaves/:id', protect, authorize('admin', 'correspondent', '
 // Student permissions update
 router.put('/school/student-permissions', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
   try {
-    const school = await School.findByIdAndUpdate(req.user.school, { studentPermissions: req.body }, { new: true });
+    const school = await School.findByIdAndUpdate(req.user.school, { studentPermissions: req.body }, { returnDocument: 'after' });
     res.json({ success: true, school });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -520,7 +520,7 @@ router.put('/classes/:id', protect, checkSubscription, async (req, res) => {
     const $unset = {};
     if (classTeacher) $set.classTeacher = classTeacher; else $unset.classTeacher = '';
     const update = Object.keys($unset).length ? { $set, $unset } : { $set };
-    const cls = await Class.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, update, { new: true });
+    const cls = await Class.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, update, { returnDocument: 'after' });
     // Sync Subject.classes — remove this class from all subjects then re-add selected ones
     if (subjects !== undefined) {
       await Subject.updateMany({ school: req.user.school }, { $pull: { classes: cls._id } });
@@ -562,7 +562,7 @@ router.post('/subjects', protect, checkSubscription, authorize('admin', 'corresp
 });
 router.put('/subjects/:id', protect, checkSubscription, async (req, res) => {
   try {
-    const subject = await Subject.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, req.body, { new: true });
+    const subject = await Subject.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, req.body, { returnDocument: 'after' });
     res.json({ success: true, subject });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -776,7 +776,7 @@ router.post('/timetable/substitutions', protect, checkSubscription, async (req, 
     const sub = await Substitution.findOneAndUpdate(
       { school: req.user.school, date: dateObj, absentTeacher: absentTeacherId, periodNumber: Number(periodNumber) },
       { $set: { substituteTeacher: substituteTeacherId, classRef: classId || null, subject: subjectId || null, academicYear, note: note || '', school: req.user.school, date: dateObj, absentTeacher: absentTeacherId, periodNumber: Number(periodNumber) } },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     ).populate('substituteTeacher', 'name designation department');
     res.json({ success: true, substitution: sub });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -825,7 +825,7 @@ router.post('/calendar', protect, authorize('admin', 'correspondent', 'principal
 router.put('/calendar/:id', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
   try {
     const event = await SchoolCalendar.findOneAndUpdate(
-      { _id: req.params.id, school: req.user.school }, req.body, { new: true }
+      { _id: req.params.id, school: req.user.school }, req.body, { returnDocument: 'after' }
     );
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
     res.json({ success: true, event });
@@ -909,7 +909,7 @@ router.post('/expenses', protect, checkSubscription, authorize('admin', 'corresp
 });
 router.put('/expenses/:id', protect, async (req, res) => {
   try {
-    const exp = await Expense.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, req.body, { new: true });
+    const exp = await Expense.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, req.body, { returnDocument: 'after' });
     res.json({ success: true, expense: exp });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -965,7 +965,7 @@ router.post('/transport', protect, authorize('admin', 'correspondent'), async (r
 router.put('/transport/:id', protect, authorize('admin', 'correspondent'), async (req, res) => {
   try {
     const route = await Transport.findOneAndUpdate(
-      { _id: req.params.id, school: req.user.school }, req.body, { new: true }
+      { _id: req.params.id, school: req.user.school }, req.body, { returnDocument: 'after' }
     );
     if (!route) return res.status(404).json({ success: false, message: 'Not found' });
     res.json({ success: true, route });
@@ -1103,7 +1103,7 @@ router.put('/homework/:id/submissions/:studentId', protect, checkSubscription, a
     const sub = await HomeworkSubmission.findOneAndUpdate(
       { homework: req.params.id, student: req.params.studentId, school: req.user.school },
       { $set: { status, note: note || '', submittedAt: status === 'completed' ? new Date() : undefined, school: req.user.school, homework: req.params.id, student: req.params.studentId } },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     ).populate('student', 'name admissionNumber');
 
     // Auto-complete or auto-revert homework based on all student statuses
@@ -1141,7 +1141,7 @@ router.post('/homework/:id/submissions/:studentId/attachment', protect, checkSub
         $set: { school: req.user.school, homework: req.params.id, student: req.params.studentId },
         $push: { attachments: { url: fileUrl, name: req.file.originalname, fileType, uploadedAt: new Date() } },
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     ).populate('student', 'name admissionNumber');
     res.json({ success: true, submission: sub });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -1153,7 +1153,7 @@ router.delete('/homework/:id/submissions/:studentId/attachment/:attachmentId', p
     const sub = await HomeworkSubmission.findOneAndUpdate(
       { homework: req.params.id, student: req.params.studentId, school: req.user.school },
       { $pull: { attachments: { _id: req.params.attachmentId } } },
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('student', 'name admissionNumber');
     if (!sub) return res.status(404).json({ success: false, message: 'Submission not found' });
     res.json({ success: true, submission: sub });
@@ -1170,7 +1170,7 @@ router.post('/homework/:id/submit', protect, async (req, res) => {
     const sub = await HomeworkSubmission.findOneAndUpdate(
       { homework: req.params.id, student: studentId, school: req.user.school },
       { $set: { status, note: note || '', submittedAt: status === 'completed' ? new Date() : undefined, school: req.user.school, homework: req.params.id, student: studentId } },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     ).populate('student', 'name admissionNumber');
     res.json({ success: true, submission: sub });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -1235,7 +1235,7 @@ router.put('/homework/:id', protect, checkSubscription, authorize('admin', 'corr
   try {
     const Homework = require('../models/Homework');
     const hw = await Homework.findOneAndUpdate(
-      { _id: req.params.id, school: req.user.school }, req.body, { new: true }
+      { _id: req.params.id, school: req.user.school }, req.body, { returnDocument: 'after' }
     ).populate('class', 'name section').populate('subject', 'name color').populate('students', 'name admissionNumber').populate('createdBy', 'name');
     if (!hw) return res.status(404).json({ success: false, message: 'Not found' });
     res.json({ success: true, homework: hw });
@@ -1300,7 +1300,7 @@ router.get('/super-admin/stats', protect, authorize('super_admin'), async (req, 
 
 router.put('/super-admin/schools/:id/subscription', protect, authorize('super_admin'), async (req, res) => {
   try {
-    const school = await School.findByIdAndUpdate(req.params.id, { subscription: req.body }, { new: true });
+    const school = await School.findByIdAndUpdate(req.params.id, { subscription: req.body }, { returnDocument: 'after' });
     res.json({ success: true, school });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -1556,7 +1556,7 @@ router.put('/school/expense-categories', protect, authorize('admin', 'correspond
   try {
     const { categories } = req.body;
     if (!Array.isArray(categories)) return res.status(400).json({ success: false, message: 'categories must be an array' });
-    const school = await School.findByIdAndUpdate(req.user.school, { expenseCategories: categories }, { new: true });
+    const school = await School.findByIdAndUpdate(req.user.school, { expenseCategories: categories }, { returnDocument: 'after' });
     res.json({ success: true, school });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -1565,7 +1565,7 @@ router.put('/school/inventory-categories', protect, authorize('admin', 'correspo
   try {
     const { categories } = req.body;
     if (!Array.isArray(categories)) return res.status(400).json({ success: false, message: 'categories must be an array' });
-    const school = await School.findByIdAndUpdate(req.user.school, { inventoryCategories: categories }, { new: true });
+    const school = await School.findByIdAndUpdate(req.user.school, { inventoryCategories: categories }, { returnDocument: 'after' });
     res.json({ success: true, school });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -1574,7 +1574,7 @@ router.put('/school/inventory-locations', protect, authorize('admin', 'correspon
   try {
     const { locations } = req.body;
     if (!Array.isArray(locations)) return res.status(400).json({ success: false, message: 'locations must be an array' });
-    const school = await School.findByIdAndUpdate(req.user.school, { inventoryLocations: locations }, { new: true });
+    const school = await School.findByIdAndUpdate(req.user.school, { inventoryLocations: locations }, { returnDocument: 'after' });
     res.json({ success: true, school });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -1586,7 +1586,7 @@ router.put('/school/library-config', protect, authorize('admin', 'correspondent'
     const school = await School.findByIdAndUpdate(
       req.user.school,
       { 'libraryConfig.finePerDay': Number(finePerDay) || 2 },
-      { new: true }
+      { returnDocument: 'after' }
     );
     res.json({ success: true, school });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -1987,7 +1987,7 @@ router.put('/visits/:id', protect, checkSubscription, authorize(...VISIT_ROLES),
   try {
     const { school, createdBy, _id, ...update } = req.body; // never reassign tenant/owner
     const visit = await Visit.findOneAndUpdate(
-      { _id: req.params.id, school: req.user.school }, update, { new: true });
+      { _id: req.params.id, school: req.user.school }, update, { returnDocument: 'after' });
     if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
     res.json({ success: true, visit });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -1999,7 +1999,7 @@ router.post('/visits/:id/checkout', protect, checkSubscription, authorize(...VIS
     const update = { status: 'completed', checkOutTime: new Date() };
     if (req.body.outcome != null) update.outcome = req.body.outcome;
     const visit = await Visit.findOneAndUpdate(
-      { _id: req.params.id, school: req.user.school }, update, { new: true });
+      { _id: req.params.id, school: req.user.school }, update, { returnDocument: 'after' });
     if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
     res.json({ success: true, visit });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -2082,7 +2082,7 @@ router.put('/outpasses/:id', protect, checkSubscription, authorize(...OUTPASS_RO
   try {
     const { school, approvedBy, passNumber, _id, ...update } = req.body;
     const outpass = await populateOutPass(
-      OutPass.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, update, { new: true }));
+      OutPass.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, update, { returnDocument: 'after' }));
     if (!outpass) return res.status(404).json({ success: false, message: 'Out pass not found' });
     res.json({ success: true, outpass });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -2092,7 +2092,7 @@ router.post('/outpasses/:id/return', protect, checkSubscription, authorize(...OU
   try {
     const outpass = await populateOutPass(OutPass.findOneAndUpdate(
       { _id: req.params.id, school: req.user.school },
-      { status: 'returned', returnedAt: new Date() }, { new: true }));
+      { status: 'returned', returnedAt: new Date() }, { returnDocument: 'after' }));
     if (!outpass) return res.status(404).json({ success: false, message: 'Out pass not found' });
     res.json({ success: true, outpass });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -2342,7 +2342,7 @@ router.put('/inventory/:id', protect, checkSubscription, authorize(...INVENTORY_
   try {
     const { school, createdBy, itemCode, _id, repairs, ...update } = req.body;
     const item = await populateItem(
-      InventoryItem.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, update, { new: true }));
+      InventoryItem.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, update, { returnDocument: 'after' }));
     if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
     res.json({ success: true, item });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -2563,7 +2563,7 @@ router.put('/purchase-requests/:id', protect, checkSubscription, authorize(...IN
     if (existing.status === 'received') {
       const metaOnly = {};
       ['title', 'vendor', 'notes', 'expectedDate'].forEach(k => { if (update[k] !== undefined) metaOnly[k] = update[k]; });
-      const request = await PurchaseRequest.findByIdAndUpdate(existing._id, metaOnly, { new: true });
+      const request = await PurchaseRequest.findByIdAndUpdate(existing._id, metaOnly, { returnDocument: 'after' });
       return res.json({ success: true, request });
     }
 
@@ -2576,7 +2576,7 @@ router.put('/purchase-requests/:id', protect, checkSubscription, authorize(...IN
         estimatedPrice: (i.estimatedPrice !== undefined && i.estimatedPrice !== '' && i.estimatedPrice !== null) ? Number(i.estimatedPrice) : undefined,
       }));
     }
-    const request = await PurchaseRequest.findByIdAndUpdate(existing._id, update, { new: true });
+    const request = await PurchaseRequest.findByIdAndUpdate(existing._id, update, { returnDocument: 'after' });
     res.json({ success: true, request });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });

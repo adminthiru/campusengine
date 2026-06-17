@@ -114,7 +114,7 @@ const startScheduler = () => {
         campaign = await SmsCampaign.findOneAndUpdate(
           { status: 'scheduled', scheduledAt: { $lte: new Date() } },
           { status: 'running', startedAt: new Date(), $push: { statusHistory: { status: 'running', at: new Date(), note: 'Started by scheduler' } } },
-          { new: true }
+          { returnDocument: 'after' }
         );
         if (!campaign) break;
         runCampaign(campaign); // fire-and-forget (runCampaign has its own error handling)

@@ -150,7 +150,7 @@ const updateStudent = async (req, res) => {
     }
 
     const student = await Student.findOneAndUpdate(
-      { _id: req.params.id, school: schoolId }, updateData, { new: true }
+      { _id: req.params.id, school: schoolId }, updateData, { returnDocument: 'after' }
     ).populate('currentClass', 'name section')
       .populate('guardians', 'name relation phone')
       .populate('transportRoute', 'routeName vehicleType vehicleNumber routeNumber');
