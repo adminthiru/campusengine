@@ -26,6 +26,8 @@ app.use(cors({
     if (allowed.includes(origin)) return callback(null, true);
     // Allow any *.vercel.app subdomain (preview deployments)
     if (/^https:\/\/[^.]+\.vercel\.app$/.test(origin)) return callback(null, true);
+    // Allow Railway-hosted frontends (e.g. school-admin.up.railway.app)
+    if (/^https:\/\/[^.]+\.(up\.railway\.app|railway\.app)$/.test(origin)) return callback(null, true);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true

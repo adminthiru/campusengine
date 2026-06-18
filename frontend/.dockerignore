@@ -1,0 +1,6 @@
+node_modules
+dist
+superadmin
+.env
+.env.*
+*.log

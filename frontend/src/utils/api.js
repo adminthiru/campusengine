@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+// In dev the Vite proxy forwards /api → backend. In production (frontend served
+// on its own domain) set VITE_API_URL to the API's public base, e.g.
+// https://campusengine-production.up.railway.app/api
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   headers: { 'Content-Type': 'application/json' }
 });
 
