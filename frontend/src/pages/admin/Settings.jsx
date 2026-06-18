@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { Select as AntSelect } from 'antd';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Settings as SettingsIcon, School, Key, CreditCard, Bell, Plus, Trash2, Check, Upload, CalendarCheck, ListOrdered, ShieldCheck, GraduationCap, BookOpen, UsersRound, UserCheck, KeyRound, Banknote, FileText, CalendarRange, UserCog, Copy, RefreshCw, Power, Pencil, X, Lock } from 'lucide-react';
+import { Settings as SettingsIcon, School, Key, CreditCard, Bell, Plus, Trash2, Check, Upload, CalendarCheck, ListOrdered, ShieldCheck, GraduationCap, BookOpen, UsersRound, UserCheck, KeyRound, Banknote, FileText, CalendarRange, UserCog, Copy, RefreshCw, Power, Pencil, X, Lock, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useAuth } from '../../store/AuthContext';
@@ -1364,78 +1364,296 @@ function AppLoginCreateModal({ type, cfg, onClose, onCreated }) {
 }
 
 function SubscriptionSettings() {
-  const { user, updateUser } = useAuth();
-  const sub = user?.subscription;
-  const now = new Date();
-  const trialEnd = sub?.trialEndDate ? new Date(sub.trialEndDate) : null;
-  const daysLeft = trialEnd ? Math.max(0, Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24))) : 0;
+  const qc = useQueryClient();
+  const { updateUser } = useAuth();
+  const [checkout, setCheckout] = useState(null);   // plan being paid for
 
-  const handleSubscribe = async () => {
-    try {
-      const res = await api.post('/subscription/create-order');
-      const { order, key } = res;
-      const options = {
-        key,
-        amount: order.amount,
-        currency: 'INR',
-        name: 'School ERP',
-        description: 'Monthly Subscription',
-        order_id: order.id,
-        handler: async (response) => {
-          await api.post('/subscription/verify', {
-            razorpayOrderId: response.razorpay_order_id,
-            razorpayPaymentId: response.razorpay_payment_id,
-            razorpaySignature: response.razorpay_signature
-          });
-          toast.success('Subscription activated!');
-          updateUser({ subscription: { ...sub, status: 'active' } });
-        },
-        theme: { color: '#1a56e8' }
-      };
-      const rzp = new window.Razorpay(options);
-      rzp.open();
-    } catch (err) {
-      toast.error('Failed to initiate payment');
-    }
+  const { data, isLoading } = useQuery({ queryKey: ['my-subscription'], queryFn: () => api.get('/subscription/my') });
+  const { data: plansData } = useQuery({ queryKey: ['active-plans'], queryFn: () => api.get('/plans') });
+  const { data: methodsData } = useQuery({ queryKey: ['payment-methods'], queryFn: () => api.get('/subscription/payment-methods') });
+  const methods = methodsData?.methods || {};
+  const sub = data?.subscription || {};
+  const payments = data?.payments || [];
+  const plans = plansData?.plans || [];
+  const isActive = sub.status === 'active';
+  const suspended = data?.isActive === false;
+
+  const endDate = isActive ? sub.currentPeriodEnd : sub.trialEndDate;
+  const daysLeft = endDate ? Math.max(0, Math.ceil((new Date(endDate) - new Date()) / 86400000)) : 0;
+  const amount = sub.amount || plans.find(p => String(p._id) === String(sub.plan))?.price || 200;
+
+  // Persist the chosen plan (so the order uses its price), then open the checkout.
+  const startCheckout = async (plan) => {
+    try { await api.post('/subscription/select-plan', { planId: plan._id }); qc.invalidateQueries(['my-subscription']); setCheckout(plan); }
+    catch (e) { toast.error(e?.response?.data?.message || 'Failed to select plan'); }
   };
 
+  const downloadInvoice = async (p) => {
+    try {
+      const blob = await api.get(`/subscription/payments/${p._id}/invoice`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `${p.invoiceNumber}.pdf`; a.click();
+      window.URL.revokeObjectURL(url);
+    } catch { toast.error('Failed to download invoice'); }
+  };
+
+  if (isLoading) return <PageLoader />;
+
   return (
-    <div className="card">
-      <h2 className="text-18-bold" style={{ marginBottom: 24 }}>Subscription</h2>
-      
-      <div style={{ background: sub?.status === 'active' ? '#f0fdf4' : '#fffbeb', border: `1px solid ${sub?.status === 'active' ? '#bbf7d0' : '#fde68a'}`, borderRadius: 12, padding: 20, marginBottom: 24 }}>
+    <div>
+      <h2 className="text-18-bold" style={{ marginBottom: 16 }}>Billing &amp; Subscription</h2>
+
+      {suspended && (
+        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 13, color: '#991b1b' }}>
+          ⛔ Your school account is <strong>suspended</strong>{data?.suspendedReason ? `: ${data.suspendedReason}` : ''}. Please contact support.
+        </div>
+      )}
+
+      {/* Status card */}
+      <div className="card" style={{ padding: 20, marginBottom: 18, background: isActive ? '#f0fdf4' : '#fffbeb', border: `1px solid ${isActive ? '#bbf7d0' : '#fde68a'}` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <div className="text-16-bold" style={{ textTransform: 'capitalize', color: sub?.status === 'active' ? '#16a34a' : '#92400e' }}>
-              {sub?.status === 'active' ? '✅ Active Subscription' : sub?.status === 'trial' ? `⏱ Trial (${daysLeft} days left)` : '❌ Subscription Expired'}
+            <div className="text-16-bold" style={{ color: isActive ? '#16a34a' : sub.status === 'trial' ? '#92400e' : '#b91c1c' }}>
+              {isActive ? '✅ Active Subscription' : sub.status === 'trial' ? `⏱ Trial — ${daysLeft} day${daysLeft === 1 ? '' : 's'} left` : '❌ Expired'}
             </div>
             <div className="text-14-regular" style={{ color: 'var(--text-secondary)', marginTop: 4 }}>
-              {sub?.status === 'trial' && trialEnd && `Trial ends: ${trialEnd.toLocaleDateString('en-IN')}`}
-              {sub?.status === 'active' && sub?.currentPeriodEnd && `Renews: ${new Date(sub.currentPeriodEnd).toLocaleDateString('en-IN')}`}
+              {sub.planName ? `${sub.planName} plan · ` : ''}
+              {isActive && endDate ? `Renews ${new Date(endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                : sub.status === 'trial' && endDate ? `Trial ends ${new Date(endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
             </div>
           </div>
-          <span className="text-24-bold" style={{ color: '#1a56e8' }}>₹200<span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>/month</span></span>
+          <span className="text-24-bold" style={{ color: '#1a56e8' }}>₹{amount}<span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>/month</span></span>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 24 }}>
-        {['All Features Unlocked', 'SMS Notifications', 'PDF Generation', 'Unlimited Students', 'Multi-role Access', 'Priority Support'].map(f => (
-          <div key={f} className="text-14-regular" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <Check size={14} color="#10b981" />
-            <span>{f}</span>
+      {/* Usage vs plan limits */}
+      {!suspended && (() => {
+        const usage = data?.usage || {};
+        const lim = sub.limits || {};
+        const rows = [
+          { label: 'Students', used: usage.students || 0, cap: lim.maxStudents || 0 },
+          { label: 'Employees', used: usage.employees || 0, cap: lim.maxStaff || 0 },
+        ];
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 18 }}>
+            {rows.map(r => {
+              const pct = r.cap ? Math.min(100, Math.round((r.used / r.cap) * 100)) : 0;
+              const atCap = r.cap > 0 && r.used >= r.cap;
+              return (
+                <div key={r.label} className="card" style={{ padding: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                    <span className="text-13-semibold">{r.label}</span>
+                    <span className="text-14-bold" style={{ fontVariantNumeric: 'tabular-nums', color: atCap ? '#b91c1c' : 'var(--text-primary)' }}>
+                      {r.used}{r.cap ? ` / ${r.cap}` : ' / ∞'}
+                    </span>
+                  </div>
+                  <div style={{ height: 6, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
+                    <div style={{ width: `${r.cap ? pct : 100}%`, height: '100%', background: atCap ? '#ef4444' : r.cap ? 'var(--primary)' : '#bbf7d0' }} />
+                  </div>
+                  {atCap && <div className="text-12-regular" style={{ color: '#b91c1c', marginTop: 6 }}>Limit reached — upgrade to add more.</div>}
+                </div>
+              );
+            })}
           </div>
-        ))}
+        );
+      })()}
+
+      {/* Plan cards */}
+      {!suspended && plans.length > 0 && (
+        <>
+          <h3 className="text-14-semibold" style={{ marginBottom: 12 }}>{isActive ? 'Change plan' : 'Choose a plan'}</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 14, marginBottom: 24 }}>
+            {plans.map(p => {
+              const current = isActive && String(p._id) === String(sub.plan?._id || sub.plan);
+              const free = (p.price || 0) === 0;
+              return (
+                <div key={p._id} className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column', border: `1px solid ${current ? 'var(--primary)' : 'var(--border)'}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span className="text-16-bold">{p.name}</span>
+                    {current && <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--primary)', background: '#eff6ff', padding: '2px 8px', borderRadius: 20 }}>Current</span>}
+                  </div>
+                  <div className="text-24-bold" style={{ color: 'var(--primary)', margin: '6px 0 10px' }}>₹{p.price}<span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>/{p.billingCycleMonths > 1 ? `${p.billingCycleMonths}mo` : 'mo'}</span></div>
+                  {(() => {
+                    const maxS = p.limits?.maxStudents || 0, maxE = p.limits?.maxStaff || 0;
+                    const modCount = (p.modules || []).length;
+                    return (
+                      <div className="text-12-regular" style={{ color: 'var(--text-secondary)', marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+                        <div>👥 {maxS ? `Up to ${maxS.toLocaleString('en-IN')} students` : 'Unlimited students'}</div>
+                        <div>🧑‍🏫 {maxE ? `Up to ${maxE.toLocaleString('en-IN')} staff` : 'Unlimited staff'}</div>
+                        <div>🧩 {modCount ? `${modCount} modules` : 'All modules'}</div>
+                      </div>
+                    );
+                  })()}
+                  <div style={{ flex: 1 }}>
+                    {(p.features || []).slice(0, 4).map(f => (
+                      <div key={f} className="text-12-regular" style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6, color: 'var(--text-secondary)' }}>
+                        <Check size={12} color="#10b981" /> {f}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 12 }}>
+                    {free ? (
+                      <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }} disabled>Free</button>
+                    ) : current ? (
+                      <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }} disabled>Current Plan</button>
+                    ) : (
+                      <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => startCheckout(p)}>
+                        <CreditCard size={15} /> {isActive ? 'Switch & Pay' : 'Subscribe'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* Payment history */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ padding: '13px 18px', borderBottom: '1px solid var(--border)' }}><span className="text-14-semibold">Payment History</span></div>
+        {payments.length === 0 ? (
+          <div style={{ padding: '20px 18px', fontSize: 13, color: 'var(--text-muted)' }}>No payments yet.</div>
+        ) : (
+          <table style={{ width: '100%' }}>
+            <thead><tr><th>Invoice</th><th>Plan</th><th>Amount</th><th>Method</th><th>Date</th><th></th></tr></thead>
+            <tbody>
+              {payments.map(p => (
+                <tr key={p._id}>
+                  <td style={{ fontSize: 13, fontWeight: 600 }}>{p.invoiceNumber}</td>
+                  <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{p.planName || '—'}</td>
+                  <td style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>₹{p.amount}</td>
+                  <td style={{ fontSize: 13, color: 'var(--text-muted)', textTransform: 'capitalize' }}>{(p.method || '').replace('_', ' ')}</td>
+                  <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{new Date(p.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button className="btn btn-secondary btn-sm btn-icon" title="Download invoice" onClick={() => downloadInvoice(p)}><Download size={13} /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {sub?.status !== 'active' && (
-        <button onClick={handleSubscribe} className="btn btn-primary btn-lg">
-          <CreditCard size={16} /> Subscribe Now — ₹200/month
-        </button>
-      )}
-      {sub?.status === 'active' && (
-        <p className="text-14-regular" style={{ color: 'var(--text-secondary)' }}>Your subscription is active. For billing queries, contact support.</p>
+      {checkout && (
+        <CheckoutModal plan={checkout} methods={methods}
+          onClose={() => setCheckout(null)}
+          onPaid={() => { qc.invalidateQueries(['my-subscription']); updateUser({ subscription: { ...sub, status: 'active' } }); }} />
       )}
     </div>
+  );
+}
+
+// Guided payment popup: pick a method → pay → success.
+function CheckoutModal({ plan, methods, onClose, onPaid }) {
+  const amount = plan.price;
+  const available = [
+    methods.gateway?.enabled && { key: 'online', emoji: '💳', title: 'Card / UPI / Netbanking', sub: 'Pay securely online · instant activation' },
+    methods.upi?.enabled && { key: 'upi', emoji: '📱', title: 'UPI', sub: 'Pay to our UPI ID' },
+    methods.bankTransfer?.enabled && { key: 'bank', emoji: '🏦', title: 'Bank Transfer', sub: 'NEFT / IMPS' },
+  ].filter(Boolean);
+
+  const [method, setMethod] = useState(available.length === 1 ? available[0].key : null);
+  const [step, setStep] = useState('select');   // 'select' | 'success'
+  const [paying, setPaying] = useState(false);
+
+  const payOnline = async () => {
+    if (!window.Razorpay) return toast.error('Payment library not loaded. Refresh and try again.');
+    setPaying(true);
+    try {
+      const { order, key } = await api.post('/subscription/create-order');
+      const rzp = new window.Razorpay({
+        key, amount: order.amount, currency: 'INR', order_id: order.id,
+        name: 'School ERP', description: `${plan.name} plan subscription`, theme: { color: '#1a56e8' },
+        handler: async (r) => {
+          try {
+            await api.post('/subscription/verify', { razorpayOrderId: r.razorpay_order_id, razorpayPaymentId: r.razorpay_payment_id, razorpaySignature: r.razorpay_signature });
+            onPaid(); setStep('success');
+          } catch (e) { toast.error(e?.response?.data?.message || 'Verification failed'); }
+          finally { setPaying(false); }
+        },
+        modal: { ondismiss: () => setPaying(false) },
+      });
+      rzp.open();
+    } catch (e) { toast.error(e?.response?.data?.message || 'Failed to start payment'); setPaying(false); }
+  };
+
+  if (step === 'success') {
+    return (
+      <Modal open onClose={onClose} size="sm" title="Payment Complete">
+        <div style={{ textAlign: 'center', padding: '12px 8px 6px' }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+            <Check size={34} color="#16a34a" strokeWidth={3} />
+          </div>
+          <h3 className="text-18-bold" style={{ marginBottom: 6 }}>Subscribed Successfully 🎉</h3>
+          <p className="text-14-regular" style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>Your <strong>{plan.name}</strong> plan is now active.</p>
+          <button className="btn btn-primary" style={{ minWidth: 120, justifyContent: 'center' }} onClick={onClose}>Done</button>
+        </div>
+      </Modal>
+    );
+  }
+
+  const detailRow = (label, value, copy) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '5px 0' }}>
+      <span style={{ color: 'var(--text-muted)' }}>{label}</span>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontFamily: 'monospace' }}>
+        {value}{copy && <button className="btn btn-secondary btn-sm btn-icon" onClick={() => { navigator.clipboard?.writeText(value); toast.success('Copied'); }}><Copy size={12} /></button>}
+      </span>
+    </div>
+  );
+
+  return (
+    <Modal open onClose={onClose} size="md" title={`Subscribe — ${plan.name}`}>
+      {/* Summary */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '12px 16px', marginBottom: 16 }}>
+        <div><div className="text-14-semibold">{plan.name} plan</div><div className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>Billed every {plan.billingCycleMonths > 1 ? `${plan.billingCycleMonths} months` : 'month'}</div></div>
+        <div className="text-24-bold" style={{ color: 'var(--primary)' }}>₹{amount}</div>
+      </div>
+
+      {available.length === 0 ? (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No payment method is configured yet. Please contact support.</div>
+      ) : (
+        <>
+          <div className="text-12-regular" style={{ color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Payment method</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+            {available.map(m => {
+              const on = method === m.key;
+              return (
+                <div key={m.key} onClick={() => setMethod(m.key)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', border: `1.5px solid ${on ? 'var(--primary)' : 'var(--border)'}`, background: on ? '#eff6ff' : 'white', borderRadius: 10, padding: '12px 14px' }}>
+                  <span style={{ fontSize: 20 }}>{m.emoji}</span>
+                  <div style={{ flex: 1 }}><div className="text-14-semibold">{m.title}</div><div className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>{m.sub}</div></div>
+                  <div style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${on ? 'var(--primary)' : 'var(--border)'}`, background: on ? 'var(--primary)' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{on && <Check size={11} color="white" />}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Method content */}
+          {method === 'online' && (
+            <button className="btn btn-primary btn-lg" style={{ width: '100%', justifyContent: 'center' }} onClick={payOnline} disabled={paying}>
+              <CreditCard size={16} /> {paying ? 'Processing…' : `Pay ₹${amount} Securely`}
+            </button>
+          )}
+
+          {(method === 'upi' || method === 'bank') && (
+            <div>
+              <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 14, marginBottom: 12 }}>
+                {method === 'upi' && (<>
+                  {detailRow('UPI ID', methods.upi.upiId, true)}
+                  {methods.upi.payeeName && detailRow('Payee', methods.upi.payeeName)}
+                </>)}
+                {method === 'bank' && [['Account Name', methods.bankTransfer.accountName], ['Account No.', methods.bankTransfer.accountNumber], ['IFSC', methods.bankTransfer.ifsc], ['Bank', methods.bankTransfer.bankName]].filter(([, v]) => v).map(([k, v]) => detailRow(k, v, true))}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
+                ℹ️ Transfer <strong>₹{amount}</strong> to the above, then click below. Your subscription activates once the payment is confirmed.{methods.note ? ` ${methods.note}` : ''}
+              </div>
+              <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => { toast.success("Thanks! We'll activate once the payment is confirmed."); onClose(); }}>I've Made the Payment</button>
+            </div>
+          )}
+        </>
+      )}
+    </Modal>
   );
 }
 

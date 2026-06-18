@@ -4,6 +4,7 @@ const { sendEmail, invitationEmail } = require('../utils/email');
 const { sendSMS } = require('../utils/sms');
 const { generateJobOffer } = require('../utils/pdf');
 const School = require('../models/School');
+const { assertWithinLimit } = require('../utils/planLimits');
 const { v4: uuidv4 } = require('uuid');
 
 const DEFAULT_JOB_OFFER = `Dear {{employee_name}},
@@ -31,6 +32,8 @@ const createEmployee = async (req, res) => {
     const schoolId = req.user.school;
     const school = await School.findById(schoolId);
 
+    await assertWithinLimit(school, 'staff', 1);   // plan usage cap
+
     // Generate employee ID
     const count = await Employee.countDocuments({ school: schoolId });
     const employeeId = `EMP${school.code}${String(count + 1).padStart(4, '0')}`;
@@ -42,7 +45,7 @@ const createEmployee = async (req, res) => {
     const populated = await Employee.findById(employee._id).populate('subjects', 'name');
     res.status(201).json({ success: true, employee: populated });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(err.status || 500).json({ success: false, message: err.message, code: err.code });
   }
 };
 

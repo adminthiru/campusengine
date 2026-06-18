@@ -25,6 +25,7 @@ const Parent = require('../models/Parent');
 const SmsLog = require('../models/SmsLog');
 const { Expense, Transport } = require('../models/Expense');
 const School = require('../models/School');
+const { limitFor } = require('../utils/planLimits');
 const User = require('../models/User');
 const Student = require('../models/Student');
 const Employee = require('../models/Employee');
@@ -47,7 +48,8 @@ const storage = multer.diskStorage({
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
 
 // ============== AUTH ==============
-router.post('/auth/register', authCtrl.registerSchool);
+// Public self-signup removed — tenants are provisioned by the super admin
+// (POST /super-admin/schools). `registerSchool` is kept in the controller only.
 router.post('/auth/login', authCtrl.login);
 router.post('/auth/init-super-admin', authCtrl.initSuperAdmin);
 router.get('/auth/me', protect, authCtrl.getMe);
@@ -70,7 +72,6 @@ router.get('/school', protect, schoolCtrl.getSchool);
 router.post('/school/setup', protect, authorize('admin', 'correspondent'), schoolCtrl.setupSchool);
 router.put('/school', protect, authorize('admin', 'correspondent', 'super_admin'), schoolCtrl.updateSchool);
 router.get('/school/dashboard', protect, checkSubscription, schoolCtrl.getDashboardStats);
-router.get('/super-admin/schools', protect, authorize('super_admin'), schoolCtrl.getAllSchools);
 router.post('/school/upload-logo', protect, upload.single('logo'), schoolCtrl.uploadLogo);
 
 // PDF template preview — generates a sample PDF with current school branding
@@ -180,33 +181,16 @@ router.put('/school/staff-attendance-timing', protect, authorize('admin', 'corre
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
-// Subscription
-router.post('/subscription/create-order', protect, async (req, res) => {
-  try {
-    const Razorpay = require('razorpay');
-    const rzp = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
-    const order = await rzp.orders.create({ amount: 20000 * 100, currency: 'INR', receipt: `sub_${req.user.school}` });
-    res.json({ success: true, order, key: process.env.RAZORPAY_KEY_ID });
-  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
-});
-router.post('/subscription/verify', protect, async (req, res) => {
-  try {
-    const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
-    const crypto = require('crypto');
-    const sig = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-      .update(`${razorpayOrderId}|${razorpayPaymentId}`).digest('hex');
-    if (sig !== razorpaySignature) return res.status(400).json({ success: false, message: 'Verification failed' });
-    const now = new Date();
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
-    await School.findByIdAndUpdate(req.user.school, {
-      'subscription.status': 'active',
-      'subscription.currentPeriodStart': now,
-      'subscription.currentPeriodEnd': end,
-      'subscription.razorpaySubscriptionId': razorpayPaymentId
-    });
-    res.json({ success: true, message: 'Subscription activated' });
-  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
-});
+// Subscription (school-admin billing) + active plans
+const subCtrl = require('../controllers/subscriptionController');
+const superAdminCtrl = require('../controllers/superAdminController');
+router.get('/plans', protect, superAdminCtrl.getActivePlans);
+router.get('/subscription/my', protect, subCtrl.getMySubscription);
+router.get('/subscription/payment-methods', protect, subCtrl.getPaymentMethods);
+router.post('/subscription/select-plan', protect, authorize('admin', 'correspondent'), subCtrl.selectPlan);
+router.post('/subscription/create-order', protect, subCtrl.createOrder);
+router.post('/subscription/verify', protect, subCtrl.verifyPayment);
+router.get('/subscription/payments/:id/invoice', protect, subCtrl.getInvoicePdf);
 
 // ============== EMPLOYEES ==============
 router.get('/employees', protect, checkSubscription, empCtrl.getEmployees);
@@ -233,9 +217,11 @@ router.post('/employees/bulk', protect, checkSubscription, authorize('admin', 'c
     const school = await School.findById(schoolId);
     const results = { created: 0, failed: 0, errors: [] };
     let baseCount = await Employee.countDocuments({ school: schoolId });
+    const staffCap = limitFor(school, 'staff');   // 0 = unlimited
     const validRoles = ['teacher', 'principal', 'accountant', 'maintenance', 'correspondent', 'other'];
     for (let i = 0; i < employees.length; i++) {
       try {
+        if (staffCap && baseCount >= staffCap) throw new Error(`Plan limit reached (${staffCap} employees). Upgrade to add more.`);
         const e = employees[i];
         if (!e.name?.trim()) throw new Error('Name is required');
         if (!e.email?.trim()) throw new Error('Email is required');
@@ -288,8 +274,10 @@ router.post('/students/bulk', protect, checkSubscription, authorize('admin', 'co
     const school = await School.findById(schoolId);
     const results = { created: 0, failed: 0, errors: [] };
     let baseCount = await Student.countDocuments({ school: schoolId });
+    const studentCap = limitFor(school, 'students');   // 0 = unlimited
     for (let i = 0; i < students.length; i++) {
       try {
+        if (studentCap && baseCount >= studentCap) throw new Error(`Plan limit reached (${studentCap} students). Upgrade to add more.`);
         const s = students[i];
         if (!s.name?.trim()) throw new Error('Name is required');
         if (!s.gender?.trim()) throw new Error('Gender is required');
@@ -1285,25 +1273,28 @@ router.post('/homework/:id/notify', protect, checkSubscription, authorize('admin
 });
 
 // ============== SUPER ADMIN ==============
-router.get('/super-admin/stats', protect, authorize('super_admin'), async (req, res) => {
-  try {
-    const School = require('../models/School');
-    const [totalSchools, activeTrials, activeSubscriptions, expiredSchools] = await Promise.all([
-      School.countDocuments(),
-      School.countDocuments({ 'subscription.status': 'trial' }),
-      School.countDocuments({ 'subscription.status': 'active' }),
-      School.countDocuments({ 'subscription.status': 'expired' })
-    ]);
-    res.json({ success: true, stats: { totalSchools, activeTrials, activeSubscriptions, expiredSchools } });
-  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
-});
-
-router.put('/super-admin/schools/:id/subscription', protect, authorize('super_admin'), async (req, res) => {
-  try {
-    const school = await School.findByIdAndUpdate(req.params.id, { subscription: req.body }, { returnDocument: 'after' });
-    res.json({ success: true, school });
-  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
-});
+const SA = [protect, authorize('super_admin')];
+// Tenants
+router.get('/super-admin/schools', ...SA, superAdminCtrl.listSchools);
+router.post('/super-admin/schools', ...SA, superAdminCtrl.createTenant);
+router.get('/super-admin/schools/:id', ...SA, superAdminCtrl.getSchool);
+router.put('/super-admin/schools/:id', ...SA, superAdminCtrl.updateSchool);
+router.post('/super-admin/schools/:id/suspend', ...SA, superAdminCtrl.suspendSchool);
+router.post('/super-admin/schools/:id/reactivate', ...SA, superAdminCtrl.reactivateSchool);
+router.post('/super-admin/schools/:id/reset-admin-password', ...SA, superAdminCtrl.resetAdminPassword);
+router.put('/super-admin/schools/:id/subscription', ...SA, superAdminCtrl.updateSubscription);
+router.post('/super-admin/schools/:id/record-payment', ...SA, superAdminCtrl.recordPayment);
+// Stats / revenue
+router.get('/super-admin/stats', ...SA, superAdminCtrl.getStats);
+router.get('/super-admin/payments', ...SA, superAdminCtrl.listPayments);
+// Payment / collection settings (owner's receiving accounts)
+router.get('/super-admin/payment-settings', ...SA, superAdminCtrl.getPaymentSettings);
+router.put('/super-admin/payment-settings', ...SA, superAdminCtrl.updatePaymentSettings);
+// Plans
+router.get('/super-admin/plans', ...SA, superAdminCtrl.listPlans);
+router.post('/super-admin/plans', ...SA, superAdminCtrl.createPlan);
+router.put('/super-admin/plans/:id', ...SA, superAdminCtrl.updatePlan);
+router.delete('/super-admin/plans/:id', ...SA, superAdminCtrl.deletePlan);
 
 // User management by admin
 router.get('/users', protect, authorize('admin', 'correspondent', 'super_admin'), async (req, res) => {

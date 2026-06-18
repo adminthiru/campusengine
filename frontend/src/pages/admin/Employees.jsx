@@ -6,6 +6,7 @@ import dayjs from 'dayjs';
 import { Plus, Download, Eye, Trash2, Users, ClipboardList, ChevronLeft, ChevronRight, Camera, Edit, ArrowLeft, Mail, MapPin, Briefcase, Phone, BookOpen, User as UserIcon, FileText, Upload, Banknote, ChevronDown, ChevronUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
+import { useAuth } from '../../store/AuthContext';
 import { Modal, ConfirmDialog, StatusBadge, Pagination, SearchInput, Avatar, EmptyState, PageLoader, FormRow, ColumnSelector, useColumnSelector } from '../../components/ui';
 import { BulkUploadModal } from '../../components/ui/BulkUploadModal';
 
@@ -98,6 +99,7 @@ function AttendanceCircle({ percentage, present, total }) {
 
 export default function Employees() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
@@ -129,6 +131,9 @@ export default function Employees() {
 
   const employees = data?.employees || [];
   const total = data?.total || 0;
+  // Plan usage cap (0 = unlimited). Hard-block Add once reached; backend enforces too.
+  const staffCap = user?.subscription?.limits?.maxStaff || 0;
+  const atStaffCap = staffCap > 0 && total >= staffCap;
   const pages = data?.pages || 1;
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm();
@@ -310,9 +315,15 @@ export default function Employees() {
         <button className="btn btn-secondary" onClick={() => setShowBulkModal(true)}>
           <Upload size={16} /> Bulk Upload
         </button>
-        <button className="btn btn-primary" onClick={openAdd}>
-          <Plus size={16} /> Add Employee
-        </button>
+        {atStaffCap ? (
+          <a href="/settings/subscription" className="btn btn-secondary" title={`Plan limit reached (${total}/${staffCap})`} style={{ textDecoration: 'none' }}>
+            <Plus size={16} /> {total}/{staffCap} — Upgrade to add more
+          </a>
+        ) : (
+          <button className="btn btn-primary" onClick={openAdd}>
+            <Plus size={16} /> Add Employee
+          </button>
+        )}
         </div>
       </div>
 

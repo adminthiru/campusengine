@@ -71,6 +71,11 @@ app.use('/api', require('./routes/index'));
 const { startScheduler } = require('./utils/scheduler');
 startScheduler();
 
+// Billing scheduler (auto-expire + reminder emails) + seed default subscription plans
+const { startBillingScheduler } = require('./utils/billingScheduler');
+startBillingScheduler();
+require('./controllers/superAdminController').seedDefaultPlans().catch(e => console.error('Plan seed error:', e.message));
+
 // Serve React frontend in production (built by Railway before starting the server)
 if (process.env.NODE_ENV === 'production') {
   const frontendDist = path.join(__dirname, '../frontend/dist');

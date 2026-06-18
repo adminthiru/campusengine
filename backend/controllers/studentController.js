@@ -6,6 +6,7 @@ const School = require('../models/School');
 const { sendEmail, invitationEmail } = require('../utils/email');
 const { sendSMS } = require('../utils/sms');
 const { generateAdmissionLetter } = require('../utils/pdf');
+const { assertWithinLimit } = require('../utils/planLimits');
 const { v4: uuidv4 } = require('uuid');
 
 const DEFAULT_ADMISSION_LETTER = `Dear Parent/Guardian,
@@ -31,6 +32,8 @@ const createStudent = async (req, res) => {
   try {
     const schoolId = req.user.school;
     const school = await School.findById(schoolId);
+
+    await assertWithinLimit(school, 'students', 1);   // plan usage cap
 
     const count = await Student.countDocuments({ school: schoolId });
     const admissionNumber = `ADM${school.code}${new Date().getFullYear()}${String(count + 1).padStart(4, '0')}`;
@@ -73,7 +76,7 @@ const createStudent = async (req, res) => {
 
     res.status(201).json({ success: true, student: populated });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(err.status || 500).json({ success: false, message: err.message, code: err.code });
   }
 };
 

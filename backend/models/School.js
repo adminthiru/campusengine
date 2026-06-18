@@ -44,13 +44,26 @@ const schoolSchema = new mongoose.Schema({
   schoolStartTime: { type: String, default: '08:00' },
   subscription: {
     status: { type: String, enum: ['trial', 'active', 'expired', 'cancelled'], default: 'trial' },
+    plan: { type: mongoose.Schema.Types.ObjectId, ref: 'SubscriptionPlan' },
+    planName: { type: String },
     trialStartDate: { type: Date, default: Date.now },
     trialEndDate: { type: Date },
     currentPeriodStart: { type: Date },
     currentPeriodEnd: { type: Date },
     razorpaySubscriptionId: { type: String },
-    amount: { type: Number, default: 20000 }
+    amount: { type: Number, default: 200 },   // effective ₹ price per cycle (per-school override allowed)
+    lastReminderDays: { type: Number },        // dedup for expiry reminder emails
+    // Entitlements snapshotted from the assigned plan (stable against later
+    // plan edits; plan edits cascade explicitly). Empty modules = all; 0 = unlimited.
+    modules: { type: [String], default: [] },
+    limits: {
+      maxStudents: { type: Number, default: 0 },
+      maxStaff:    { type: Number, default: 0 },
+    },
   },
+  // Suspension (super admin) — the top-level `isActive` flag (below) blocks access.
+  suspendedReason: { type: String },
+  suspendedAt: { type: Date },
   pdfConfig: {
     primaryColor:    { type: String, default: '#1a56e8' },
     secondaryColor:  { type: String, default: '#0ea5e9' },

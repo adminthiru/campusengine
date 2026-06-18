@@ -33,6 +33,26 @@ const enforceModulePermission = (req) => {
   return { status: 403, code: 'NO_PERMISSION', message: `You do not have '${action}' permission for ${mod.label}` };
 };
 
+// Plan-level module entitlement gate. A school's plan unlocks a subset of the
+// app modules; requests to a module not in the plan are blocked for every
+// non-super_admin role. An empty `modules` array = unrestricted (legacy/trial).
+// Returns null if allowed, or a { status, code, message, module } to reject with.
+const enforcePlanModule = (req) => {
+  const user = req.user;
+  if (user.role === 'super_admin') return null;
+  const planModules = req.school?.subscription?.modules || [];
+  if (!planModules.length) return null;                          // [] → all modules unlocked
+
+  const path = cleanPath(req.originalUrl);
+  if (isAlwaysAllowed(path, req.method)) return null;            // self-service + shared reads
+
+  const mod = moduleForPath(path);
+  if (mod && !planModules.includes(mod.key)) {
+    return { status: 403, code: 'PLAN_MODULE_LOCKED', module: mod.key, message: `${mod.label} is not included in your plan. Upgrade to unlock it.` };
+  }
+  return null;
+};
+
 const protect = async (req, res, next) => {
   let token;
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
@@ -54,6 +74,9 @@ const protect = async (req, res, next) => {
     // so every authenticated route is governed without per-route changes.
     const denial = enforceModulePermission(req);
     if (denial) return res.status(denial.status).json({ success: false, message: denial.message, code: denial.code });
+    // Plan entitlement gate — block modules not unlocked by the school's plan.
+    const planDenial = enforcePlanModule(req);
+    if (planDenial) return res.status(planDenial.status).json({ success: false, message: planDenial.message, code: planDenial.code, module: planDenial.module });
     next();
   } catch (err) {
     return res.status(401).json({ success: false, message: 'Token invalid' });
@@ -76,6 +99,14 @@ const checkSubscription = async (req, res, next) => {
   if (!req.school || req.user.role === 'super_admin') return next();
   const school = req.school;
   const now = new Date();
+  // Suspended by the super admin → block access entirely.
+  if (school.isActive === false) {
+    return res.status(402).json({ success: false, message: 'Your school account has been suspended. Please contact support.', code: 'SCHOOL_SUSPENDED' });
+  }
+  // Active period ended → treat as expired.
+  if (school.subscription.status === 'active' && school.subscription.currentPeriodEnd && now > new Date(school.subscription.currentPeriodEnd)) {
+    return res.status(402).json({ success: false, message: 'Subscription expired. Please renew.', code: 'SUBSCRIPTION_EXPIRED' });
+  }
   if (school.subscription.status === 'trial') {
     if (now > school.subscription.trialEndDate) {
       return res.status(402).json({ success: false, message: 'Trial expired. Please subscribe.', code: 'TRIAL_EXPIRED' });

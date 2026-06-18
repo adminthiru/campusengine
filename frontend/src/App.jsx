@@ -3,7 +3,6 @@ import { useAuth } from './store/AuthContext';
 import AppLayout from './components/layout/AppLayout';
 import Login from './pages/auth/Login';
 import StaffLogin from './pages/auth/StaffLogin';
-import Register from './pages/auth/Register';
 import SchoolSetup from './pages/auth/SchoolSetup';
 import Dashboard from './pages/admin/Dashboard';
 import Students from './pages/admin/Students';
@@ -22,13 +21,13 @@ import Transport from './pages/admin/Transport';
 import Settings from './pages/admin/Settings';
 import SMS from './pages/admin/SMS';
 import Parents from './pages/admin/Parents';
-import { SuperAdminDashboard } from './pages/superadmin/Dashboard';
 import { TeacherDashboard, MySalary, MyTasks, StudentDashboard, ParentDashboard } from './pages/portals/index';
 import Library from './pages/admin/Library';
 import Visits from './pages/admin/Visits';
 import OutPass from './pages/admin/OutPass';
 import Inventory from './pages/admin/Inventory';
 import { MODULES } from './config/modules';
+import UpgradeRequired from './components/UpgradeRequired';
 
 // Delegated (custom) staff are gated by their module-view permission instead of
 // the role lists. Their landing page is the first module they can view.
@@ -38,9 +37,22 @@ const firstAllowedPath = (user) => {
   return m ? m.path : '/settings/profile';
 };
 
+// Whether the school's plan unlocks this module. Empty/absent list = all unlocked
+// (legacy schools / trials), mirroring the backend gate in middleware/auth.js.
+const planAllowsModule = (user, module) => {
+  if (!module || user?.role === 'super_admin') return true;
+  const planModules = user?.subscription?.modules || [];
+  return !planModules.length || planModules.includes(module);
+};
+
 function ProtectedRoute({ children, roles, module }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
+  // Plan entitlement: a module not in the school's plan shows an upgrade screen
+  // (kept inside the layout) instead of the page.
+  if (module && !planAllowsModule(user, module)) {
+    return <AppLayout><UpgradeRequired module={module} /></AppLayout>;
+  }
   if (isCustomUser(user)) {
     if (module && !user.permissions?.[module]?.view) return <Navigate to={firstAllowedPath(user)} replace />;
     return <AppLayout>{children}</AppLayout>;
@@ -52,7 +64,6 @@ function ProtectedRoute({ children, roles, module }) {
 function RoleRedirect() {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role === 'super_admin') return <Navigate to="/super-admin" replace />;
   if (user.role === 'maintenance') return <Navigate to="/my-tasks" replace />;
   if (isCustomUser(user)) return <Navigate to={firstAllowedPath(user)} replace />;
   return <Navigate to="/dashboard" replace />;
@@ -68,12 +79,8 @@ export default function App() {
       <Route path="/login" element={!user ? <Login /> : <RoleRedirect />} />
       {/* Dedicated staff login link — always shows the form, even if a session exists */}
       <Route path="/staff-login" element={<StaffLogin />} />
-      <Route path="/register" element={!user ? <Register /> : <RoleRedirect />} />
       <Route path="/school-setup" element={user ? <AppLayout><SchoolSetup /></AppLayout> : <Navigate to="/login" />} />
       <Route path="/" element={<RoleRedirect />} />
-
-      <Route path="/super-admin" element={<ProtectedRoute roles={['super_admin']}><SuperAdminDashboard /></ProtectedRoute>} />
-      <Route path="/super-admin/schools" element={<ProtectedRoute roles={['super_admin']}><SuperAdminDashboard /></ProtectedRoute>} />
 
       <Route path="/dashboard" element={
         <ProtectedRoute roles={ALL}>

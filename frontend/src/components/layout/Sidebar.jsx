@@ -5,16 +5,11 @@ import {
   LayoutDashboard, Users, UserCheck, BookOpen, Clock,
   DollarSign, CreditCard, FileText, Truck,
   MessageSquare, Settings,
-  GraduationCap, Building2, ClipboardList, Banknote, School, BookMarked, UsersRound, Calendar, Library, DoorOpen, LogOut, Package
+  GraduationCap, ClipboardList, Banknote, School, BookMarked, UsersRound, Calendar, Library, DoorOpen, LogOut, Package, Lock
 } from 'lucide-react';
-import { MODULES } from '../../config/modules';
+import { MODULES, moduleKeyForPath } from '../../config/modules';
 
 const navConfig = {
-  super_admin: [
-    { label: 'Dashboard', icon: LayoutDashboard, path: '/super-admin' },
-    { label: 'All Schools', icon: Building2, path: '/super-admin/schools' },
-    { label: 'Settings', icon: Settings, path: '/super-admin/settings' },
-  ],
   admin: [
     { section: 'Overview' },
     { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
@@ -155,6 +150,15 @@ export default function Sidebar({ open, onClose, collapsed }) {
   const isCustom = user?.accessType === 'custom' || user?.role === 'staff';
   const items = isCustom ? customNav(user) : (navConfig[user?.role] || navConfig.admin);
 
+  // Plan entitlement — modules not in the school's plan stay visible but locked.
+  // Empty/absent list = all unlocked (legacy schools / trials).
+  const planModules = user?.subscription?.modules || [];
+  const isLocked = (path) => {
+    if (user?.role === 'super_admin' || !planModules.length) return false;
+    const key = moduleKeyForPath(path);
+    return !!key && !planModules.includes(key);
+  };
+
   return (
     <>
       {open && <div className="sidebar-overlay" onClick={onClose} />}
@@ -179,16 +183,18 @@ export default function Sidebar({ open, onClose, collapsed }) {
               return <div key={idx} className="sidebar-section-title">{item.section}</div>;
             }
             const Icon = item.icon;
+            const locked = isLocked(item.path);
             return (
               <NavLink
                 key={item.path}
                 to={item.path}
-                className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+                className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}${locked ? ' locked' : ''}`}
                 onClick={onClose}
-                title={collapsed ? item.label : undefined}
+                title={collapsed ? item.label : (locked ? `${item.label} — not in your plan` : undefined)}
               >
                 <Icon className="icon" />
                 <span>{item.label}</span>
+                {locked && <Lock size={13} style={{ marginLeft: 'auto', opacity: 0.6 }} />}
               </NavLink>
             );
           })}

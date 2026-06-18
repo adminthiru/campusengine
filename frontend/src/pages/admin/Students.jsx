@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
+import { useAuth } from '../../store/AuthContext';
 import { Modal, ConfirmDialog, StatusBadge, Pagination, SearchInput, Avatar, EmptyState, PageLoader, FormRow, ColumnSelector, useColumnSelector } from '../../components/ui';
 import { BulkUploadModal } from '../../components/ui/BulkUploadModal';
 import { format } from 'date-fns';
@@ -49,6 +50,7 @@ const DETAIL_TABS = [
 
 export default function Students() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('');
@@ -98,6 +100,9 @@ export default function Students() {
 
   const students = data?.students || [];
   const total = data?.total || 0;
+  // Plan usage cap (0 = unlimited). Hard-block Add once reached; backend enforces too.
+  const studentCap = user?.subscription?.limits?.maxStudents || 0;
+  const atStudentCap = studentCap > 0 && total >= studentCap;
   const pages = data?.pages || 1;
 
   const { register, handleSubmit, reset, watch, control, setValue, formState: { errors } } = useForm();
@@ -341,9 +346,15 @@ export default function Students() {
           <button className="btn btn-secondary" onClick={() => setShowBulkModal(true)}>
             <Upload size={14} /> Bulk Upload
           </button>
-          <button className="btn btn-primary" onClick={openAdd}>
-            <Plus size={14} /> Add Student
-          </button>
+          {atStudentCap ? (
+            <a href="/settings/subscription" className="btn btn-secondary" title={`Plan limit reached (${total}/${studentCap})`} style={{ textDecoration: 'none' }}>
+              <Plus size={14} /> {total}/{studentCap} — Upgrade to add more
+            </a>
+          ) : (
+            <button className="btn btn-primary" onClick={openAdd}>
+              <Plus size={14} /> Add Student
+            </button>
+          )}
         </div>
       </div>
 

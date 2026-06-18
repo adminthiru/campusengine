@@ -11,7 +11,6 @@ export default function Login() {
   const [params] = useSearchParams();
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   // Prefill school code / email when arriving via a shared staff login link.
   const { register, handleSubmit, formState: { errors } } = useForm({
     defaultValues: { schoolCode: params.get('code') || '', email: params.get('email') || '' },
@@ -20,10 +19,9 @@ export default function Login() {
   const onSubmit = async (data) => {
     setLoading(true);
     try {
-      const user = await login({ ...data, isSuperAdmin });
+      const user = await login(data);
       toast.success(`Welcome back, ${user.name}!`);
-      if (user.role === 'super_admin') navigate('/super-admin');
-      else if (user.firstLogin) navigate('/settings/password?first=true');
+      if (user.firstLogin) navigate('/settings/password?first=true');
       else navigate('/dashboard');
     } catch (err) {
       toast.error(err.message || 'Invalid credentials');
@@ -80,39 +78,11 @@ export default function Login() {
             <p className="text-16-regular" style={{ color: 'var(--text-secondary)' }}>Sign in to your school portal</p>
           </div>
 
-          {/* Admin type toggle */}
-          <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 10, padding: 4, marginBottom: 24 }}>
-            <button
-              onClick={() => setIsSuperAdmin(false)}
-              className="text-14-semibold"
-              style={{
-                flex: 1, padding: '8px', border: 'none', borderRadius: 7, cursor: 'pointer',
-                background: !isSuperAdmin ? 'white' : 'transparent',
-                color: !isSuperAdmin ? 'var(--primary)' : 'var(--text-secondary)',
-                boxShadow: !isSuperAdmin ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
-                transition: 'all 0.2s'
-              }}
-            >School Login</button>
-            <button
-              onClick={() => setIsSuperAdmin(true)}
-              className="text-14-semibold"
-              style={{
-                flex: 1, padding: '8px', border: 'none', borderRadius: 7, cursor: 'pointer',
-                background: isSuperAdmin ? 'white' : 'transparent',
-                color: isSuperAdmin ? 'var(--primary)' : 'var(--text-secondary)',
-                boxShadow: isSuperAdmin ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
-                transition: 'all 0.2s'
-              }}
-            >Super Admin</button>
-          </div>
-
           <form onSubmit={handleSubmit(onSubmit)}>
-            {!isSuperAdmin && (
-              <div className="form-group">
-                <label className="form-label">School Code (optional)</label>
-                <input className="form-control" {...register('schoolCode')} placeholder="e.g. SRI12345" />
-              </div>
-            )}
+            <div className="form-group">
+              <label className="form-label">School Code (optional)</label>
+              <input className="form-control" {...register('schoolCode')} placeholder="e.g. SRI12345" />
+            </div>
             <div className="form-group">
               <label className="form-label">Email Address</label>
               <input
@@ -143,11 +113,6 @@ export default function Login() {
               {loading ? <><div className="spinner" style={{ width: 18, height: 18 }} />Signing in...</> : 'Sign In'}
             </button>
           </form>
-
-          <p className="text-14-regular" style={{ textAlign: 'center', marginTop: 24, color: 'var(--text-secondary)' }}>
-            New school?{' '}
-            <Link to="/register" style={{ color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>Register here</Link>
-          </p>
         </div>
       </div>
     </div>
