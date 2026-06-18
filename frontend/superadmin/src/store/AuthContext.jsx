@@ -32,6 +32,11 @@ export const AuthProvider = ({ children }) => {
   const login = async (credentials) => {
     // This is the super-admin portal — always authenticate as the product owner.
     const res = await api.post('/auth/login', { ...credentials, isSuperAdmin: true });
+    // If VITE_API_URL is unset/wrong, /api/* hits the static server's SPA fallback
+    // and returns index.html (200) instead of JSON — guard with a clear message.
+    if (!res || !res.token || !res.user) {
+      throw new Error('Could not reach the API. Check the VITE_API_URL setting for this app.');
+    }
     localStorage.setItem('token', res.token);
     localStorage.setItem('user', JSON.stringify(res.user));
     setUser(res.user);
