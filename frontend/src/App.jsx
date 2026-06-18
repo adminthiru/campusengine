@@ -77,6 +77,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={!user ? <Login /> : <RoleRedirect />} />
+      {/* Public self-service signup — same screen as login, opened in signup mode */}
+      <Route path="/register" element={!user ? <Login initialMode="signup" /> : <RoleRedirect />} />
       {/* Dedicated staff login link — always shows the form, even if a session exists */}
       <Route path="/staff-login" element={<StaffLogin />} />
       <Route path="/school-setup" element={user ? <AppLayout><SchoolSetup /></AppLayout> : <Navigate to="/login" />} />

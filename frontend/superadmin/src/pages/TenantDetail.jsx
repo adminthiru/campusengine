@@ -13,6 +13,7 @@ export default function TenantDetail() {
   const qc = useQueryClient();
   const [payOpen, setPayOpen] = useState(false);
   const [credsPw, setCredsPw] = useState(null);
+  const [trialDays, setTrialDays] = useState(15);
 
   const { data, isLoading } = useQuery({ queryKey: ['sa-school', id], queryFn: () => api.get(`/super-admin/schools/${id}`) });
   const { data: plansData } = useQuery({ queryKey: ['sa-plans'], queryFn: () => api.get('/super-admin/plans') });
@@ -32,6 +33,16 @@ export default function TenantDetail() {
   const changePlan = useMutation({
     mutationFn: (planId) => api.put(`/super-admin/schools/${id}`, { planId }),
     onSuccess: () => { invalidate(); toast.success('Plan updated'); }, onError: (e) => toast.error(e?.response?.data?.message || 'Failed'),
+  });
+  const addTrialDays = useMutation({
+    mutationFn: (days) => {
+      const cur = data?.school?.subscription?.trialEndDate;
+      const base = (cur && new Date(cur) > new Date()) ? new Date(cur) : new Date();
+      base.setDate(base.getDate() + Number(days));
+      return api.put(`/super-admin/schools/${id}/subscription`, { status: 'trial', trialEndDate: base });
+    },
+    onSuccess: () => { invalidate(); toast.success(`Trial extended by ${trialDays} day(s)`); },
+    onError: (e) => toast.error(e?.response?.data?.message || 'Failed'),
   });
   const suspend = mut(() => api.post(`/super-admin/schools/${id}/suspend`, {}), 'Suspended');
   const reactivate = mut(() => api.post(`/super-admin/schools/${id}/reactivate`, {}), 'Reactivated');
@@ -89,6 +100,20 @@ export default function TenantDetail() {
         })}
       </div>
 
+      {/* School details captured at signup */}
+      <div className="card" style={{ padding: 18, marginBottom: 16 }}>
+        <h3 className="text-14-semibold" style={{ marginBottom: 14 }}>School Details</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14 }}>
+          <Info label="School Code" value={school.code} />
+          <Info label="School Name" value={school.name} />
+          <Info label="Email" value={school.email} />
+          <Info label="Admin Phone" value={school.phone} />
+          <Info label="Location" value={school.address?.city} />
+          <Info label="Students (signup)" value={school.studentsRange} />
+          <Info label="Registered" value={fmt(school.createdAt)} />
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         {/* Subscription */}
         <div className="card" style={{ padding: 18 }}>
@@ -105,6 +130,16 @@ export default function TenantDetail() {
               <option value="">No plan</option>
               {plans.map(p => <option key={p._id} value={p._id}>{p.name} — ₹{p.price}/mo</option>)}
             </select>
+          </div>
+          <div className="form-group" style={{ marginTop: 14, marginBottom: 0 }}>
+            <label className="form-label">Extend trial</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="form-control" type="number" min="1" value={trialDays} onChange={e => setTrialDays(e.target.value)} style={{ maxWidth: 120 }} placeholder="Days" />
+              <button className="btn btn-secondary" onClick={() => addTrialDays.mutate(trialDays)} disabled={addTrialDays.isPending || !trialDays}>
+                <CalendarPlus size={14} /> Add days
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>Adds to the current trial end date and keeps the tenant on trial.</div>
           </div>
           <div style={{ marginTop: 14 }}>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Modules unlocked {planModules.length ? `(${planModules.length})` : '(all)'}</div>

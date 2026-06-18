@@ -3,16 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
-import { PageLoader, Modal, ConfirmDialog, SearchInput, EmptyState, Badge, FormRow } from '../components/ui';
-import { Plus, Building2, Eye, Power, RefreshCw, Copy, Lock } from 'lucide-react';
+import { PageLoader, Modal, ConfirmDialog, SearchInput, EmptyState, Badge } from '../components/ui';
+import { Building2, Eye, Power, RefreshCw, Copy, Lock } from 'lucide-react';
 
 export default function Tenants() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
-  const [createOpen, setCreateOpen] = useState(false);
-  const [creds, setCreds] = useState(null);          // { name, email, code, tempPassword }
+  const [creds, setCreds] = useState(null);          // { name, email, code, tempPassword } — from reset-password
   const [confirm, setConfirm] = useState(null);      // { kind, id, name }
 
   const { data, isLoading } = useQuery({ queryKey: ['sa-schools'], queryFn: () => api.get('/super-admin/schools') });
@@ -43,9 +42,9 @@ export default function Tenants() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+      <div style={{ marginBottom: 18 }}>
         <h1 className="page-title">Tenants</h1>
-        <button className="btn btn-primary" onClick={() => setCreateOpen(true)}><Plus size={15} /> Create Tenant</button>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>Schools sign up themselves — manage their subscriptions and access here.</p>
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -85,54 +84,11 @@ export default function Tenants() {
         </div>
       )}
 
-      {createOpen && <CreateTenantModal onClose={() => setCreateOpen(false)} onCreated={(c) => { setCreateOpen(false); qc.invalidateQueries(['sa-schools']); setCreds(c); }} />}
       {creds && <CredentialsModal creds={creds} onClose={() => setCreds(null)} />}
       <ConfirmDialog open={!!confirm} danger title="Suspend tenant?"
         message={`Suspend ${confirm?.name}? Their school will be blocked from accessing the app until reactivated.`}
         onClose={() => setConfirm(null)} onConfirm={() => suspend.mutate(confirm.id)} />
     </div>
-  );
-}
-
-function CreateTenantModal({ onClose, onCreated }) {
-  const { data: plansData } = useQuery({ queryKey: ['sa-plans'], queryFn: () => api.get('/super-admin/plans') });
-  const plans = plansData?.plans || [];
-  const [f, setF] = useState({ schoolName: '', adminName: '', adminEmail: '', phone: '', planId: '' });
-  const set = (k, v) => setF(p => ({ ...p, [k]: v }));
-
-  const create = useMutation({
-    mutationFn: () => api.post('/super-admin/schools', f),
-    onSuccess: (res) => onCreated({ name: f.schoolName, email: f.adminEmail, code: res.code, tempPassword: res.tempPassword }),
-    onError: (e) => toast.error(e?.response?.data?.message || 'Failed to create tenant'),
-  });
-
-  const submit = () => {
-    if (!f.schoolName.trim() || !f.adminName.trim() || !f.adminEmail.trim()) return toast.error('School name, admin name and email are required');
-    create.mutate();
-  };
-
-  return (
-    <Modal open onClose={onClose} title="Create Tenant" size="md"
-      footer={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={create.isPending}>{create.isPending ? 'Creating…' : 'Create Tenant'}</button></>}>
-      <FormRow>
-        <div className="form-group"><label className="form-label">School Name *</label><input className="form-control" value={f.schoolName} onChange={e => set('schoolName', e.target.value)} placeholder="Sri Vidya Mandir" /></div>
-        <div className="form-group"><label className="form-label">Admin Name *</label><input className="form-control" value={f.adminName} onChange={e => set('adminName', e.target.value)} placeholder="Principal name" /></div>
-      </FormRow>
-      <FormRow>
-        <div className="form-group"><label className="form-label">Admin Email *</label><input className="form-control" value={f.adminEmail} onChange={e => set('adminEmail', e.target.value)} placeholder="admin@school.com" /></div>
-        <div className="form-group"><label className="form-label">Phone</label><input className="form-control" value={f.phone} onChange={e => set('phone', e.target.value)} placeholder="Optional" /></div>
-      </FormRow>
-      <div className="form-group">
-        <label className="form-label">Plan</label>
-        <select className="form-control" value={f.planId} onChange={e => set('planId', e.target.value)}>
-          <option value="">Select a plan (optional)</option>
-          {plans.map(p => <option key={p._id} value={p._id}>{p.name} — ₹{p.price}/mo</option>)}
-        </select>
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
-        A school code + temporary password are generated and shown once (also emailed). The admin changes the password on first login.
-      </div>
-    </Modal>
   );
 }
 

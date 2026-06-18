@@ -1,5 +1,12 @@
 const mongoose = require('mongoose');
 
+// Some local/dev networks can't resolve MongoDB SRV records (querySrv
+// ECONNREFUSED), which mongodb+srv:// needs. Fall back to public DNS resolvers
+// outside production. Railway resolves SRV fine, so production is left untouched.
+if (process.env.NODE_ENV !== 'production') {
+  try { require('dns').setServers(['8.8.8.8', '1.1.1.1']); } catch {}
+}
+
 const connectDB = async () => {
   // Accept common alternative names some hosts inject, but MONGO_URI is primary.
   const uri = process.env.MONGO_URI || process.env.MONGODB_URI || process.env.MONGO_URL || process.env.DATABASE_URL;

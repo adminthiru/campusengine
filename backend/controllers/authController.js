@@ -10,29 +10,51 @@ const { v4: uuidv4 } = require('uuid');
 // Register new school (admin self-register)
 const registerSchool = async (req, res) => {
   try {
-    const { schoolName, adminName, email, password, phone } = req.body;
+    const {
+      schoolName, schoolCode, adminName, email, password,
+      phone, schoolEmail, location, studentsRange,
+    } = req.body;
 
-    // Check if email already used
-    const existingUser = await User.findOne({ email, school: null });
-    if (existingUser) return res.status(400).json({ success: false, message: 'Email already registered' });
+    if (!schoolName?.trim() || !email?.trim() || !password) {
+      return res.status(400).json({ success: false, message: 'School name, email and password are required' });
+    }
+    const loginEmail = email.trim().toLowerCase();
 
-    // Generate school code
-    const code = schoolName.substring(0, 3).toUpperCase() + Date.now().toString().slice(-5);
+    // Block duplicate admin signups for the same login email.
+    if (await User.findOne({ email: loginEmail })) {
+      return res.status(400).json({ success: false, message: 'Email already registered. Please sign in instead.' });
+    }
 
-    const school = await School.create({ name: schoolName, code, phone, email });
+    // School code: use the chosen one (uppercased, no spaces) or auto-generate. Must be unique.
+    let code = (schoolCode || '').trim().toUpperCase().replace(/\s+/g, '');
+    if (code) {
+      if (await School.findOne({ code })) return res.status(400).json({ success: false, message: 'That school code is already taken. Please choose another.' });
+    } else {
+      for (let i = 0; i < 5; i++) {
+        code = schoolName.substring(0, 3).toUpperCase() + (Date.now() + i).toString().slice(-5);
+        if (!(await School.findOne({ code }))) break;
+      }
+    }
+
+    const school = await School.create({
+      name: schoolName.trim(),
+      code,
+      phone,
+      email: (schoolEmail || loginEmail).trim().toLowerCase(),
+      address: location ? { city: location.trim() } : undefined,
+      studentsRange,
+    });
 
     const user = await User.create({
       school: school._id,
-      name: adminName,
-      email,
+      name: adminName?.trim() || loginEmail.split('@')[0] || 'Administrator',
+      email: loginEmail,
       phone,
       password,
-      role: 'admin'
+      role: 'admin',
     });
 
     const token = generateToken(user._id);
-
-    // Update User index - email+school combo
     res.status(201).json({
       success: true,
       token,
@@ -42,8 +64,8 @@ const registerSchool = async (req, res) => {
         email: user.email,
         role: user.role,
         school: { id: school._id, name: school.name, code: school.code, profileCompleted: school.profileCompleted },
-        subscription: school.subscription
-      }
+        subscription: school.subscription,
+      },
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -74,8 +96,8 @@ const login = async (req, res) => {
       if (!school) return res.status(400).json({ success: false, message: 'Invalid school code' });
       user = await User.findOne({ email, school: school._id });
     } else {
-      // Try to find by email (for admin who may not know code)
-      user = await User.findOne({ email }).sort({ createdAt: -1 });
+      // Email login requires the school code (safety: no ambiguous email-only sign-in).
+      return res.status(400).json({ success: false, message: 'School code is required' });
     }
 
     if (!user) return res.status(401).json({ success: false, message: 'Invalid credentials' });

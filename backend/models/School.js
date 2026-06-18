@@ -16,6 +16,7 @@ const schoolSchema = new mongoose.Schema({
   email: { type: String },
   website: { type: String },
   principalName: { type: String },
+  studentsRange: { type: String },   // self-signup size bracket, e.g. "1000 - 1500"
   affiliationNumber: { type: String },
   establishedYear: { type: Number },
   board: { type: String, enum: ['CBSE', 'ICSE', 'State Board', 'IB', 'Other'] },

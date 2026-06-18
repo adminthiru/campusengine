@@ -49,7 +49,9 @@ const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
 
 // ============== AUTH ==============
 // Public self-signup removed — tenants are provisioned by the super admin
-// (POST /super-admin/schools). `registerSchool` is kept in the controller only.
+// Public self-service signup — creates a school tenant + its admin account and
+// starts the free trial. The new tenant appears in the super-admin Tenants list.
+router.post('/auth/register', authCtrl.registerSchool);
 router.post('/auth/login', authCtrl.login);
 router.post('/auth/init-super-admin', authCtrl.initSuperAdmin);
 router.get('/auth/me', protect, authCtrl.getMe);
