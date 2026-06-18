@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
+const fs = require('fs');
 const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/db');
 
@@ -76,15 +77,21 @@ const { startBillingScheduler } = require('./utils/billingScheduler');
 startBillingScheduler();
 require('./controllers/superAdminController').seedDefaultPlans().catch(e => console.error('Plan seed error:', e.message));
 
-// Serve React frontend in production (built by Railway before starting the server)
+// Serve React frontend in production (built by Railway before starting the server).
+// Guard on the build actually existing so a frontend build hiccup can't crash the
+// API server — the backend still boots and serves /api and /health.
 if (process.env.NODE_ENV === 'production') {
   const frontendDist = path.join(__dirname, '../frontend/dist');
-  app.use(express.static(frontendDist));
-  // Catch-all: send index.html for any non-API route (React Router)
-  // Express 5 requires a named wildcard — '*' alone throws a PathError
-  app.get('/{*path}', (req, res) => {
-    res.sendFile(path.join(frontendDist, 'index.html'));
-  });
+  if (fs.existsSync(path.join(frontendDist, 'index.html'))) {
+    app.use(express.static(frontendDist));
+    // Catch-all: send index.html for any non-API route (React Router)
+    // Express 5 requires a named wildcard — '*' alone throws a PathError
+    app.get('/{*path}', (req, res) => {
+      res.sendFile(path.join(frontendDist, 'index.html'));
+    });
+  } else {
+    console.warn('[startup] frontend/dist not found — serving API only.');
+  }
 }
 
 // Health check
