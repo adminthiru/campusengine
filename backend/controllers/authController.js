@@ -96,8 +96,15 @@ const login = async (req, res) => {
       if (!school) return res.status(400).json({ success: false, message: 'Invalid school code' });
       user = await User.findOne({ email, school: school._id });
     } else {
-      // Email login requires the school code (safety: no ambiguous email-only sign-in).
-      return res.status(400).json({ success: false, message: 'School code is required' });
+      // No school code (e.g. the mobile app's email+password login). Look up by
+      // email: if it's unique we log in directly; only when the same email exists
+      // in more than one school do we require the code to disambiguate. The
+      // password is always verified below, so this is not a security hole.
+      const matches = await User.find({ email }).limit(2).select('_id');
+      if (matches.length > 1) {
+        return res.status(400).json({ success: false, message: 'Multiple accounts use this email. Please enter your school code.' });
+      }
+      user = matches.length === 1 ? await User.findById(matches[0]._id) : null;
     }
 
     if (!user) return res.status(401).json({ success: false, message: 'Invalid credentials' });
