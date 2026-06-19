@@ -127,7 +127,7 @@ const getDashboardStats = async (req, res) => {
       { $lookup: { from: 'students', localField: 'student', foreignField: '_id', as: 'student' } },
       { $unwind: '$student' },
       { $lookup: { from: 'classes', localField: 'student.currentClass', foreignField: '_id', as: 'class' } },
-      { $unwind: { path: '$class', preserveNullAndEmpty: true } },
+      { $unwind: { path: '$class', preserveNullAndEmptyArrays: true } },
       { $group: { _id: '$class.name', collected: { $sum: '$paidAmount' }, pending: { $sum: '$pendingAmount' } } },
       { $sort: { _id: 1 } }
     ]);
