@@ -6,6 +6,7 @@ const Razorpay = require('razorpay');
 const { generateFeeReceipt, generateFeesReport } = require('../utils/pdf');
 const { sendSMS } = require('../utils/sms');
 const { notifyParentUsers, notifyStudentUsers } = require('../utils/notify');
+const escapeRegex = require('../utils/escapeRegex');
 
 const getRazorpay = () => new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -246,7 +247,7 @@ const getFees = async (req, res) => {
     }
 
     if (search && search.trim()) {
-      const regex = new RegExp(search.trim(), 'i');
+      const regex = new RegExp(escapeRegex(search.trim()), 'i');
       const matchedStudents = await Student.find({
         school: req.user.school,
         $or: [{ name: regex }, { admissionNumber: regex }]

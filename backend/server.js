@@ -39,6 +39,22 @@ app.use(morgan('dev'));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// NoSQL-injection guard: strip MongoDB operator keys ($…, dotted) from user
+// input so values like { "$ne": null } can't be smuggled into queries.
+const stripMongoOperators = (obj, depth = 0) => {
+  if (!obj || typeof obj !== 'object' || depth > 6) return;
+  for (const key of Object.keys(obj)) {
+    if (key.startsWith('$') || key.includes('.')) { delete obj[key]; continue; }
+    const v = obj[key];
+    if (v && typeof v === 'object') stripMongoOperators(v, depth + 1);
+  }
+};
+app.use((req, res, next) => {
+  stripMongoOperators(req.body);
+  try { stripMongoOperators(req.query); } catch { /* req.query may be read-only on some setups */ }
+  next();
+});
+
 // Rate limiting
 // General API limiter — generous, since many users at a school share one public
 // IP and an active app makes lots of polling calls. (200 was far too low and
@@ -101,10 +117,6 @@ if (process.env.NODE_ENV === 'production') {
 // Friendly root — this is an API server (no website here).
 app.get('/', (req, res) => res.json({ service: 'CampusEngine API', status: 'ok', health: '/health', api: '/api' }));
 
-app.get('/', (req, res) => {
-  res.send('Backend Running');
-});
-
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'OK', timestamp: new Date() }));
 
@@ -115,11 +127,10 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 School Management Server running on port ${PORT}`);
-  console.log(`📊 API running`);
-  console.log(`🏥 Health running`);
+app.listen(PORT, () => {
+  console.log(`\n🚀 School Management Server running on port ${PORT}`);
+  console.log(`📊 API: http://localhost:${PORT}/api`);
+  console.log(`🏥 Health: http://localhost:${PORT}/health\n`);
 });
 
 module.exports = app;

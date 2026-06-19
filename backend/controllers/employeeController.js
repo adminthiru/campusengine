@@ -5,6 +5,7 @@ const { sendSMS } = require('../utils/sms');
 const { generateJobOffer } = require('../utils/pdf');
 const School = require('../models/School');
 const { assertWithinLimit } = require('../utils/planLimits');
+const escapeRegex = require('../utils/escapeRegex');
 const { v4: uuidv4 } = require('uuid');
 
 const DEFAULT_JOB_OFFER = `Dear {{employee_name}},
@@ -56,11 +57,14 @@ const getEmployees = async (req, res) => {
     const query = { school: req.user.school };
     if (role) query.role = role;
     if (status) query.status = status;
-    if (search) query.$or = [
-      { name: new RegExp(search, 'i') },
-      { employeeId: new RegExp(search, 'i') },
-      { email: new RegExp(search, 'i') }
-    ];
+    if (search) {
+      const s = escapeRegex(search);
+      query.$or = [
+        { name: new RegExp(s, 'i') },
+        { employeeId: new RegExp(s, 'i') },
+        { email: new RegExp(s, 'i') }
+      ];
+    }
 
     const total = await Employee.countDocuments(query);
     const employees = await Employee.find(query)

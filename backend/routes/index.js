@@ -26,6 +26,7 @@ const SmsLog = require('../models/SmsLog');
 const { Expense, Transport } = require('../models/Expense');
 const School = require('../models/School');
 const { limitFor } = require('../utils/planLimits');
+const escapeRegex = require('../utils/escapeRegex');
 const User = require('../models/User');
 const Student = require('../models/Student');
 const Employee = require('../models/Employee');
@@ -40,12 +41,27 @@ const PurchaseRequest = require('../models/PurchaseRequest');
 const { v4: uuidv4 } = require('uuid');
 const { notifyParentUsers, notifyStudentUsers } = require('../utils/notify');
 
-// Multer setup
+// Multer setup — generate a safe random filename (never trust client filename:
+// `../../x` would be a path-traversal write) and restrict to safe file types.
+const UPLOAD_ALLOWED_EXT = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.xlsx', '.xls', '.csv', '.doc', '.docx', '.ppt', '.pptx', '.txt'];
+// Blocked implicitly (not in the list): .html .htm .svg .js .php .exe .sh etc. — these
+// can execute scripts when served from /uploads (stored XSS).
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads')),
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+  filename: (req, file, cb) => {
+    const ext = (path.extname(file.originalname || '') || '').toLowerCase().replace(/[^.a-z0-9]/g, '');
+    cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+  }
 });
-const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = (path.extname(file.originalname || '') || '').toLowerCase();
+    if (UPLOAD_ALLOWED_EXT.includes(ext)) return cb(null, true);
+    cb(new Error('File type not allowed'));
+  },
+});
 
 // ============== AUTH ==============
 // Public self-signup removed — tenants are provisioned by the super admin
@@ -203,10 +219,13 @@ router.delete('/employees/:id', protect, checkSubscription, authorize('admin', '
 router.post('/employees/:id/job-offer-pdf', protect, empCtrl.getJobOfferPDF);
 router.post('/employees/:id/tasks', protect, authorize('admin', 'correspondent', 'principal'), empCtrl.assignTask);
 router.put('/employees/:id/tasks/:taskId', protect, empCtrl.updateTask);
-router.post('/employees/:id/upload-photo', protect, upload.single('photo'), async (req, res) => {
+router.post('/employees/:id/upload-photo', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), upload.single('photo'), async (req, res) => {
   try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
     const url = `/uploads/${req.file.filename}`;
-    await require('../models/Employee').findByIdAndUpdate(req.params.id, { photo: url });
+    // Scope to the caller's school so one tenant can't set another tenant's photo.
+    const emp = await Employee.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, { photo: url });
+    if (!emp) return res.status(404).json({ success: false, message: 'Employee not found' });
     res.json({ success: true, url });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -255,15 +274,18 @@ router.post('/employees/bulk', protect, checkSubscription, authorize('admin', 'c
 router.get('/students', protect, checkSubscription, stuCtrl.getStudents);
 router.post('/students', protect, checkSubscription, authorize('admin', 'correspondent', 'principal', 'accountant'), stuCtrl.createStudent);
 router.get('/students/:id', protect, checkSubscription, stuCtrl.getStudent);
-router.put('/students/:id', protect, checkSubscription, stuCtrl.updateStudent);
+router.put('/students/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'principal', 'accountant'), stuCtrl.updateStudent);
 router.delete('/students/:id', protect, checkSubscription, authorize('admin', 'correspondent'), stuCtrl.deleteStudent);
 router.post('/students/promote', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), stuCtrl.promoteStudents);
 router.post('/students/:id/admission-letter-pdf', protect, stuCtrl.getAdmissionLetterPDF);
 router.post('/students/id-card-data', protect, stuCtrl.getIDCardData);
-router.post('/students/:id/upload-photo', protect, upload.single('photo'), async (req, res) => {
+router.post('/students/:id/upload-photo', protect, checkSubscription, authorize('admin', 'correspondent', 'principal', 'accountant'), upload.single('photo'), async (req, res) => {
   try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
     const url = `/uploads/${req.file.filename}`;
-    await require('../models/Student').findByIdAndUpdate(req.params.id, { photo: url });
+    // Scope to the caller's school so one tenant can't set another tenant's photo.
+    const stu = await Student.findOneAndUpdate({ _id: req.params.id, school: req.user.school }, { photo: url });
+    if (!stu) return res.status(404).json({ success: false, message: 'Student not found' });
     res.json({ success: true, url });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -313,7 +335,7 @@ router.get('/parents', protect, async (req, res) => {
       school: req.user.school, primaryGuardian: { $ne: null }
     });
     const query = { _id: { $in: primaryIds }, school: req.user.school };
-    if (search) query.$or = [{ name: new RegExp(search, 'i') }, { phone: new RegExp(search, 'i') }];
+    if (search) { const s = escapeRegex(search); query.$or = [{ name: new RegExp(s, 'i') }, { phone: new RegExp(s, 'i') }]; }
     const parents = await Parent.find(query).sort({ name: 1 });
 
     // Query students directly (don't rely on parent.students[] which can be stale)
@@ -1311,6 +1333,14 @@ router.put('/users/:id/toggle-status', protect, authorize('admin', 'corresponden
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'Not found' });
+    // Tenant isolation: a school admin may only toggle users in their own school.
+    if (req.user.role !== 'super_admin' && String(user.school) !== String(req.user.school)) {
+      return res.status(404).json({ success: false, message: 'Not found' });
+    }
+    // Don't let an admin disable their own account.
+    if (String(user._id) === String(req.user._id)) {
+      return res.status(400).json({ success: false, message: 'You cannot change your own status' });
+    }
     user.isActive = !user.isActive;
     await user.save();
     res.json({ success: true, user });

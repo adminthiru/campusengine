@@ -7,11 +7,22 @@ const { Expense } = require('../models/Expense');
 const Attendance = require('../models/Attendance');
 const Salary = require('../models/Salary');
 
+// Fields a school admin must NOT be able to set on their own school via the
+// profile/setup endpoints — these are controlled by the super admin / billing.
+// Without this, a tenant could grant themselves modules/limits, mark their
+// subscription active, or un-suspend (isActive) via mass assignment.
+const PROTECTED_SCHOOL_FIELDS = ['subscription', 'isActive', 'code', 'suspendedReason', 'suspendedAt', '_id', 'createdAt', 'updatedAt', 'studentsRange'];
+const stripProtectedSchoolFields = (body = {}) => {
+  const clean = { ...body };
+  PROTECTED_SCHOOL_FIELDS.forEach(f => delete clean[f]);
+  return clean;
+};
+
 // Setup school profile
 const setupSchool = async (req, res) => {
   try {
     const schoolId = req.user.school;
-    const updateData = { ...req.body, profileCompleted: true };
+    const updateData = { ...stripProtectedSchoolFields(req.body), profileCompleted: true };
     const school = await School.findByIdAndUpdate(schoolId, updateData, { returnDocument: 'after', runValidators: true });
     res.json({ success: true, school });
   } catch (err) {
@@ -32,7 +43,7 @@ const getSchool = async (req, res) => {
 // Update school
 const updateSchool = async (req, res) => {
   try {
-    const school = await School.findByIdAndUpdate(req.user.school, req.body, { returnDocument: 'after' });
+    const school = await School.findByIdAndUpdate(req.user.school, stripProtectedSchoolFields(req.body), { returnDocument: 'after' });
     res.json({ success: true, school });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

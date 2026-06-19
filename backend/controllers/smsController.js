@@ -4,6 +4,7 @@ const SmsTemplate = require('../models/SmsTemplate');
 const SmsCampaign = require('../models/SmsCampaign');
 const { sendCustomSMS, sendBulkSMS, sendOTP, verifyOTP, updateDeliveryStatus } = require('../utils/sms');
 const { buildRecipients, runCampaign } = require('../utils/scheduler');
+const escapeRegex = require('../utils/escapeRegex');
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 const getSettings = async (req, res) => {
@@ -167,7 +168,7 @@ const getLogs = async (req, res) => {
     if (type) query.type = type;
     if (status) query.status = status;
     if (channel) query.channel = channel;
-    if (search) query.$or = [{ to: new RegExp(search, 'i') }, { recipientName: new RegExp(search, 'i') }, { message: new RegExp(search, 'i') }];
+    if (search) { const s = escapeRegex(search); query.$or = [{ to: new RegExp(s, 'i') }, { recipientName: new RegExp(s, 'i') }, { message: new RegExp(s, 'i') }]; }
     const total = await SmsLog.countDocuments(query);
     const logs = await SmsLog.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(Number(limit));
     res.json({ success: true, logs, total, page: Number(page), pages: Math.ceil(total / limit) });

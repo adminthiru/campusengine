@@ -7,6 +7,7 @@ const { sendEmail, invitationEmail } = require('../utils/email');
 const { sendSMS } = require('../utils/sms');
 const { generateAdmissionLetter } = require('../utils/pdf');
 const { assertWithinLimit } = require('../utils/planLimits');
+const escapeRegex = require('../utils/escapeRegex');
 const { v4: uuidv4 } = require('uuid');
 
 const DEFAULT_ADMISSION_LETTER = `Dear Parent/Guardian,
@@ -86,11 +87,14 @@ const getStudents = async (req, res) => {
     const query = { school: req.user.school };
     if (classId) query.currentClass = classId;
     if (status) query.status = status;
-    if (search) query.$or = [
-      { name: new RegExp(search, 'i') },
-      { admissionNumber: new RegExp(search, 'i') },
-      { rollNumber: new RegExp(search, 'i') }
-    ];
+    if (search) {
+      const s = escapeRegex(search);
+      query.$or = [
+        { name: new RegExp(s, 'i') },
+        { admissionNumber: new RegExp(s, 'i') },
+        { rollNumber: new RegExp(s, 'i') }
+      ];
+    }
 
     const total = await Student.countDocuments(query);
     const students = await Student.find(query)
