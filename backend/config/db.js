@@ -28,6 +28,14 @@ const connectDB = async () => {
     try {
       const conn = await mongoose.connect(uri, { serverSelectionTimeoutMS: 10000 });
       console.log(`MongoDB Connected: ${conn.connection.host}`);
+      // One-time, idempotent migration: drop the legacy sparse {admissionNumber,school}
+      // unique index that caused E11000 duplicate-key errors on null admissionNumber.
+      // The schema now defines a partial index (admissionNumber_school_partial), which
+      // Mongoose auto-creates; here we just remove the old one if it's still present.
+      try {
+        await mongoose.connection.collection('users').dropIndex('admissionNumber_1_school_1');
+        console.log('[migrate] dropped legacy admissionNumber_1_school_1 index');
+      } catch { /* already migrated or never existed — fine */ }
       return;
     } catch (error) {
       attempt += 1;

@@ -45,7 +45,15 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 userSchema.index({ email: 1, school: 1 }, { unique: true });
-userSchema.index({ admissionNumber: 1, school: 1 }, { unique: true, sparse: true });
+// Partial (NOT sparse): a sparse compound index still indexes docs where only
+// admissionNumber is null (school is present), so multiple non-student users
+// (admin/teacher/parent) collide on { admissionNumber: null, school }. A partial
+// index only enforces uniqueness when admissionNumber is an actual string.
+// New index name avoids a conflict with the legacy index (dropped in db.js).
+userSchema.index(
+  { admissionNumber: 1, school: 1 },
+  { unique: true, partialFilterExpression: { admissionNumber: { $type: 'string' } }, name: 'admissionNumber_school_partial' }
+);
 
 userSchema.pre('save', async function() {
   if (!this.isModified('password')) return;
