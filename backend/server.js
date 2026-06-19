@@ -30,6 +30,8 @@ app.use(cors({
     if (/^https:\/\/[^.]+\.(up\.railway\.app|railway\.app)$/.test(origin)) return callback(null, true);
     // Allow the campusengine.in app domains (school + super admin subdomains)
     if (/^https:\/\/([a-z0-9-]+\.)?campusengine\.in$/.test(origin)) return callback(null, true);
+    // Allow Render-hosted frontends / Flutter web (e.g. campusengine-web.onrender.com)
+    if (/^https:\/\/[a-z0-9-]+\.onrender\.com$/.test(origin)) return callback(null, true);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true

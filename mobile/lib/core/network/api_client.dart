@@ -3,8 +3,16 @@ import 'package:flutter/foundation.dart';
 import '../storage/secure_storage.dart';
 
 class ApiClient {
+  // Production default points at the live Render API. Override for local dev with:
+  //   flutter run --dart-define=API_BASE_URL=http://localhost:5000/api   (web)
+  //   flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5000/api    (android emulator)
+  static const String _baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://campusengine.onrender.com/api',
+  );
+
   static final Dio _dio = Dio(BaseOptions(
-    baseUrl: kIsWeb ? 'http://localhost:5000/api' : 'http://10.0.2.2:5000/api',
+    baseUrl: _baseUrl,
     connectTimeout: const Duration(seconds: 60),
     receiveTimeout: const Duration(seconds: 60),
     headers: {'Content-Type': 'application/json'},
