@@ -101,6 +101,10 @@ if (process.env.NODE_ENV === 'production') {
 // Friendly root — this is an API server (no website here).
 app.get('/', (req, res) => res.json({ service: 'CampusEngine API', status: 'ok', health: '/health', api: '/api' }));
 
+app.get('/', (req, res) => {
+  res.send('Backend Running');
+});
+
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'OK', timestamp: new Date() }));
 
