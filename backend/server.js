@@ -96,6 +96,7 @@ startScheduler();
 const { startBillingScheduler } = require('./utils/billingScheduler');
 startBillingScheduler();
 require('./controllers/superAdminController').seedDefaultPlans().catch(e => console.error('Plan seed error:', e.message));
+require('./controllers/superAdminController').createDefaultSuperAdmin().catch(e => console.error('Super admin seed error:', e.message));
 
 // Serve React frontend in production (built by Railway before starting the server).
 // Guard on the build actually existing so a frontend build hiccup can't crash the

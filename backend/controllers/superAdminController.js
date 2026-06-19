@@ -52,6 +52,21 @@ const seedDefaultPlans = async () => {
   ]);
 };
 
+// Auto-provision the platform super admin on startup (idempotent), from the
+// SUPER_ADMIN_EMAIL / SUPER_ADMIN_PASSWORD env vars — so a fresh deployment
+// (Render/Railway/Atlas) is ready to log in without a manual init call.
+const createDefaultSuperAdmin = async () => {
+  const email = (process.env.SUPER_ADMIN_EMAIL || '').trim().toLowerCase();
+  const password = process.env.SUPER_ADMIN_PASSWORD;
+  if (!email || !password) {
+    console.warn('[startup] SUPER_ADMIN_EMAIL / SUPER_ADMIN_PASSWORD not set — skipping super-admin seed');
+    return;
+  }
+  if (await User.findOne({ role: 'super_admin' })) return;   // already provisioned
+  await User.create({ name: 'Super Admin', email, password, role: 'super_admin' });  // pre-save hook hashes
+  console.log(`[startup] Super admin provisioned: ${email}`);
+};
+
 // ── Tenants ───────────────────────────────────────────────────────────────────
 const listSchools = async (req, res) => {
   try {
@@ -366,7 +381,7 @@ const updatePaymentSettings = async (req, res) => {
 };
 
 module.exports = {
-  seedDefaultPlans,
+  seedDefaultPlans, createDefaultSuperAdmin,
   listSchools, getSchool, createTenant, updateSchool, suspendSchool, reactivateSchool,
   resetAdminPassword, updateSubscription, recordPayment, getStats, listPayments,
   listPlans, getActivePlans, createPlan, updatePlan, deletePlan,
