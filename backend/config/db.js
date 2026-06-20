@@ -36,6 +36,13 @@ const connectDB = async () => {
         await mongoose.connection.collection('users').dropIndex('admissionNumber_1_school_1');
         console.log('[migrate] dropped legacy admissionNumber_1_school_1 index');
       } catch { /* already migrated or never existed — fine */ }
+      // Legacy 2-field email uniqueness → replaced by the 3-field
+      // {email, school, staffCode} index (auto-created from the schema) so a
+      // staff login can share an email with an app login.
+      try {
+        await mongoose.connection.collection('users').dropIndex('email_1_school_1');
+        console.log('[migrate] dropped legacy email_1_school_1 index');
+      } catch { /* already migrated or never existed — fine */ }
       return;
     } catch (error) {
       attempt += 1;

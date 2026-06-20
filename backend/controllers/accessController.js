@@ -107,7 +107,7 @@ const deleteAccessRole = async (req, res) => {
 const listStaffLogins = async (req, res) => {
   try {
     const users = await User.find({ school: req.user.school, accessType: 'custom' })
-      .select('name email phone category accessRole permissions permissionsCustomized isActive firstLogin lastLogin createdAt')
+      .select('name email phone staffCode category accessRole permissions permissionsCustomized isActive firstLogin lastLogin createdAt')
       .populate('accessRole', 'name')
       .sort({ createdAt: -1 });
     res.json({ success: true, logins: users });
@@ -116,10 +116,12 @@ const listStaffLogins = async (req, res) => {
 
 const createStaffLogin = async (req, res) => {
   try {
-    const { name, email, phone, accessRoleId, employeeId } = req.body;
+    const { name, email, phone, accessRoleId, employeeId, staffCode } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ success: false, message: 'Name is required' });
     if (!email || !email.trim()) return res.status(400).json({ success: false, message: 'Email is required' });
     if (!accessRoleId) return res.status(400).json({ success: false, message: 'Please select an access role' });
+    if (!staffCode || !staffCode.trim()) return res.status(400).json({ success: false, message: 'Staff code is required' });
+    const code = staffCode.trim();
 
     const role = await AccessRole.findOne({ _id: accessRoleId, school: req.user.school });
     if (!role) return res.status(404).json({ success: false, message: 'Access role not found' });
@@ -132,12 +134,11 @@ const createStaffLogin = async (req, res) => {
       if (!linkedEmployee) return res.status(404).json({ success: false, message: 'Employee not found' });
     }
 
-    // Staff logins are SEPARATE accounts from app logins, so the email/username
-    // must be unique within the school. (An app login uses the person's own email;
-    // a staff sub-admin login needs its own email, e.g. barath.librarian@school.com.)
     const emailNorm = email.trim().toLowerCase();
-    const dupe = await User.findOne({ school: req.user.school, email: emailNorm });
-    if (dupe) return res.status(400).json({ success: false, message: 'This email already has a login in your school. Staff logins are separate accounts — please use a different email/username.' });
+    // The staff code is the unique identifier for a staff (web-admin) login within
+    // the school — it lets the SAME email also exist as a separate app login.
+    const codeDupe = await User.findOne({ school: req.user.school, staffCode: code });
+    if (codeDupe) return res.status(400).json({ success: false, message: 'That staff code is already in use. Please choose another.' });
 
     const tempPassword = genTempPassword();
     const user = await User.create({
@@ -152,6 +153,7 @@ const createStaffLogin = async (req, res) => {
       permissions: normalizePermissions(role.permissions),
       permissionsCustomized: false,
       category: role.name,
+      staffCode: code,
       employeeId: linkedEmployee?._id,
       firstLogin: true,
       isActive: true,
@@ -163,7 +165,7 @@ const createStaffLogin = async (req, res) => {
         .catch(() => {});
     }
 
-    res.json({ success: true, login: { _id: user._id, name: user.name, email: user.email }, tempPassword });
+    res.json({ success: true, login: { _id: user._id, name: user.name, email: user.email, staffCode: user.staffCode }, tempPassword });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 

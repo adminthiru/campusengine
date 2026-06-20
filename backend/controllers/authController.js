@@ -75,12 +75,18 @@ const registerSchool = async (req, res) => {
 // Login
 const login = async (req, res) => {
   try {
-    const { email, password, schoolCode } = req.body;
+    const { email, password, schoolCode, staffCode } = req.body;
     const isIdentifier = email && !email.includes('@');
+    const emailLc = email ? String(email).trim().toLowerCase() : email;
 
     let user;
     if (req.body.isSuperAdmin) {
-      user = await User.findOne({ email, role: 'super_admin' });
+      user = await User.findOne({ email: emailLc, role: 'super_admin' });
+    } else if (staffCode) {
+      // Staff sub-admin login (web admin): staff code + email, no school code.
+      // The staff code is the unique identifier that distinguishes this account
+      // from the same person's app login (which has no staff code).
+      user = await User.findOne({ email: emailLc, staffCode: String(staffCode).trim() });
     } else if (isIdentifier) {
       // Admission number (student) or mobile number (parent)
       let sf = {};
@@ -94,13 +100,12 @@ const login = async (req, res) => {
     } else if (schoolCode) {
       const school = await School.findOne({ code: schoolCode.toUpperCase() });
       if (!school) return res.status(400).json({ success: false, message: 'Invalid school code' });
-      user = await User.findOne({ email, school: school._id });
+      // staffCode:null → the regular/app account (never a staff sub-admin login).
+      user = await User.findOne({ email: emailLc, school: school._id, staffCode: null });
     } else {
-      // No school code (e.g. the mobile app's email+password login). Look up by
-      // email: if it's unique we log in directly; only when the same email exists
-      // in more than one school do we require the code to disambiguate. The
-      // password is always verified below, so this is not a security hole.
-      const matches = await User.find({ email }).limit(2).select('_id');
+      // No school code (e.g. the mobile app's email+password login). Resolve to the
+      // app/regular account (staffCode:null) — staff logins require their staff code.
+      const matches = await User.find({ email: emailLc, staffCode: null }).limit(2).select('_id');
       if (matches.length > 1) {
         return res.status(400).json({ success: false, message: 'Multiple accounts use this email. Please enter your school code.' });
       }

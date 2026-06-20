@@ -42,9 +42,17 @@ const userSchema = new mongoose.Schema({
   studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' },
   parentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Parent' },
   admissionNumber: { type: String },
+  // Staff sub-admin logins (web admin: Librarian/Principal/…) carry a unique
+  // staffCode. App logins / regular accounts leave it null. This lets the SAME
+  // email exist as both an app login (staffCode null) and a staff login (with a
+  // code) — they're told apart at sign-in by the staff code.
+  staffCode: { type: String, default: null },
 }, { timestamps: true });
 
-userSchema.index({ email: 1, school: 1 }, { unique: true });
+// Uniqueness keyed on (email, school, staffCode): existing/app accounts have a
+// null staffCode, so email stays unique among them; a staff login adds a
+// non-null code, so it can reuse an email that already has an app login.
+userSchema.index({ email: 1, school: 1, staffCode: 1 }, { unique: true });
 // Partial (NOT sparse): a sparse compound index still indexes docs where only
 // admissionNumber is null (school is present), so multiple non-student users
 // (admin/teacher/parent) collide on { admissionNumber: null, school }. A partial

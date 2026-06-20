@@ -2329,11 +2329,20 @@ function PermMatrix({ value, onChange }) {
 function PasswordModal({ login, password, onClose, showUrl = true }) {
   const { user } = useAuth();
   const code = user?.school?.code || '';
+  const isStaff = !!login?.staffCode;
   // Identity is the email for staff/teacher, admission number for students, mobile for parents.
   const identifier = login?.identifier || login?.email || '';
-  const loginUrl = `${window.location.origin}/staff-login?code=${encodeURIComponent(code)}${identifier ? `&id=${encodeURIComponent(identifier)}` : ''}`;
+  // Staff logins sign in with staff code + email; app/other logins use school code + id.
+  const loginUrl = isStaff
+    ? `${window.location.origin}/staff-login?staffCode=${encodeURIComponent(login.staffCode)}${login.email ? `&email=${encodeURIComponent(login.email)}` : ''}`
+    : `${window.location.origin}/staff-login?code=${encodeURIComponent(code)}${identifier ? `&id=${encodeURIComponent(identifier)}` : ''}`;
   const copyAll = () => {
-    const lines = [showUrl ? `Login URL: ${loginUrl}` : null, `Login ID: ${identifier}`, `Temporary Password: ${password}`].filter(Boolean);
+    const lines = [
+      showUrl ? `Login URL: ${loginUrl}` : null,
+      isStaff ? `Staff Code: ${login.staffCode}` : null,
+      `${isStaff ? 'Email' : 'Login ID'}: ${identifier}`,
+      `Temporary Password: ${password}`,
+    ].filter(Boolean);
     navigator.clipboard?.writeText(lines.join('\n'));
     toast.success('Credentials copied');
   };
@@ -2356,7 +2365,13 @@ function PasswordModal({ login, password, onClose, showUrl = true }) {
             </div>
           </>
         )}
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Login ID</div>
+        {isStaff && (
+          <>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Staff Code</div>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: 'var(--primary)' }}>{login.staffCode}</div>
+          </>
+        )}
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{isStaff ? 'Email' : 'Login ID'}</div>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{identifier}</div>
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Temporary Password</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -2441,7 +2456,7 @@ function StaffLoginsSettings() {
           ) : (
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
               <table style={{ width: '100%' }}>
-                <thead><tr><th>Name</th><th>Email</th><th>Access Role</th><th>Modules</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>Name</th><th>Staff Code</th><th>Email</th><th>Access Role</th><th>Modules</th><th>Status</th><th></th></tr></thead>
                 <tbody>
                   {filtered.map(l => (
                     <tr key={l._id}>
@@ -2449,6 +2464,7 @@ function StaffLoginsSettings() {
                         {l.name}
                         {l.permissionsCustomized && <span title="Permissions fine-tuned for this login" style={{ marginLeft: 6, fontSize: 10, color: '#d97706', background: '#fffbeb', padding: '1px 6px', borderRadius: 10 }}>custom</span>}
                       </td>
+                      <td style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary)' }}>{l.staffCode || '—'}</td>
                       <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{l.email}</td>
                       <td style={{ fontSize: 13 }}>{l.accessRole?.name || l.category || '—'}</td>
                       <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{permCount(l.permissions)}</td>
@@ -2557,6 +2573,7 @@ function StaffLoginModal({ data, roles, onClose, onCreated }) {
   const [name, setName]   = useState(l?.name || '');
   const [email, setEmail] = useState(l?.email || '');
   const [phone, setPhone] = useState(l?.phone || '');
+  const [staffCode, setStaffCode] = useState(l?.staffCode || '');
   const [employeeId, setEmployeeId] = useState('');
   const [roleId, setRoleId] = useState(l?.accessRole?._id || (roles[0]?._id || ''));
   const [fineTune, setFineTune] = useState(false);
@@ -2568,15 +2585,12 @@ function StaffLoginModal({ data, roles, onClose, onCreated }) {
   const pickEmployee = (id) => {
     setEmployeeId(id);
     const emp = employees.find(e => e._id === id);
-    // Staff logins are SEPARATE accounts from app logins, so we don't copy the
-    // employee's email (they may already use it for their app login). The admin
-    // sets a distinct login email/username below.
-    if (emp) { setName(emp.name || ''); setPhone(emp.phone || ''); }
+    if (emp) { setName(emp.name || ''); setEmail(emp.email || ''); setPhone(emp.phone || ''); }
   };
 
   const create = useMutation({
     mutationFn: (body) => api.post('/staff-logins', body),
-    onSuccess: (res) => { qc.invalidateQueries(['staff-logins']); qc.invalidateQueries(['access-roles']); onClose(); onCreated({ login: { name, email }, password: res.tempPassword }); },
+    onSuccess: (res) => { qc.invalidateQueries(['staff-logins']); qc.invalidateQueries(['access-roles']); onClose(); onCreated({ login: { name, email, staffCode: staffCode.trim() }, password: res.tempPassword }); },
     onError: (e) => toast.error(e?.response?.data?.message || 'Create failed'),
   });
   const update = useMutation({
@@ -2588,13 +2602,14 @@ function StaffLoginModal({ data, roles, onClose, onCreated }) {
   const submit = () => {
     if (!name.trim()) return toast.error('Name is required');
     if (!editing && !email.trim()) return toast.error('Email is required');
+    if (!editing && !staffCode.trim()) return toast.error('Staff code is required');
     if (!roleId) return toast.error('Select an access role');
     if (editing) {
       const body = { name, phone, accessRoleId: roleId };
       if (fineTune) body.permissions = perms;
       update.mutate(body);
     } else {
-      create.mutate({ name, email, phone, accessRoleId: roleId, employeeId: employeeId || undefined });
+      create.mutate({ name, email, phone, staffCode: staffCode.trim(), accessRoleId: roleId, employeeId: employeeId || undefined });
     }
   };
 
@@ -2604,7 +2619,7 @@ function StaffLoginModal({ data, roles, onClose, onCreated }) {
       footer={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={create.isPending || update.isPending}>{(create.isPending || update.isPending) ? 'Saving…' : editing ? 'Save Changes' : 'Create Login'}</button></>}>
       {!editing && (
         <div className="form-group">
-          <label className="form-label">Select Employee <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}>— auto-fills the name</span></label>
+          <label className="form-label">Select Employee <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}>— auto-fills the details below</span></label>
           <AntSelect showSearch style={{ width: '100%' }} value={employeeId || undefined} onChange={pickEmployee}
             placeholder="Choose from the employee list…" optionFilterProp="label" getPopupContainer={() => document.body}
             options={employees.map(e => ({ value: e._id, label: `${e.name}${e.email ? ' · ' + e.email : ''}` }))} />
@@ -2617,21 +2632,25 @@ function StaffLoginModal({ data, roles, onClose, onCreated }) {
           <input className="form-control" value={name} onChange={e => setName(e.target.value)} placeholder="Staff name" />
         </div>
         <div className="form-group">
-          <label className="form-label">Login Email <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}>— separate from their app login</span> <span style={{ color: '#ef4444' }}>*</span></label>
-          <input className="form-control" value={email} onChange={e => setEmail(e.target.value)} placeholder="e.g. name.librarian@school.com" disabled={editing} />
+          <label className="form-label">Email <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}>— can match their app login</span> <span style={{ color: '#ef4444' }}>*</span></label>
+          <input className="form-control" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@school.com" disabled={editing} />
         </div>
       </FormRow>
       <FormRow>
         <div className="form-group">
+          <label className="form-label">Staff Code <span style={{ color: '#ef4444' }}>*</span> <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}>— used to sign in</span></label>
+          <input className="form-control" value={staffCode} onChange={e => setStaffCode(e.target.value)} placeholder="e.g. LIB01" disabled={editing} />
+        </div>
+        <div className="form-group">
           <label className="form-label">Phone</label>
           <input className="form-control" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Optional" />
         </div>
-        <div className="form-group">
-          <label className="form-label">Access Role <span style={{ color: '#ef4444' }}>*</span></label>
-          <AntSelect style={{ width: '100%' }} value={roleId || undefined} onChange={setRoleId} placeholder="Select role"
-            options={roles.map(r => ({ value: r._id, label: r.name }))} getPopupContainer={() => document.body} />
-        </div>
       </FormRow>
+      <div className="form-group">
+        <label className="form-label">Access Role <span style={{ color: '#ef4444' }}>*</span></label>
+        <AntSelect style={{ width: '100%' }} value={roleId || undefined} onChange={setRoleId} placeholder="Select role"
+          options={roles.map(r => ({ value: r._id, label: r.name }))} getPopupContainer={() => document.body} />
+      </div>
       {!editing && (
         <div style={{ fontSize: 12, color: 'var(--text-muted)', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
           A temporary password will be generated and shown once. The staff member changes it on first login.
