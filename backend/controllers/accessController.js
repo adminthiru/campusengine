@@ -218,6 +218,12 @@ const deleteStaffLogin = async (req, res) => {
   try {
     const user = await User.findOneAndDelete({ _id: req.params.id, school: req.user.school, accessType: 'custom' });
     if (!user) return res.status(404).json({ success: false, message: 'Login not found' });
+    // Clear the profile back-reference (only if it points to THIS login, so an app
+    // login on the same person isn't affected) — otherwise the person would stay
+    // hidden from the login pickers, which only show profiles without a `user`.
+    if (user.employeeId) await require('../models/Employee').updateOne({ _id: user.employeeId, user: user._id }, { $unset: { user: 1 } });
+    if (user.studentId)  await require('../models/Student').updateOne({ _id: user.studentId, user: user._id }, { $unset: { user: 1 } });
+    if (user.parentId)   await require('../models/Parent').updateOne({ _id: user.parentId, user: user._id }, { $unset: { user: 1 } });
     res.json({ success: true, message: 'Login removed' });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
