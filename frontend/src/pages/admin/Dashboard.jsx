@@ -3,8 +3,51 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContai
 import { GraduationCap, Users, CreditCard, TrendingUp, UserCheck, AlertCircle, Clock, Banknote } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../store/AuthContext';
-import { StatCard, PageLoader } from '../../components/ui';
+import { StatCard, Skeleton } from '../../components/ui';
 import { format } from 'date-fns';
+
+// Loading skeleton that mirrors the dashboard's widgets (stat cards + charts + list).
+function DashboardSkeleton() {
+  return (
+    <div style={{ padding: 4 }}>
+      <div style={{ marginBottom: 24 }}><Skeleton width={200} height={24} /><Skeleton width={150} height={13} style={{ marginTop: 10 }} /></div>
+      <div className="grid-4" style={{ marginBottom: 24 }}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="card" style={{ padding: 18 }}>
+            <Skeleton width={36} height={36} radius={10} />
+            <Skeleton width={70} height={26} style={{ marginTop: 14 }} />
+            <Skeleton width={100} height={12} style={{ marginTop: 10 }} />
+          </div>
+        ))}
+      </div>
+      <div className="grid-2" style={{ marginBottom: 24 }}>
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="card" style={{ padding: 18 }}>
+            <Skeleton width={140} height={16} />
+            <Skeleton width="100%" height={200} radius={10} style={{ marginTop: 16 }} />
+          </div>
+        ))}
+      </div>
+      <div className="grid-2" style={{ marginBottom: 24 }}>
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="card" style={{ padding: 18 }}>
+            <Skeleton width={160} height={16} />
+            <Skeleton width="100%" height={200} radius={10} style={{ marginTop: 16 }} />
+          </div>
+        ))}
+      </div>
+      <div className="card" style={{ padding: 18 }}>
+        <Skeleton width={180} height={16} style={{ marginBottom: 16 }} />
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 0' }}>
+            <Skeleton width={36} height={36} radius={18} />
+            <Skeleton width={160} height={14} /><Skeleton width={100} height={14} /><Skeleton width={80} height={14} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const COLORS = ['#1a56e8', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#f97316'];
 const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -17,7 +60,7 @@ export default function Dashboard() {
     refetchInterval: 60000
   });
 
-  if (isLoading) return <PageLoader />;
+  if (isLoading) return <DashboardSkeleton />;
   const s = data?.stats;
 
   const revenueChart = s?.charts?.revenue?.map(r => ({
