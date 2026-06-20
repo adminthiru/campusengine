@@ -143,6 +143,46 @@ const getDashboardStats = async (req, res) => {
       { $sort: { _id: 1 } }
     ]);
 
+    // ── Operational pulse, upcoming items, and action-center alerts ──────────────
+    const OutPass = require('../models/OutPass');
+    const Visit = require('../models/Visit');
+    const Leave = require('../models/Leave');
+    const StudentLeave = require('../models/StudentLeave');
+    const BookIssue = require('../models/BookIssue');
+    const PurchaseRequest = require('../models/PurchaseRequest');
+    const SchoolCalendar = require('../models/SchoolCalendar');
+    const { Exam } = require('../models/Exam');
+    const Homework = require('../models/Homework');
+    const in7 = new Date(today); in7.setDate(in7.getDate() + 7);
+
+    const [
+      outpassToday, visitsToday, pendingStaffLeaves, pendingStudentLeaves,
+      todayExpenseAgg, feeTotals, overdueBooks, pendingPurchases,
+      upcomingEvents, upcomingExams, homeworkDue, classStrength, overdueFeesAgg,
+    ] = await Promise.all([
+      OutPass.countDocuments({ school: schoolId, exitDate: { $gte: today, $lte: todayEnd } }),
+      Visit.countDocuments({ school: schoolId, checkInTime: { $gte: today, $lte: todayEnd } }),
+      Leave.countDocuments({ school: schoolId, status: 'pending' }),
+      StudentLeave.countDocuments({ school: schoolId, status: 'pending' }),
+      Expense.aggregate([{ $match: { school: schoolId, date: { $gte: today, $lte: todayEnd } } }, { $group: { _id: null, total: { $sum: '$amount' } } }]),
+      FeeCollection.aggregate([{ $match: { school: schoolId } }, { $group: { _id: null, collected: { $sum: '$paidAmount' }, expected: { $sum: '$netAmount' } } }]),
+      BookIssue.countDocuments({ school: schoolId, status: { $in: ['issued', 'overdue'] }, dueDate: { $lt: today } }),
+      PurchaseRequest.countDocuments({ school: schoolId, status: 'pending' }),
+      SchoolCalendar.find({ school: schoolId, date: { $gte: today, $lte: in7 } }).select('title date type color').sort({ date: 1 }).limit(8).lean(),
+      Exam.find({ school: schoolId, examDate: { $gte: today, $lte: in7 } }).select('name examDate type').sort({ examDate: 1 }).limit(8).lean(),
+      Homework.find({ school: schoolId, status: 'active', dueDate: { $gte: today, $lte: in7 } }).select('title dueDate').populate('class', 'name section').sort({ dueDate: 1 }).limit(8).lean(),
+      Student.aggregate([
+        { $match: { school: schoolId, status: 'active' } },
+        { $group: { _id: '$currentClass', count: { $sum: 1 } } },
+        { $lookup: { from: 'classes', localField: '_id', foreignField: '_id', as: 'cls' } },
+        { $unwind: { path: '$cls', preserveNullAndEmptyArrays: true } },
+        { $project: { _id: 0, name: { $ifNull: ['$cls.name', 'Unassigned'] }, section: '$cls.section', count: 1 } },
+        { $sort: { name: 1 } },
+      ]),
+      FeeCollection.aggregate([{ $match: { school: schoolId, dueDate: { $lt: today }, pendingAmount: { $gt: 0 } } }, { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: '$pendingAmount' } } }]),
+    ]);
+    const pendingLeaves = pendingStaffLeaves + pendingStudentLeaves;
+
     res.json({
       success: true,
       stats: {
@@ -153,7 +193,17 @@ const getDashboardStats = async (req, res) => {
           monthlyExpenses: (monthlyExpenses[0]?.total || 0) + (monthlySalaries[0]?.total || 0),
           monthlyProfit: (monthlyFees[0]?.total || 0) - (monthlyExpenses[0]?.total || 0) - (monthlySalaries[0]?.total || 0),
           pendingFees: pendingFees[0]?.total || 0,
-          pendingFeesCount: pendingFees[0]?.count || 0
+          pendingFeesCount: pendingFees[0]?.count || 0,
+          todayExpenses: todayExpenseAgg[0]?.total || 0,
+          collected: feeTotals[0]?.collected || 0,
+          expected: feeTotals[0]?.expected || 0,
+        },
+        pulse: { outpassToday, visitsToday, pendingStaffLeaves, pendingStudentLeaves, pendingLeaves },
+        upcoming: { events: upcomingEvents, exams: upcomingExams, homework: homeworkDue },
+        classStrength,
+        alerts: {
+          overdueFees: { count: overdueFeesAgg[0]?.count || 0, amount: overdueFeesAgg[0]?.amount || 0 },
+          overdueBooks, pendingPurchases, pendingLeaves,
         },
         recentStudents,
         charts: { revenue: revenueData, expenses: expenseData, feesByClass }
