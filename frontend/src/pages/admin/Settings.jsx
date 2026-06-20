@@ -2568,7 +2568,10 @@ function StaffLoginModal({ data, roles, onClose, onCreated }) {
   const pickEmployee = (id) => {
     setEmployeeId(id);
     const emp = employees.find(e => e._id === id);
-    if (emp) { setName(emp.name || ''); setEmail(emp.email || ''); setPhone(emp.phone || ''); }
+    // Staff logins are SEPARATE accounts from app logins, so we don't copy the
+    // employee's email (they may already use it for their app login). The admin
+    // sets a distinct login email/username below.
+    if (emp) { setName(emp.name || ''); setPhone(emp.phone || ''); }
   };
 
   const create = useMutation({
@@ -2601,7 +2604,7 @@ function StaffLoginModal({ data, roles, onClose, onCreated }) {
       footer={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={create.isPending || update.isPending}>{(create.isPending || update.isPending) ? 'Saving…' : editing ? 'Save Changes' : 'Create Login'}</button></>}>
       {!editing && (
         <div className="form-group">
-          <label className="form-label">Select Employee <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}>— auto-fills the details below</span></label>
+          <label className="form-label">Select Employee <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}>— auto-fills the name</span></label>
           <AntSelect showSearch style={{ width: '100%' }} value={employeeId || undefined} onChange={pickEmployee}
             placeholder="Choose from the employee list…" optionFilterProp="label" getPopupContainer={() => document.body}
             options={employees.map(e => ({ value: e._id, label: `${e.name}${e.email ? ' · ' + e.email : ''}` }))} />
@@ -2614,8 +2617,8 @@ function StaffLoginModal({ data, roles, onClose, onCreated }) {
           <input className="form-control" value={name} onChange={e => setName(e.target.value)} placeholder="Staff name" />
         </div>
         <div className="form-group">
-          <label className="form-label">Email (username) <span style={{ color: '#ef4444' }}>*</span></label>
-          <input className="form-control" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@school.com" disabled={editing} />
+          <label className="form-label">Login Email <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}>— separate from their app login</span> <span style={{ color: '#ef4444' }}>*</span></label>
+          <input className="form-control" value={email} onChange={e => setEmail(e.target.value)} placeholder="e.g. name.librarian@school.com" disabled={editing} />
         </div>
       </FormRow>
       <FormRow>

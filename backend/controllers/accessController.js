@@ -132,10 +132,18 @@ const createStaffLogin = async (req, res) => {
       if (!linkedEmployee) return res.status(404).json({ success: false, message: 'Employee not found' });
     }
 
+    // Staff logins are SEPARATE accounts from app logins, so the email/username
+    // must be unique within the school. (An app login uses the person's own email;
+    // a staff sub-admin login needs its own email, e.g. barath.librarian@school.com.)
     const emailNorm = email.trim().toLowerCase();
+    const dupe = await User.findOne({ school: req.user.school, email: emailNorm });
+    if (dupe) return res.status(400).json({ success: false, message: 'This email already has a login in your school. Staff logins are separate accounts — please use a different email/username.' });
+
     const tempPassword = genTempPassword();
-    const staffFields = {
+    const user = await User.create({
+      school: req.user.school,
       name: name.trim(),
+      email: emailNorm,
       phone: phone || '',
       password: tempPassword,                 // hashed by the model pre-save hook
       role: 'staff',
@@ -144,23 +152,10 @@ const createStaffLogin = async (req, res) => {
       permissions: normalizePermissions(role.permissions),
       permissionsCustomized: false,
       category: role.name,
+      employeeId: linkedEmployee?._id,
       firstLogin: true,
       isActive: true,
-    };
-    if (linkedEmployee?._id) staffFields.employeeId = linkedEmployee._id;
-
-    // One account per person: if a login with this email already exists in the
-    // school (e.g. a legacy teacher login), convert it to this access role and
-    // issue a fresh temp password — instead of failing on the duplicate.
-    let user = await User.findOne({ school: req.user.school, email: emailNorm });
-    let converted = false;
-    if (user) {
-      Object.assign(user, staffFields);
-      await user.save();
-      converted = true;
-    } else {
-      user = await User.create({ school: req.user.school, email: emailNorm, ...staffFields });
-    }
+    });
 
     // Best-effort email (only if SMTP is configured) — on-screen password is primary.
     if (process.env.EMAIL_USER) {
@@ -168,7 +163,7 @@ const createStaffLogin = async (req, res) => {
         .catch(() => {});
     }
 
-    res.json({ success: true, converted, login: { _id: user._id, name: user.name, email: user.email }, tempPassword });
+    res.json({ success: true, login: { _id: user._id, name: user.name, email: user.email }, tempPassword });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
