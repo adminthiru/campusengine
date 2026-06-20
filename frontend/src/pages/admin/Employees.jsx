@@ -150,11 +150,10 @@ export default function Employees() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => api.put(`/employees/${id}`, data),
-    onSuccess: (res) => {
+    onSuccess: () => {
       qc.invalidateQueries(['employees']);
       toast.success('Employee updated!');
-      setViewEmployee(res.employee || res);
-      closeModal();
+      closeModal();   // stay on the list (don't jump to the detail screen)
     },
     onError: (err) => toast.error(err.message || 'Failed to update employee')
   });
