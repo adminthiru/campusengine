@@ -28,6 +28,7 @@ import OutPass from './pages/admin/OutPass';
 import Inventory from './pages/admin/Inventory';
 import { MODULES } from './config/modules';
 import UpgradeRequired from './components/UpgradeRequired';
+import Landing from './pages/marketing/Landing';
 
 // Delegated (custom) staff are gated by their module-view permission instead of
 // the role lists. Their landing page is the first module they can view.
@@ -82,7 +83,9 @@ export default function App() {
       {/* Dedicated staff login link — always shows the form, even if a session exists */}
       <Route path="/staff-login" element={<StaffLogin />} />
       <Route path="/school-setup" element={user ? <AppLayout><SchoolSetup /></AppLayout> : <Navigate to="/login" />} />
-      <Route path="/" element={<RoleRedirect />} />
+      {/* Public marketing site — the product's front door. Authenticated users
+          are sent straight to their role dashboard. */}
+      <Route path="/" element={user ? <RoleRedirect /> : <Landing />} />
 
       <Route path="/dashboard" element={
         <ProtectedRoute roles={ALL}>
