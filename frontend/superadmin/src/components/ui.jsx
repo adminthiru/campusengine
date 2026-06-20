@@ -1,8 +1,26 @@
 import { X } from 'lucide-react';
 
-export const PageLoader = () => (
-  <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
-    <div className="spinner" style={{ width: 36, height: 36, borderWidth: 3 }} />
+const Sk = ({ w = '100%', h = 16, r = 8, style }) => (
+  <span className="skeleton" style={{ width: w, height: h, borderRadius: r, ...style }} />
+);
+
+// Page loader — a content skeleton (header + table rows) instead of a spinner.
+export const PageLoader = ({ rows = 8 }) => (
+  <div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <Sk w={200} h={24} />
+      <Sk w={130} h={36} r={10} />
+    </div>
+    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 24 }}>
+        {[160, 120, 100, 80].map((w, i) => <Sk key={i} w={w} h={12} />)}
+      </div>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} style={{ padding: '16px 18px', borderBottom: i < rows - 1 ? '1px solid var(--border)' : 'none', display: 'flex', alignItems: 'center', gap: 24 }}>
+          <Sk w={150} h={14} /><Sk w={120} h={14} /><Sk w={90} h={14} /><Sk w={70} h={22} r={11} />
+        </div>
+      ))}
+    </div>
   </div>
 );
 

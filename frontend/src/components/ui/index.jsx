@@ -216,14 +216,48 @@ export function Avatar({ src, name, size = 36 }) {
   );
 }
 
-// Loading spinner
+// Loading spinner (kept for buttons / inline use)
 export function Spinner({ size = 20 }) {
   return <div className="spinner" style={{ width: size, height: size }} />;
 }
 
-// Page loader
-export function PageLoader() {
-  return <div className="page-loader"><Spinner size={36} /></div>;
+// Skeleton primitive — a shimmering placeholder block.
+export function Skeleton({ width = '100%', height = 16, radius = 8, style }) {
+  return <span className="skeleton" style={{ width, height, borderRadius: radius, ...style }} />;
+}
+
+// Page loader — a generic content skeleton (header + filter + table rows) shown
+// while a page's data loads. Reads better than a circular spinner.
+export function PageLoader({ rows = 8 }) {
+  return (
+    <div style={{ padding: 4 }}>
+      {/* header: title + action button */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <Skeleton width={200} height={24} />
+          <Skeleton width={130} height={13} style={{ marginTop: 10 }} />
+        </div>
+        <Skeleton width={130} height={38} radius={10} />
+      </div>
+      {/* filter bar */}
+      <Skeleton width={280} height={38} radius={10} style={{ marginBottom: 16 }} />
+      {/* table card */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 24 }}>
+          {[160, 120, 100, 90, 70].map((w, i) => <Skeleton key={i} width={w} height={12} />)}
+        </div>
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} style={{ padding: '16px 18px', borderBottom: i < rows - 1 ? '1px solid var(--border)' : 'none', display: 'flex', alignItems: 'center', gap: 24 }}>
+            <Skeleton width={36} height={36} radius={18} />
+            <Skeleton width={150} height={14} />
+            <Skeleton width={110} height={14} />
+            <Skeleton width={90} height={14} />
+            <Skeleton width={70} height={22} radius={11} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // Empty state

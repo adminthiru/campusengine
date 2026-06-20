@@ -59,9 +59,22 @@ export const AuthProvider = ({ children }) => {
   const value = { user, loading, login, logout, updateUser };
 
   if (loading) {
+    // App-shell skeleton on first load — no spinner.
+    const sk = (w, h, r = 8, style) => <span className="skeleton" style={{ display: 'block', width: w, height: h, borderRadius: r, ...style }} />;
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f0f4f8' }}>
-        <div className="spinner" style={{ width: 40, height: 40, borderWidth: 3 }}></div>
+      <div style={{ display: 'flex', minHeight: '100vh', background: '#f0f4f8' }}>
+        <div style={{ width: 240, background: '#0f172a', padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <span className="skeleton" style={{ width: 130, height: 18, borderRadius: 6, opacity: 0.25, marginBottom: 18 }} />
+          {Array.from({ length: 6 }).map((_, i) => <span key={i} className="skeleton" style={{ width: '100%', height: 30, borderRadius: 8, opacity: 0.18 }} />)}
+        </div>
+        <div style={{ flex: 1, padding: 28 }}>
+          <div style={{ display: 'flex', gap: 16, marginBottom: 22 }}>
+            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="card" style={{ flex: 1, padding: 18 }}>{sk(90, 12)}{sk(60, 26, 8, { marginTop: 12 })}</div>)}
+          </div>
+          <div className="card" style={{ padding: 18 }}>
+            {Array.from({ length: 6 }).map((_, i) => <div key={i} style={{ display: 'flex', gap: 20, padding: '12px 0' }}>{[150, 120, 90, 70].map((w, j) => sk(w, 14))}</div>)}
+          </div>
+        </div>
       </div>
     );
   }
