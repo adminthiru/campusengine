@@ -270,7 +270,7 @@ export default function Employees() {
     }
   };
 
-  const isMutating = createMutation.isLoading || updateMutation.isLoading;
+  const isMutating = createMutation.isPending || updateMutation.isPending;
   const tabIdx = FORM_TABS.findIndex(t => t.key === formTab);
 
   if (viewEmployee) {
@@ -554,7 +554,9 @@ function AddEditEmployeeModal({
               disabled={!isFormReady || isMutating}
               title={!isFormReady ? 'Fill all required fields across all tabs' : ''}
             >
-              {isMutating ? 'Saving...' : editEmployee ? 'Update Employee' : 'Add Employee'}
+              {isMutating
+                ? <><div className="spinner" style={{ width: 16, height: 16 }} /> Saving…</>
+                : editEmployee ? 'Update Employee' : 'Add Employee'}
             </button>
           </div>
         </div>

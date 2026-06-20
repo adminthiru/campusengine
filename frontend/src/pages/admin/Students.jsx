@@ -288,7 +288,7 @@ export default function Students() {
     } catch (err) { toast.error(err.message || 'Failed to generate PDF'); }
   };
 
-  const isMutating = createMutation.isLoading || updateMutation.isLoading;
+  const isMutating = createMutation.isPending || updateMutation.isPending;
   const tabIdx = FORM_TABS.findIndex(t => t.key === formTab);
   const [visibleCols, setVisibleCols] = useColumnSelector('students', STUDENT_COLS);
   const col = (key) => visibleCols.has(key);
@@ -580,7 +580,9 @@ function AddEditModal({
               disabled={!isFormReady || isMutating}
               title={!isFormReady ? 'Fill all required fields across all tabs' : ''}
             >
-              {isMutating ? 'Saving...' : editStudent ? 'Update Student' : 'Add Student'}
+              {isMutating
+                ? <><div className="spinner" style={{ width: 16, height: 16 }} /> Saving…</>
+                : editStudent ? 'Update Student' : 'Add Student'}
             </button>
           </div>
         </div>
