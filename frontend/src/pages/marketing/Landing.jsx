@@ -135,8 +135,8 @@ function Hero() {
             admin and more time on students.
           </Reveal>
           <Reveal className="ce-hero__cta" delay={3}>
-            <Link to="/register" className="ce-btn ce-btn--primary ce-btn--lg">Start free trial <ArrowRight size={18} /></Link>
-            <a href="mailto:hello@campusengine.in" className="ce-btn ce-btn--ghost ce-btn--lg">Book a demo</a>
+            <Link to="/register" className="ce-btn ce-btn--primary">Start free trial <ArrowRight size={17} /></Link>
+            <a href="mailto:hello@campusengine.in" className="ce-btn ce-btn--ghost">Book a demo</a>
           </Reveal>
           <Reveal className="ce-hero__trust" delay={4}>
             <span><Check size={15} color="#10b981" /> 15-day free trial</span>
