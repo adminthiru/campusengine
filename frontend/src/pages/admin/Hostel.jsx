@@ -207,33 +207,43 @@ export default function Hostel() {
 
       {/* ── HOSTELS ── */}
       {tab === 'hostels' && (
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div className="table-container">
-            <table>
-              <thead><tr><th>Hostel</th><th>Type</th><th>Block</th><th>Floors</th><th>Rooms</th><th>Occupancy</th><th>Status</th><th style={{ textAlign: 'right' }}>Actions</th></tr></thead>
-              <tbody>
-                {hostels.length === 0 && <tr><td colSpan={8}><EmptyState icon={Building2} message="No hostels yet. Create your first hostel block." action={<button className="btn btn-primary btn-sm" onClick={() => setHostelModal({})}><Plus size={14} /> Add Hostel</button>} /></td></tr>}
-                {hostels.map(h => (
-                  <tr key={h._id}>
-                    <td className="text-14-medium">{h.name}</td>
-                    <td><Pill meta={HOSTEL_TYPE[h.type]} /></td>
-                    <td style={{ fontSize: 13 }}>{h.block || '—'}</td>
-                    <td style={{ fontSize: 13 }}>{h.totalFloors ?? '—'}</td>
-                    <td style={{ fontSize: 13 }}>{h.rooms ?? 0}</td>
-                    <td style={{ fontSize: 13 }}>{h.occupied ?? 0}/{h.capacity ?? 0}</td>
-                    <td><Pill meta={{ active: { label: 'Active', color: '#16a34a', bg: '#f0fdf4' }, inactive: { label: 'Inactive', color: '#64748b', bg: '#f1f5f9' } }[h.status]} /></td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => setHostelModal({ data: h })}><Edit2 size={14} /></button>
-                        <button className="btn btn-danger btn-sm btn-icon" title="Delete" onClick={() => setDeleteHostelId(h._id)}><Trash2 size={14} /></button>
+        hostels.length === 0 ? (
+          <div className="card"><EmptyState icon={Building2} message="No hostels yet. Create your first hostel block." action={<button className="btn btn-primary btn-sm" onClick={() => setHostelModal({})}><Plus size={14} /> Add Hostel</button>} /></div>
+        ) : (
+          <div className="grid-3">
+            {hostels.map(h => (
+              <div key={h._id} className="card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center', minWidth: 0 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: HOSTEL_TYPE[h.type]?.bg || '#eff6ff', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                      <Building2 size={22} color={HOSTEL_TYPE[h.type]?.color || '#1a56e8'} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="text-16-bold" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.name}</div>
+                      <div style={{ display: 'flex', gap: 7, alignItems: 'center', marginTop: 4 }}>
+                        <Pill meta={HOSTEL_TYPE[h.type]} />
+                        {h.block && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{h.block}</span>}
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => setHostelModal({ data: h })}><Edit2 size={14} /></button>
+                    <button className="btn btn-danger btn-sm btn-icon" title="Delete" onClick={() => setDeleteHostelId(h._id)}><Trash2 size={14} /></button>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 16, fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 14, flexWrap: 'wrap' }}>
+                  <span>{h.totalFloors ?? 0} floor{h.totalFloors === 1 ? '' : 's'}</span>
+                  <span>{h.rooms ?? 0} room{h.rooms === 1 ? '' : 's'}</span>
+                  {h.contactNumber && <span>{h.contactNumber}</span>}
+                </div>
+                <OccBar occupied={h.occupied ?? 0} capacity={h.capacity ?? 0} />
+                <div style={{ marginTop: 12 }}>
+                  <Pill meta={{ active: { label: 'Active', color: '#16a34a', bg: '#f0fdf4' }, inactive: { label: 'Inactive', color: '#64748b', bg: '#f1f5f9' } }[h.status]} />
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        )
       )}
 
       {/* ── ROOMS ── */}
