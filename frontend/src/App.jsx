@@ -26,6 +26,7 @@ import Library from './pages/admin/Library';
 import Visits from './pages/admin/Visits';
 import OutPass from './pages/admin/OutPass';
 import Inventory from './pages/admin/Inventory';
+import Hostel from './pages/admin/Hostel';
 import { MODULES } from './config/modules';
 import UpgradeRequired from './components/UpgradeRequired';
 import Landing from './pages/marketing/Landing';
@@ -112,6 +113,7 @@ export default function App() {
       <Route path="/visits" element={<ProtectedRoute roles={['admin','correspondent','principal']} module="visits"><Visits /></ProtectedRoute>} />
       <Route path="/outpass" element={<ProtectedRoute roles={['admin','correspondent','principal']} module="outpass"><OutPass /></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute roles={['admin','correspondent','principal']} module="inventory"><Inventory /></ProtectedRoute>} />
+      <Route path="/hostel" element={<ProtectedRoute roles={['admin','correspondent','principal']} module="hostel"><Hostel /></ProtectedRoute>} />
       <Route path="/transport" element={<ProtectedRoute roles={ADMIN} module="transport"><Transport /></ProtectedRoute>} />
       <Route path="/sms" element={<ProtectedRoute roles={['admin','correspondent','principal']} module="sms"><SMS /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute roles={ALL}><Settings /></ProtectedRoute>} />

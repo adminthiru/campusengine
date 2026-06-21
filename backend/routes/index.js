@@ -2719,4 +2719,32 @@ router.post('/purchase-requests/:id/reverse', protect, checkSubscription, author
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+// ============== HOSTEL ==============
+const hostelCtrl = require('../controllers/hostelController');
+const HOSTEL_ROLES = ['admin', 'correspondent', 'principal'];
+
+router.get('/hostel/dashboard',      protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.getDashboard);
+
+router.get('/hostel/hostels',        protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.listHostels);
+router.post('/hostel/hostels',       protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.createHostel);
+router.put('/hostel/hostels/:id',    protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.updateHostel);
+router.delete('/hostel/hostels/:id', protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.deleteHostel);
+
+router.get('/hostel/available-rooms',     protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.getAvailableRooms);
+router.get('/hostel/rooms',               protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.listRooms);
+router.post('/hostel/rooms',              protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.createRoom);
+router.put('/hostel/rooms/:id',           protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.updateRoom);
+router.delete('/hostel/rooms/:id',        protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.deleteRoom);
+router.get('/hostel/rooms/:id/students',  protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.getRoomStudents);
+
+router.get('/hostel/wardens',        protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.listWardens);
+router.post('/hostel/wardens',       protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.assignWarden);
+router.delete('/hostel/wardens/:id', protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.removeWarden);
+
+router.get('/hostel/allocations',                protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.listAllocations);
+router.post('/hostel/allocations',               protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.allocateStudent);
+router.post('/hostel/allocations/:id/transfer',  protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.transferStudent);
+router.post('/hostel/allocations/:id/vacate',    protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.vacateStudent);
+router.get('/hostel/student/:studentId/history', protect, checkSubscription, authorize(...HOSTEL_ROLES), hostelCtrl.getStudentHistory);
+
 module.exports = router;

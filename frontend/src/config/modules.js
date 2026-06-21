@@ -4,7 +4,7 @@
 import {
   GraduationCap, UsersRound, Users, BookOpen, ClipboardList, Clock, Calendar,
   UserCheck, FileText, BookMarked, CreditCard, Banknote, DollarSign, Library,
-  DoorOpen, LogOut, Package, Truck, MessageSquare,
+  DoorOpen, LogOut, Package, Truck, MessageSquare, BedDouble,
 } from 'lucide-react';
 
 export const MODULES = [
@@ -26,6 +26,7 @@ export const MODULES = [
   { key: 'outpass',    label: 'Out Pass',   path: '/outpass',    icon: LogOut },
   { key: 'inventory',  label: 'Inventory',  path: '/inventory',  icon: Package },
   { key: 'transport',  label: 'Transport',  path: '/transport',  icon: Truck },
+  { key: 'hostel',     label: 'Hostel',     path: '/hostel',     icon: BedDouble },
   { key: 'sms',        label: 'SMS Services', path: '/sms',      icon: MessageSquare },
 ];
 

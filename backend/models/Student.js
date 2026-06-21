@@ -39,6 +39,7 @@ const studentSchema = new mongoose.Schema({
   }],
   primaryGuardian: { type: mongoose.Schema.Types.ObjectId, ref: 'Parent' },
   transportRoute: { type: mongoose.Schema.Types.ObjectId, ref: 'Transport' },
+  isHosteller: { type: Boolean, default: false },
   documents: [{
     name: String,
     url: String,

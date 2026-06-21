@@ -23,6 +23,7 @@ const MODULES = [
   { key: 'outpass',    label: 'Out Pass',   path: '/outpass',    prefixes: ['/outpasses'] },
   { key: 'inventory',  label: 'Inventory',  path: '/inventory',  prefixes: ['/inventory', '/purchase-requests'] },
   { key: 'transport',  label: 'Transport',  path: '/transport',  prefixes: ['/transport'] },
+  { key: 'hostel',     label: 'Hostel',     path: '/hostel',     prefixes: ['/hostel'] },
   { key: 'sms',        label: 'SMS',        path: '/sms',        prefixes: ['/sms'] },
 ];
 
@@ -34,7 +35,7 @@ const POST_EDIT_VERBS = [
   'collect', 'pay', 'revert', 'recalculate', 'send', 'test', 'recipients',
   'checkout', 'return', 'receive', 'reverse', 'complete', 'publish', 'promote',
   'generate', 'retry', 'notify', 'visit', 'submit', 'renewal', 'toggle-status',
-  'read', 'marks', 'class-structure',
+  'read', 'marks', 'class-structure', 'transfer', 'vacate',
 ];
 
 // Endpoints any authenticated user may reach regardless of module permissions:
