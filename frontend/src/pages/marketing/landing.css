@@ -56,8 +56,8 @@ html { scroll-behavior: smooth; }
 
 /* ── Typography ─────────────────────────────────────────────────────────── */
 .ce-h1 {
-  font-size: clamp(40px, 6.4vw, 80px);
-  line-height: 1.02; font-weight: 800; letter-spacing: -0.035em; margin: 0;
+  font-size: clamp(34px, 4.6vw, 60px);
+  line-height: 1.05; font-weight: 800; letter-spacing: -0.035em; margin: 0;
 }
 .ce-h2 {
   font-size: clamp(30px, 4.2vw, 54px);
@@ -128,7 +128,7 @@ html { scroll-behavior: smooth; }
 .ce-hero__inner { position: relative; z-index: 1; display: grid; grid-template-columns: 1.05fr 1fr; gap: clamp(28px, 4vw, 56px); align-items: center; }
 .ce-hero__copy { max-width: 620px; }
 .ce-hero .ce-h1 { margin: 22px 0; }
-.ce-hero__lead { max-width: 540px; }
+.ce-hero__lead { max-width: 520px; font-size: clamp(15px, 1.3vw, 17px); }
 .ce-hero__cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
 .ce-hero__trust { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 24px; color: var(--ce-muted); font-size: 13.5px; }
 .ce-hero__trust span { display: inline-flex; align-items: center; gap: 6px; }
