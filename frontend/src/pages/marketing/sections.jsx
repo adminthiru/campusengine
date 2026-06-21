@@ -161,7 +161,7 @@ export function WhyCampusEngine() {
   return (
     <section id="why" className="ce-section">
       <div className="ce-container">
-        <Head eyebrow="Why CampusEngine" title="Why schools switch — and stay" lead="Replace a dozen registers, spreadsheets and disconnected tools with one calm, reliable system your whole campus actually enjoys using." />
+        <Head eyebrow="Why CampusEngine" title={<>Why schools switch<br />— and stay</>} lead="Replace a dozen registers, spreadsheets and disconnected tools with one calm, reliable system your whole campus actually enjoys using." />
         <div className="ce-why">
           {WHY.map((w, i) => (
             <Reveal key={w.title} delay={(i % 3) + 1} className={`ce-why__card ${w.wide ? 'ce-why__card--wide' : ''}`}>
