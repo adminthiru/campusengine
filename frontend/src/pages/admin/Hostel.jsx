@@ -170,9 +170,6 @@ export default function Hostel() {
             <StatCard title="Total Rooms"        value={stats.totalRooms ?? 0}     icon={DoorOpen}   color="#0891b2" bg="#ecfeff" />
             <StatCard title="Occupied Beds"      value={stats.occupiedBeds ?? 0}   icon={BedDouble}  color="#16a34a" bg="#f0fdf4" />
             <StatCard title="Available Beds"     value={stats.availableBeds ?? 0}  icon={CheckCircle} color="#d97706" bg="#fffbeb" />
-            <StatCard title="Hostel Students"    value={stats.hostelStudents ?? 0} icon={Users}      color="#8b5cf6" bg="#faf5ff" />
-            <StatCard title="Pending Allocation" value={stats.pendingAllocation ?? 0} icon={AlertTriangle} color="#dc2626" bg="#fef2f2" />
-            <StatCard title="Wardens Assigned"   value={stats.wardensAssigned ?? 0} icon={UserCog}   color="#0f172a" bg="#f1f5f9" />
           </div>
           <div className="grid-2">
             <div className="card">
