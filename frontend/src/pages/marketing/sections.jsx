@@ -7,9 +7,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Check, ChevronDown, ArrowRight, Sparkles, Send, TrendingUp, AlertTriangle,
-  Bell, CheckCircle2, GraduationCap, Building2, UserCog, Users2, BarChart3,
-  School, FolderTree, FileBarChart,
+  Check, ChevronDown, ChevronRight, ArrowRight, Bell, CheckCircle2, XCircle,
+  Building2, UserCog, Users2, BarChart3, School, FolderTree, FileBarChart,
+  Clock, CalendarCheck, CalendarDays, Home, User, Wifi, BatteryFull, Signal,
+  Smartphone, Apple, ClipboardCheck,
 } from 'lucide-react';
 import {
   Reveal, CountUp, MiniBars, Donut, Sparkline, Progress, AppChrome,
@@ -274,85 +275,157 @@ export function HowItWorks() {
   );
 }
 
-// ── 6. CampusEngine AI ───────────────────────────────────────────────────────
-const AI_EXAMPLES = [
-  {
-    q: 'Which classes have low attendance this week?',
-    render: () => (
-      <>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 96 }}>
-          {[['6-A', 96, false], ['7-B', 91, false], ['8-A', 88, false], ['9-B', 71, true], ['10-A', 94, false]].map(([c, v, hot]) => (
-            <div key={c} style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ height: `${v - 55}px`, borderRadius: '6px 6px 0 0', background: hot ? '#ef4444' : 'rgba(255,255,255,.22)' }} />
-              <div style={{ fontSize: 10.5, marginTop: 6, color: hot ? '#fca5a5' : '#9fb0d0', fontWeight: hot ? 700 : 500 }}>{c} · {v}%</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ marginTop: 14, display: 'flex', gap: 9, alignItems: 'flex-start', color: '#cdd8ef', fontSize: 13.5 }}>
-          <AlertTriangle size={16} color="#fbbf24" style={{ flexShrink: 0, marginTop: 1 }} />
-          <span><b style={{ color: '#fff' }}>Grade 9-B at 71%</b> — 8 students absent 3+ days in a row. Recommend contacting guardians today.</span>
-        </div>
-      </>
-    ),
-    actions: ['Send SMS to guardians', 'Notify class teacher'],
-  },
-  {
-    q: 'How much fee is still pending this month?',
-    render: () => (
-      <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-        <Donut pct={86} size={104} color="#10b981" track="rgba(255,255,255,.12)" label="86%" sub="collected" />
-        <div style={{ flex: 1, display: 'grid', gap: 8, color: '#cdd8ef', fontSize: 13.5 }}>
-          <div><b style={{ color: '#fff', fontSize: 22 }}>₹2.9L</b> pending across <b style={{ color: '#fff' }}>138</b> students.</div>
-          <div>54 are past their due date — reminders can go out in one click.</div>
-        </div>
+// ── 6. Mobile apps (parents · teachers · students) ───────────────────────────
+const APP_BULLETS = {
+  parent: ['Live attendance, fees & exam results for every child', 'Apply for leave and get instant approvals', 'Push + SMS alerts in your preferred language'],
+  teacher: ['Mark attendance for your classes in seconds', 'Set homework and enter exam marks on the go', 'See today’s timetable and substitutions'],
+  student: ['Timetable, homework and results in one tap', 'Track attendance and pending fees', 'Submit leave requests from your phone'],
+};
+
+function PhoneStatus() {
+  return (
+    <div className="ce-phone__status">
+      <span>9:41</span>
+      <span className="dots"><Signal size={13} /><Wifi size={13} /><BatteryFull size={16} /></span>
+    </div>
+  );
+}
+function PhoneNav() {
+  const items = [[Home, true], [CalendarDays, false], [Bell, false], [User, false]];
+  return (
+    <div className="ce-phone__nav">
+      {items.map(([Ic, active], i) => <Ic key={i} size={20} color={active ? '#1a56e8' : '#94a3b8'} strokeWidth={active ? 2.4 : 2} />)}
+    </div>
+  );
+}
+const MWelcome = ({ greeting, name, sub, badge, letter }) => (
+  <div className="ce-mw">
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 12, opacity: .85 }}>Good {greeting},</div>
+        <div style={{ fontSize: 18, fontWeight: 800, marginTop: 2 }}>{name}</div>
+        {badge
+          ? <span style={{ display: 'inline-block', marginTop: 6, fontSize: 11, fontWeight: 700, background: 'rgba(255,255,255,.2)', padding: '3px 10px', borderRadius: 999 }}>{badge}</span>
+          : <div style={{ fontSize: 11.5, opacity: .8, marginTop: 3 }}>{sub}</div>}
       </div>
-    ),
-    actions: ['Send fee reminders', 'View overdue list'],
-  },
-  {
-    q: 'Show top performers in Grade 10.',
-    render: () => (
-      <div style={{ display: 'grid', gap: 8 }}>
-        {[['Ananya K.', '96.4%', 1], ['Rohan D.', '94.8%', 2], ['Meera S.', '93.1%', 3]].map(([n, p, r]) => (
-          <div key={n} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 10, padding: '9px 12px' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#e7ecf6', fontSize: 13.5, fontWeight: 600 }}>
-              <span style={{ width: 22, height: 22, borderRadius: 7, display: 'grid', placeItems: 'center', background: '#1a56e8', color: '#fff', fontSize: 12, fontWeight: 800 }}>{r}</span>{n}
-            </span>
-            <b style={{ color: '#fff' }}>{p}</b>
+      <div className="ce-mw__av">{letter}</div>
+    </div>
+  </div>
+);
+
+const APP_SCREEN = {
+  parent: () => (
+    <>
+      <MWelcome greeting="Morning" name="Meera Nair" sub="2 children linked" letter="M" />
+      <div className="ce-msec">Quick Actions</div>
+      <div style={{ display: 'flex', gap: 9 }}>
+        {[[Users2, 'My Children', '#1a56e8'], [CalendarCheck, 'Leave', '#f59e0b'], [UserCog, 'Profile', '#8b5cf6']].map(([Ic, l, c]) => (
+          <div key={l} className="ce-mtile">
+            <div className="ce-mtile__ic" style={{ background: c + '1a' }}><Ic size={19} color={c} /></div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{l}</div>
           </div>
         ))}
       </div>
-    ),
-    actions: ['Generate merit certificates', 'Share with parents'],
-  },
-];
+      <div className="ce-msec">Children Overview</div>
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 13 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#eff6ff', display: 'grid', placeItems: 'center', color: '#1a56e8', fontWeight: 800 }}>A</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>Aarav Sharma</div>
+            <div style={{ fontSize: 11.5, color: '#94a3b8' }}>Grade 8 — A</div>
+          </div>
+          <ChevronRight size={16} color="#94a3b8" />
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          {[['Attendance', '96%', '#10b981'], ['This Month', '22/23', '#1a56e8'], ['Fee Due', '₹4,500', '#ef4444']].map(([l, v, c]) => (
+            <div key={l} className="ce-mstat" style={{ background: c + '14' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: c }}>{v}</div>
+              <div style={{ fontSize: 9.5, color: '#94a3b8', marginTop: 2 }}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  ),
+  teacher: () => (
+    <>
+      <MWelcome greeting="Morning" name="Priya Menon" sub="Class Teacher · Grade 9 — B" letter="P" />
+      <div style={{ display: 'flex', gap: 6 }}>
+        <span style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#1a56e8', padding: '8px 0', borderBottom: '2px solid #1a56e8' }}>My Class</span>
+        <span style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#94a3b8', padding: '8px 0', borderBottom: '2px solid #e2e8f0' }}>My Subjects</span>
+      </div>
+      <div className="ce-msec">Today’s Classes</div>
+      {[['P1', 'Grade 8 — A', 'Mathematics', '#1a56e8'], ['P3', 'Grade 9 — B', 'Mathematics', '#8b5cf6'], ['P5', 'Grade 10 — A', 'Mathematics', '#10b981']].map(([p, cls, sub, c]) => (
+        <div key={p} className="ce-mrow">
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: c + '1a', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800, color: c }}>{p}</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{cls}</div>
+            <div style={{ fontSize: 11, color: '#94a3b8' }}>{sub}</div>
+          </div>
+        </div>
+      ))}
+      <button style={{ marginTop: 2, width: '100%', background: '#1a56e8', color: '#fff', border: 'none', borderRadius: 11, padding: 11, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+        <ClipboardCheck size={15} /> Mark attendance
+      </button>
+    </>
+  ),
+  student: () => (
+    <>
+      <MWelcome greeting="Morning" name="Aarav Sharma" badge="Grade 8 — A" letter="A" />
+      <div className="ce-msec">This Month</div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {[[BarChart3, 'Attendance', '96%', '#10b981'], [CheckCircle2, 'Present', '22', '#10b981'], [XCircle, 'Absent', '1', '#ef4444']].map(([Ic, l, v, c]) => (
+          <div key={l} className="ce-mtile">
+            <Ic size={20} color={c} />
+            <div style={{ fontSize: 16, fontWeight: 800, color: c, marginTop: 5 }}>{v}</div>
+            <div style={{ fontSize: 9.5, color: '#94a3b8', marginTop: 1 }}>{l}</div>
+          </div>
+        ))}
+      </div>
+      <div className="ce-msec">Today’s Schedule</div>
+      {[['P1', 'Mathematics', '#1a56e8', '09:00'], ['P2', 'Science', '#10b981', '09:50'], ['P3', 'English', '#ef4444', '10:40']].map(([p, s, c, t]) => (
+        <div key={p} className="ce-mrow">
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: c + '1a', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800, color: c }}>{p}</div>
+          <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{s}</div>
+          <div style={{ fontSize: 11, color: '#94a3b8' }}>{t}</div>
+        </div>
+      ))}
+    </>
+  ),
+};
 
-export function AISection() {
-  const [i, setI] = useState(0);
-  const ex = AI_EXAMPLES[i];
+export function MobileApps() {
+  const [role, setRole] = useState('parent');
   return (
-    <section id="ai" className="ce-section ce-dark">
+    <section id="apps" className="ce-section ce-dark">
       <div className="ce-dark__glow" style={{ width: 460, height: 460, top: -120, right: -80, background: 'radial-gradient(circle,#3b82f6,transparent 70%)' }} />
       <div className="ce-dark__glow" style={{ width: 420, height: 420, bottom: -160, left: -100, background: 'radial-gradient(circle,#8b5cf6,transparent 70%)' }} />
       <div className="ce-container">
-        <div className="ce-ai">
+        <div className="ce-apps">
           <div>
-            <Reveal as="span" className="ce-eyebrow ce-eyebrow--light"><Sparkles size={14} /> CampusEngine AI</Reveal>
-            <Reveal as="h2" className="ce-h2" delay={1} style={{ margin: '18px 0 16px' }}>Ask your campus anything.</Reveal>
-            <Reveal as="p" className="ce-lead" delay={2}>Your data already knows the answers. Ask in plain English and CampusEngine AI returns charts, insights and the next best action — built from the same widgets you use every day.</Reveal>
-            <div className="ce-ai__chips">
-              {AI_EXAMPLES.map((e, idx) => (
-                <button key={idx} className={`ce-ai__chip ${i === idx ? 'ce-ai__chip--active' : ''}`} onClick={() => setI(idx)}>{e.q}</button>
+            <Reveal as="span" className="ce-eyebrow ce-eyebrow--light"><Smartphone size={14} /> Mobile apps</Reveal>
+            <Reveal as="h2" className="ce-h2" delay={1} style={{ margin: '18px 0 16px' }}>An app for parents, teachers &amp; students</Reveal>
+            <Reveal as="p" className="ce-lead" delay={2}>CampusEngine goes home with your community. Parents, teachers and students each get a focused mobile app to manage their day — attendance, fees, homework and results, in real time.</Reveal>
+            <div className="ce-apps__tabs">
+              {[['parent', 'Parent'], ['teacher', 'Teacher'], ['student', 'Student']].map(([k, l]) => (
+                <button key={k} className={`ce-ai__chip ${role === k ? 'ce-ai__chip--active' : ''}`} onClick={() => setRole(k)}>{l}</button>
               ))}
             </div>
+            <ul className="ce-apps__bullets">
+              {APP_BULLETS[role].map(b => <li key={b}><Check size={17} color="#60a5fa" style={{ flexShrink: 0, marginTop: 1 }} /> {b}</li>)}
+            </ul>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <span className="ce-store"><Apple size={15} /> iOS</span>
+              <span className="ce-store"><Smartphone size={15} /> Android</span>
+            </div>
           </div>
-          <Reveal className="ce-ai__panel" delay={1}>
-            <div className="ce-ai__q"><span style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg,#1a56e8,#8b5cf6)', display: 'grid', placeItems: 'center', flexShrink: 0 }}><Sparkles size={15} color="#fff" /></span>{ex.q}</div>
-            <div className="ce-ai__a">{ex.render()}</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 9, marginTop: 14 }}>
-              {ex.actions.map(a => (
-                <span key={a} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: '#fff', background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.14)', padding: '8px 13px', borderRadius: 10 }}><Send size={13} /> {a}</span>
-              ))}
+          <Reveal delay={1}>
+            <div className="ce-phone">
+              <div className="ce-phone__screen">
+                <PhoneStatus />
+                <div className="ce-phone__body">{APP_SCREEN[role]()}</div>
+                <PhoneNav />
+              </div>
             </div>
           </Reveal>
         </div>

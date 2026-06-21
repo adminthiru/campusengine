@@ -245,6 +245,30 @@ html { scroll-behavior: smooth; }
 .ce-ai__q { display: flex; gap: 10px; align-items: center; font-weight: 600; color: #fff; }
 .ce-ai__a { margin-top: 16px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 16px; }
 
+/* ── Mobile apps (phone mockups) ────────────────────────────────────────── */
+.ce-apps { display: grid; grid-template-columns: 1fr 1fr; gap: 44px; align-items: center; }
+.ce-apps__tabs { display: flex; gap: 8px; margin-top: 22px; }
+.ce-apps__bullets { list-style: none; padding: 0; margin: 22px 0 22px; display: grid; gap: 12px; }
+.ce-apps__bullets li { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; color: #cdd8ef; }
+.ce-store { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: #cdd8ef; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); padding: 8px 13px; border-radius: 10px; }
+
+.ce-phone { width: 286px; margin: 0 auto; background: #0b1120; border: 1px solid rgba(255,255,255,.14); border-radius: 42px; padding: 10px; box-shadow: 0 40px 90px rgba(0,0,0,.55); position: relative; }
+.ce-phone::before { content: ''; position: absolute; top: 18px; left: 50%; transform: translateX(-50%); width: 92px; height: 22px; background: #0b1120; border-radius: 0 0 16px 16px; z-index: 5; }
+.ce-phone__screen { background: #f0f4f8; border-radius: 33px; overflow: hidden; height: 566px; display: flex; flex-direction: column; }
+.ce-phone__status { display: flex; align-items: center; justify-content: space-between; padding: 13px 20px 7px; font-size: 11.5px; font-weight: 700; color: #0f172a; }
+.ce-phone__status .dots { display: flex; gap: 5px; align-items: center; }
+.ce-phone__body { flex: 1; overflow: hidden; padding: 4px 12px; display: flex; flex-direction: column; gap: 11px; }
+.ce-phone__nav { display: flex; justify-content: space-around; align-items: center; padding: 11px 0 13px; background: #fff; border-top: 1px solid #e8edf3; }
+.ce-mw { border-radius: 18px; padding: 15px 16px; color: #fff; background: linear-gradient(135deg, #1a56e8, #1240c4); box-shadow: 0 12px 24px rgba(26,86,232,.32); }
+.ce-mw__av { width: 46px; height: 46px; border-radius: 50%; background: rgba(255,255,255,.22); display: grid; place-items: center; font-weight: 800; font-size: 18px; flex-shrink: 0; }
+.ce-msec { font-size: 12.5px; font-weight: 700; color: #0f172a; margin-top: 1px; }
+.ce-mtile { background: #fff; border: 1px solid #e2e8f0; border-radius: 13px; padding: 11px 8px; text-align: center; flex: 1; }
+.ce-mtile__ic { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 7px; }
+.ce-mrow { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 9px 11px; display: flex; align-items: center; gap: 10px; }
+.ce-mstat { flex: 1; border-radius: 10px; padding: 9px 6px; text-align: center; }
+
+@media (max-width: 1024px) { .ce-apps { grid-template-columns: 1fr; } .ce-apps .ce-phone { margin-top: 8px; } }
+
 /* ── Role experience ────────────────────────────────────────────────────── */
 .ce-roleui { background: var(--ce-bg-soft); border: 1px solid var(--ce-line); border-radius: var(--ce-r-lg); padding: 22px; box-shadow: var(--ce-sh-md); }
 

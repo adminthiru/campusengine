@@ -9,14 +9,14 @@ import { Menu, X, ArrowRight, Check, GraduationCap, TrendingUp, Bell } from 'luc
 import './landing.css';
 import { BRAND, FOOTER, Reveal, Donut } from './_ui';
 import {
-  WhyCampusEngine, ModuleShowcase, HowItWorks, AISection,
+  WhyCampusEngine, ModuleShowcase, HowItWorks, MobileApps,
   RoleExperience, OperatingSystem, ROISection, Pricing, FAQ, FinalCTA,
 } from './sections';
 
 const NAV_LINKS = [
   ['Product', '#modules'],
   ['How it works', '#how'],
-  ['CampusEngine AI', '#ai'],
+  ['Mobile apps', '#apps'],
   ['Pricing', '#pricing'],
   ['FAQ', '#faq'],
 ];
@@ -235,7 +235,7 @@ export default function Landing() {
       <WhyCampusEngine />
       <ModuleShowcase />
       <HowItWorks />
-      <AISection />
+      <MobileApps />
       <RoleExperience />
       <OperatingSystem />
       <ROISection />
