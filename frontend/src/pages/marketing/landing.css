@@ -134,11 +134,52 @@ html { scroll-behavior: smooth; }
 .ce-hero__trust span { display: inline-flex; align-items: center; gap: 6px; }
 
 /* hero product preview */
-.ce-hero__visual { position: relative; min-height: 420px; }
-.ce-floaty { animation: ce-float 6s ease-in-out infinite; }
-.ce-floaty--slow { animation-duration: 8s; }
-.ce-floaty--delay { animation-delay: 1.5s; }
-@keyframes ce-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+.ce-hero__visual { position: relative; min-height: 380px; padding: 8px 6px; }
+.ce-floaty { animation: ce-float 7s ease-in-out infinite; }
+.ce-floaty--slow { animation-duration: 9s; }
+.ce-floaty--delay { animation-delay: 1.8s; }
+@keyframes ce-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+
+/* hero product panel — a polished, aligned recreation of the real dashboard */
+.ce-happ { background: #fff; border: 1px solid var(--ce-line); border-radius: var(--ce-r-lg); box-shadow: 0 28px 64px rgba(15,23,42,.14); overflow: hidden; position: relative; z-index: 1; }
+.ce-happ__bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #eef2f8; }
+.ce-happ__brand { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 13px; letter-spacing: -0.02em; color: var(--ce-ink); }
+.ce-happ__brand .m { width: 23px; height: 23px; border-radius: 7px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, var(--ce-primary), var(--ce-purple)); }
+.ce-happ__pill { font-size: 11px; font-weight: 600; color: #64748b; background: #f1f5f9; padding: 4px 11px; border-radius: 999px; }
+.ce-happ__body { padding: 14px; display: flex; flex-direction: column; gap: 11px; }
+.ce-happ__kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ce-kpi { border-radius: 12px; padding: 11px 12px; }
+.ce-kpi__top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.ce-kpi__label { font-size: 11px; color: #64748b; font-weight: 500; }
+.ce-kpi__chip { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 6px; display: inline-flex; align-items: center; gap: 2px; line-height: 1; }
+.ce-kpi__val { font-size: 19px; font-weight: 800; letter-spacing: -0.03em; margin-top: 6px; line-height: 1; }
+.ce-happ__charts { display: grid; grid-template-columns: 1.32fr 1fr; gap: 10px; }
+.ce-happ__chart { border: 1px solid #eef2f8; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; min-height: 152px; }
+.ce-happ__chart-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.ce-happ__chart-t { font-size: 11.5px; font-weight: 700; color: #475569; }
+.ce-legend { display: flex; gap: 11px; }
+.ce-legend span { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: #94a3b8; font-weight: 600; }
+.ce-legend i { width: 7px; height: 7px; border-radius: 7px; display: block; flex-shrink: 0; }
+.ce-bars { display: flex; align-items: flex-end; gap: 9px; flex: 1; min-height: 64px; border-bottom: 1px solid #eef2f8; padding-bottom: 1px; }
+.ce-bars__g { flex: 1; display: flex; gap: 3px; align-items: flex-end; height: 100%; }
+.ce-bars__g i { flex: 1; border-radius: 4px 4px 0 0; display: block; }
+
+/* refined floating widgets */
+.ce-fcard { position: absolute; z-index: 3; display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 13px; box-shadow: 0 16px 34px rgba(15,23,42,.13); }
+.ce-fcard--light { background: #fff; border: 1px solid var(--ce-line); }
+.ce-fcard--dark { background: #0f172a; border: 1px solid rgba(255,255,255,.08); }
+.ce-fcard__ic { width: 31px; height: 31px; border-radius: 9px; display: grid; place-items: center; flex-shrink: 0; }
+.ce-fcard__l { font-size: 10.5px; color: #64748b; line-height: 1.35; }
+.ce-fcard--dark .ce-fcard__l { color: #9fb0d0; }
+.ce-fcard__v { font-size: 13px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.3; }
+.ce-fcard--dark .ce-fcard__v { color: #fff; }
+
+@media (max-width: 1024px) { .ce-hero__visual { max-width: 560px; } }
+@media (max-width: 560px) {
+  .ce-fcard { transform: scale(.86); }
+  .ce-fcard--light { left: -8px !important; }
+  .ce-fcard--dark { right: -8px !important; }
+}
 
 /* ── Generic surfaces ───────────────────────────────────────────────────── */
 .ce-card { background: #fff; border: 1px solid var(--ce-line); border-radius: var(--ce-r-md); box-shadow: var(--ce-sh-sm); }

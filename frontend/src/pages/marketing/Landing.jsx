@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, X, ArrowRight, Check, GraduationCap, TrendingUp, Bell } from 'lucide-react';
 import './landing.css';
-import { BRAND, FOOTER, Reveal, Donut, MiniBars, AppChrome } from './_ui';
+import { BRAND, FOOTER, Reveal, Donut } from './_ui';
 import {
   TrustBar, WhyCampusEngine, ModuleShowcase, HowItWorks, AISection,
   RoleExperience, OperatingSystem, ROISection, Pricing, FAQ, FinalCTA,
@@ -70,43 +70,83 @@ function Nav() {
   );
 }
 
-// ── Hero product preview (recreated dashboard) ───────────────────────────────
+// ── Hero product preview (polished, aligned recreation of the dashboard) ──────
+const KPIS = [
+  { label: 'Students', val: '1,248', color: '#1a56e8', bg: '#eff6ff', chip: '+12', chipColor: '#1a56e8', chipBg: '#dbe8ff' },
+  { label: 'Attendance', val: '94%', color: '#10b981', bg: '#ecfdf5', chip: '↑ 2%', chipColor: '#16a34a', chipBg: '#d1fae5' },
+  { label: 'Fees · month', val: '₹18.4L', color: '#f59e0b', bg: '#fffbeb', chip: '↑ 8%', chipColor: '#d97706', chipBg: '#fef0c7' },
+];
+const REV = [42, 58, 47, 70, 61, 88];
+const EXP = [30, 39, 34, 47, 43, 53];
+
 function HeroVisual() {
+  const max = Math.max(...REV, ...EXP);
   return (
     <div className="ce-hero__visual">
       <Reveal delay={2}>
-        <AppChrome title="CampusEngine · Dashboard" style={{ boxShadow: '0 30px 80px rgba(15,23,42,.16)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-            {[['Students', '1,248', '#1a56e8', '#eff6ff'], ['Attendance', '94%', '#10b981', '#ecfdf5'], ['Fees (mo)', '₹18.4L', '#f59e0b', '#fffbeb']].map(([l, v, c, b]) => (
-              <div key={l} style={{ background: b, borderRadius: 11, padding: '11px 12px' }}>
-                <div style={{ fontSize: 11, color: '#64748b' }}>{l}</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: c, letterSpacing: '-0.03em', marginTop: 3 }}>{v}</div>
+        <div className="ce-happ">
+          <div className="ce-happ__bar">
+            <span className="ce-happ__brand"><span className="m"><GraduationCap size={14} /></span> CampusEngine</span>
+            <span className="ce-happ__pill">This month</span>
+          </div>
+          <div className="ce-happ__body">
+            <div className="ce-happ__kpis">
+              {KPIS.map(k => (
+                <div key={k.label} className="ce-kpi" style={{ background: k.bg }}>
+                  <div className="ce-kpi__top">
+                    <span className="ce-kpi__label">{k.label}</span>
+                    <span className="ce-kpi__chip" style={{ color: k.chipColor, background: k.chipBg }}>{k.chip}</span>
+                  </div>
+                  <div className="ce-kpi__val" style={{ color: k.color }}>{k.val}</div>
+                </div>
+              ))}
+            </div>
+            <div className="ce-happ__charts">
+              <div className="ce-happ__chart">
+                <div className="ce-happ__chart-h">
+                  <span className="ce-happ__chart-t">Revenue vs Expenses</span>
+                  <span className="ce-legend">
+                    <span><i style={{ background: '#1a56e8' }} />Revenue</span>
+                    <span><i style={{ background: '#f9a8a8' }} />Expenses</span>
+                  </span>
+                </div>
+                <div className="ce-bars">
+                  {REV.map((v, i) => (
+                    <span key={i} className="ce-bars__g">
+                      <i style={{ height: `${(v / max) * 100}%`, background: '#1a56e8' }} />
+                      <i style={{ height: `${(EXP[i] / max) * 100}%`, background: '#f9a8a8' }} />
+                    </span>
+                  ))}
+                </div>
               </div>
-            ))}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 10, marginTop: 10 }}>
-            <div style={{ border: '1px solid #eef2f8', borderRadius: 12, padding: 13 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: '#475569', marginBottom: 10 }}>Revenue vs Expenses</div>
-              <MiniBars data={[40, 58, 46, 70, 60, 88]} highlight={5} color="#1a56e8" height={70} />
+              <div className="ce-happ__chart">
+                <div className="ce-happ__chart-h"><span className="ce-happ__chart-t">Fee collection</span></div>
+                <div style={{ flex: 1, display: 'grid', placeItems: 'center' }}>
+                  <Donut pct={86} size={92} color="#10b981" label="86%" sub="collected" />
+                </div>
+                <span className="ce-legend" style={{ justifyContent: 'center', marginTop: 10 }}>
+                  <span><i style={{ background: '#10b981' }} />Collected</span>
+                  <span><i style={{ background: '#e6ebf3' }} />Pending</span>
+                </span>
+              </div>
             </div>
-            <div style={{ border: '1px solid #eef2f8', borderRadius: 12, padding: 13, display: 'grid', placeItems: 'center' }}>
-              <Donut pct={86} size={104} color="#10b981" label="86%" sub="collected" />
-            </div>
           </div>
-        </AppChrome>
+        </div>
       </Reveal>
 
-      {/* floating widgets */}
-      <div className="ce-floaty" style={{ position: 'absolute', top: -18, left: -14, zIndex: 2 }}>
-        <div style={{ background: '#fff', border: '1px solid #e6ebf3', borderRadius: 13, boxShadow: '0 14px 34px rgba(15,23,42,.12)', padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ width: 34, height: 34, borderRadius: 9, background: '#ecfdf5', display: 'grid', placeItems: 'center' }}><TrendingUp size={17} color="#10b981" /></span>
-          <div><div style={{ fontSize: 11, color: '#64748b' }}>Collected today</div><div style={{ fontSize: 14, fontWeight: 800, color: '#10b981' }}>₹1,24,500</div></div>
+      {/* refined floating widgets — edge-aligned, clear of the panel title */}
+      <div className="ce-fcard ce-fcard--light ce-floaty" style={{ bottom: 28, left: -26 }}>
+        <span className="ce-fcard__ic" style={{ background: '#ecfdf5' }}><TrendingUp size={16} color="#10b981" /></span>
+        <div>
+          <div className="ce-fcard__l">Collected today</div>
+          <div className="ce-fcard__v" style={{ color: '#10b981' }}>₹1,24,500</div>
         </div>
       </div>
-      <div className="ce-floaty ce-floaty--slow ce-floaty--delay" style={{ position: 'absolute', bottom: -16, right: -10, zIndex: 2 }}>
-        <div style={{ background: '#0f172a', color: '#fff', borderRadius: 13, boxShadow: '0 14px 34px rgba(15,23,42,.28)', padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ width: 34, height: 34, borderRadius: 9, background: 'rgba(255,255,255,.1)', display: 'grid', placeItems: 'center' }}><Bell size={16} color="#fbbf24" /></span>
-          <div><div style={{ fontSize: 11, color: '#9fb0d0' }}>Absentee alert</div><div style={{ fontSize: 13, fontWeight: 700 }}>SMS sent to 4 parents</div></div>
+      <div className="ce-fcard ce-fcard--dark ce-floaty ce-floaty--slow ce-floaty--delay" style={{ top: 86, right: -26 }}>
+        <span className="ce-fcard__ic" style={{ background: 'rgba(255,255,255,.1)' }}><Bell size={15} color="#fbbf24" /></span>
+        <div>
+          <div className="ce-fcard__l">Absentee alert</div>
+          <div className="ce-fcard__v">SMS sent to 4 parents</div>
         </div>
       </div>
     </div>
