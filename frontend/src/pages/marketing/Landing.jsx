@@ -142,7 +142,7 @@ function HeroVisual() {
           <div className="ce-fcard__v" style={{ color: '#10b981' }}>₹1,24,500</div>
         </div>
       </div>
-      <div className="ce-fcard ce-fcard--dark ce-floaty ce-floaty--slow ce-floaty--delay" style={{ top: 86, right: -26 }}>
+      <div className="ce-fcard ce-fcard--dark ce-floaty ce-floaty--slow ce-floaty--delay" style={{ top: -16, right: -10 }}>
         <span className="ce-fcard__ic" style={{ background: 'rgba(255,255,255,.1)' }}><Bell size={15} color="#fbbf24" /></span>
         <div>
           <div className="ce-fcard__l">Absentee alert</div>
