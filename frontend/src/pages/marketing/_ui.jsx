@@ -114,7 +114,7 @@ export const FAQS = [
 
 export const FOOTER = {
   Product: [['Modules', '#modules'], ['How it works', '#how'], ['CampusEngine AI', '#ai'], ['Pricing', '#pricing']],
-  Company: [['About', '#'], ['Customers', '#trust'], ['Careers', '#'], ['Contact', 'mailto:hello@campusengine.in']],
+  Company: [['About', '#'], ['Careers', '#'], ['Contact', 'mailto:hello@campusengine.in']],
   Resources: [['Help centre', '#'], ['Documentation', '#'], ['Onboarding guide', '#how'], ['FAQ', '#faq']],
   Legal: [['Privacy', '#'], ['Terms', '#'], ['Security', '#'], ['Data policy', '#']],
 };

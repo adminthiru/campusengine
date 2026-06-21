@@ -9,7 +9,7 @@ import { Menu, X, ArrowRight, Check, GraduationCap, TrendingUp, Bell } from 'luc
 import './landing.css';
 import { BRAND, FOOTER, Reveal, Donut } from './_ui';
 import {
-  TrustBar, WhyCampusEngine, ModuleShowcase, HowItWorks, AISection,
+  WhyCampusEngine, ModuleShowcase, HowItWorks, AISection,
   RoleExperience, OperatingSystem, ROISection, Pricing, FAQ, FinalCTA,
 } from './sections';
 
@@ -232,7 +232,6 @@ export default function Landing() {
     <div className="ce">
       <Nav />
       <Hero />
-      <TrustBar />
       <WhyCampusEngine />
       <ModuleShowcase />
       <HowItWorks />
