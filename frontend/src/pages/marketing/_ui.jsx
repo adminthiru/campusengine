@@ -50,8 +50,7 @@ export const WHY = [
   { icon: Gauge,         color: C.blue,   title: 'Faster administration', text: 'Admissions, fees and reports that once took days now take minutes — from one screen.' },
   { icon: Workflow,      color: C.green,  title: 'Reduce manual work',    text: 'Auto receipts, payroll, attendance SMS and result cards remove repetitive paperwork.' },
   { icon: HeartHandshake,color: C.purple, title: 'Parent satisfaction',   text: 'Parents see attendance, fees and results live — and get instant SMS in their language.' },
-  { icon: Network,       color: C.orange, title: 'Centralised operations',text: '19 modules, every department and every role connected in a single source of truth.', wide: true },
-  { icon: Sparkles,      color: C.red,    title: 'AI automation',         text: 'Ask plain-English questions and get charts, insights and the next action — instantly.', wide: true },
+  { icon: Network,       color: C.orange, title: 'Centralised operations',text: '19 modules, every department and every role connected in a single source of truth.' },
 ];
 
 export const STEPS = [

@@ -200,10 +200,9 @@ html { scroll-behavior: smooth; }
 .ce-grid--3 { grid-template-columns: repeat(3, 1fr); }
 .ce-grid--2 { grid-template-columns: repeat(2, 1fr); }
 
-.ce-why { display: grid; grid-template-columns: repeat(6, 1fr); gap: 18px; }
-.ce-why__card { grid-column: span 2; padding: 26px; border-radius: var(--ce-r-md); border: 1px solid var(--ce-line); background: #fff; box-shadow: var(--ce-sh-sm); transition: transform .2s ease, box-shadow .2s ease, border-color .2s; }
+.ce-why { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.ce-why__card { padding: 26px; border-radius: var(--ce-r-md); border: 1px solid var(--ce-line); background: #fff; box-shadow: var(--ce-sh-sm); transition: transform .2s ease, box-shadow .2s ease, border-color .2s; }
 .ce-why__card:hover { transform: translateY(-4px); box-shadow: var(--ce-sh-md); border-color: #d8e2f1; }
-.ce-why__card--wide { grid-column: span 3; }
 .ce-ico { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; margin-bottom: 16px; }
 
 /* ── Module showcase ────────────────────────────────────────────────────── */
