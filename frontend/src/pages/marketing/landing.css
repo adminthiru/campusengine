@@ -64,7 +64,7 @@ html { scroll-behavior: smooth; }
   line-height: 1.06; font-weight: 800; letter-spacing: -0.03em; margin: 0;
 }
 .ce-h3 { font-size: clamp(20px, 2.4vw, 28px); font-weight: 700; letter-spacing: -0.02em; margin: 0; }
-.ce-lead { font-size: clamp(16px, 1.7vw, 20px); line-height: 1.6; color: var(--ce-body); margin: 0; }
+.ce-lead { font-size: clamp(15px, 1.4vw, 17px); line-height: 1.6; color: var(--ce-body); margin: 0; }
 .ce-grad-text {
   background: linear-gradient(110deg, var(--ce-primary) 0%, var(--ce-purple) 55%, var(--ce-primary) 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
