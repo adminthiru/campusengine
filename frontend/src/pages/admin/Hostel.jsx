@@ -148,7 +148,7 @@ export default function Hostel() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', marginBottom: 16, overflowX: 'auto' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', borderBottom: '2px solid var(--border)', marginBottom: 16 }}>
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             style={{
