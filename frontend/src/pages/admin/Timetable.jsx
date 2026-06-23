@@ -983,10 +983,6 @@ function EditCellModal({ cell, day, period, subjects, teachers, onSave, onClose,
             )}
           />
         </div>
-        <div className="form-group">
-          <label className="form-label">Room</label>
-          <input className="form-control" value={room} onChange={e => setRoom(e.target.value)} placeholder="e.g. Room 101" />
-        </div>
     </Modal>
   );
 }
