@@ -778,6 +778,7 @@ router.get('/salaries/:id/payslip', protect, salCtrl.getPayslipPDF);
 router.get('/timetable', protect, checkSubscription, ttCtrl.getTimetable);
 router.post('/timetable', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), ttCtrl.saveTimetable);
 router.get('/timetable/free-slots', protect, checkSubscription, ttCtrl.getTeacherFreeSlots);
+router.get('/timetable/teacher-busy', protect, checkSubscription, ttCtrl.getTeacherBusy);
 router.get('/timetable/day-substitutes', protect, checkSubscription, ttCtrl.getDaySubstitutes);
 router.delete('/timetable/period', protect, checkSubscription, ttCtrl.deletePeriod);
 

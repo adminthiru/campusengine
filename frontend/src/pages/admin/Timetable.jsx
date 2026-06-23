@@ -126,6 +126,14 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
     queryFn: () => api.get(`/timetable?classId=${classId}&academicYear=${academicYear}`)
   });
 
+  // Teacher busy-slot map across OTHER classes — for live conflict detection.
+  const { data: busyData } = useQuery({
+    queryKey: ['tt-busy', classId, academicYear],
+    enabled: !!classId,
+    queryFn: () => api.get(`/timetable/teacher-busy?academicYear=${academicYear}&excludeClassId=${classId}`),
+  });
+  const busyMap = busyData?.busy || {};
+
   useEffect(() => {
     if (!ttData) return;
     if (ttData.timetable) {
@@ -187,6 +195,25 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
 
   const activeDays = schedule.map(s => s.day);
 
+  // Live conflict: a teacher assigned here is already busy in another class at
+  // the same day + period. Recomputed on every edit so it shows immediately.
+  const liveConflict = (() => {
+    for (const ds of schedule) {
+      for (const p of (ds.periods || [])) {
+        if (p.isBreak || !p.teacher) continue;
+        const tid = p.teacher._id || p.teacher;
+        const where = busyMap[`${tid}_${ds.day}_${p.periodNumber}`];
+        if (where) {
+          const t = teachers.find(x => x._id === tid);
+          const tname = t?.name || (typeof p.teacher === 'object' ? p.teacher.name : 'Teacher');
+          return `${tname} is already assigned to ${where} on ${ds.day} Period ${p.periodNumber}`;
+        }
+      }
+    }
+    return null;
+  })();
+  const banner = liveConflict || conflict;
+
   return (
     <div>
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -212,10 +239,10 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
         </div>
       </div>
 
-      {conflict && (
+      {banner && (
         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 10 }}>
           <AlertTriangle size={18} color="#ef4444" style={{ flexShrink: 0, marginTop: 1 }} />
-          <div><div style={{ fontWeight: 600, color: '#dc2626', fontSize: 14 }}>Conflict</div><div style={{ color: '#991b1b', fontSize: 13 }}>{conflict}</div></div>
+          <div><div style={{ fontWeight: 600, color: '#dc2626', fontSize: 14 }}>Conflict</div><div style={{ color: '#991b1b', fontSize: 13 }}>{banner}</div></div>
         </div>
       )}
 

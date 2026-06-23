@@ -219,4 +219,27 @@ const getDaySubstitutes = async (req, res) => {
   }
 };
 
-module.exports = { saveTimetable, getTimetable, getTeacherFreeSlots, deletePeriod, getDaySubstitutes };
+// Busy-slot map for live (client-side) conflict detection: which teacher is
+// already assigned in OTHER classes, keyed "teacherId_day_period".
+const getTeacherBusy = async (req, res) => {
+  try {
+    const { academicYear, excludeClassId } = req.query;
+    const query = { school: req.user.school, isActive: true };
+    if (academicYear) query.academicYear = academicYear;
+    if (excludeClassId) query.class = { $ne: excludeClassId };
+    const tts = await Timetable.find(query).populate('class', 'name section');
+    const busy = {};
+    for (const tt of tts) {
+      const label = `${tt.class?.name || ''}${tt.class?.section ? ' ' + tt.class.section : ''}`.trim();
+      for (const ds of tt.schedule) {
+        for (const p of ds.periods) {
+          if (p.isBreak || !p.teacher) continue;
+          busy[`${p.teacher}_${ds.day}_${p.periodNumber}`] = label || 'another class';
+        }
+      }
+    }
+    res.json({ success: true, busy });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+};
+
+module.exports = { saveTimetable, getTimetable, getTeacherFreeSlots, deletePeriod, getDaySubstitutes, getTeacherBusy };
