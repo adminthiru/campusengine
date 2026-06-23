@@ -290,13 +290,6 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
                               <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 11, fontWeight: 800, color: '#78350f', letterSpacing: '0.08em', textTransform: 'uppercase', lineHeight: 1.2 }}>
                                 {brk.breakName || 'Break'}
                               </div>
-                              {editMode && (
-                                <button
-                                  onClick={() => setEditCell({ day: activeDays[0], period: p })}
-                                  style={{ background: 'none', border: '1px dashed #d97706', borderRadius: 6, padding: '3px 5px', cursor: 'pointer', writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 9, color: '#d97706', fontWeight: 700, lineHeight: 1 }}>
-                                  Edit
-                                </button>
-                              )}
                             </div>
                           </td>
                         );
@@ -927,8 +920,6 @@ function EditCellModal({ cell, day, period, subjects, teachers, onSave, onClose,
   const [subjectId, setSubjectId] = useState(cell?.subject?._id || cell?.subject || '');
   const [teacherId, setTeacherId] = useState(cell?.teacher?._id || cell?.teacher || '');
   const [room, setRoom] = useState(cell?.room || '');
-  const [isBreak, setIsBreak] = useState(cell?.isBreak || false);
-  const [breakName, setBreakName] = useState(cell?.breakName || '');
 
   return (
     <Modal open onClose={onClose} title={`${day.charAt(0).toUpperCase() + day.slice(1)} — Period ${period}`} size="sm"
@@ -937,22 +928,10 @@ function EditCellModal({ cell, day, period, subjects, teachers, onSave, onClose,
         <div style={{ flex: 1 }} />
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
         <button className="btn btn-primary" onClick={() => onSave({
-          subject: subjectId || null, teacher: teacherId || null, room, isBreak, breakName,
+          subject: subjectId || null, teacher: teacherId || null, room,
           startTime: cell?.startTime || '', endTime: cell?.endTime || ''
         })}>Save</button>
       </>}>
-      <div className="form-group">
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 16 }}>
-          <input type="checkbox" checked={isBreak} onChange={e => setIsBreak(e.target.checked)} />
-          <span className="form-label" style={{ marginBottom: 0 }}>Mark as Break</span>
-        </label>
-      </div>
-      {isBreak ? (
-        <div className="form-group">
-          <label className="form-label">Break Name</label>
-          <input className="form-control" value={breakName} onChange={e => setBreakName(e.target.value)} placeholder="e.g. Lunch Break" />
-        </div>
-      ) : <>
         <div className="form-group">
           <label className="form-label">Subject</label>
           <AntSelect
@@ -995,7 +974,6 @@ function EditCellModal({ cell, day, period, subjects, teachers, onSave, onClose,
           <label className="form-label">Room</label>
           <input className="form-control" value={room} onChange={e => setRoom(e.target.value)} placeholder="e.g. Room 101" />
         </div>
-      </>}
     </Modal>
   );
 }
