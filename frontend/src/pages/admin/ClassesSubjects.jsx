@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { Select as AntSelect } from 'antd';
-import { Plus, Trash2, BookOpen, Users, Edit, GripVertical, Eye } from 'lucide-react';
+import { Plus, Trash2, BookOpen, Users, Edit, GripVertical, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, EmptyState, PageLoader, FormRow, StatusBadge, Select, SearchInput } from '../../components/ui';
@@ -17,6 +17,7 @@ export function Classes() {
   const [deleteId, setDeleteId] = useState(null);
   const [selectedSubjects, setSelectedSubjects] = useState([]);
   const [subjectTeacherMap, setSubjectTeacherMap] = useState({});
+  const [classTab, setClassTab] = useState('details');
   const [orderedClasses, setOrderedClasses] = useState([]);
   const [draggingIdx, setDraggingIdx] = useState(null);
   const dragItem = useRef(null);
@@ -97,6 +98,7 @@ export function Classes() {
       if (subId && teachId) map[subId] = teachId;
     });
     setSubjectTeacherMap(map);
+    setClassTab('details');
     setShowModal(true);
   };
 
@@ -110,7 +112,7 @@ export function Classes() {
           <h1 className="page-title">Classes</h1>
           <p className="page-subtitle">{orderedClasses.length} classes configured</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setEditClass(null); reset(); setSelectedSubjects([]); setSubjectTeacherMap({}); setShowModal(true); }}>
+        <button className="btn btn-primary" onClick={() => { setEditClass(null); reset(); setSelectedSubjects([]); setSubjectTeacherMap({}); setClassTab('details'); setShowModal(true); }}>
           <Plus size={16} /> Add Class
         </button>
       </div>
@@ -268,10 +270,13 @@ export function Classes() {
         )}
       </Modal>
 
-      <Modal open={showModal} onClose={() => { setShowModal(false); setEditClass(null); reset(); }}
+      <Modal open={showModal} onClose={() => { setShowModal(false); setEditClass(null); reset(); setClassTab('details'); }}
         title={editClass ? 'Edit Class' : 'Add Class'}
         footer={<>
-          <button className="btn btn-secondary" onClick={() => { setShowModal(false); setEditClass(null); }}>Cancel</button>
+          <button className="btn btn-secondary" onClick={() => { setShowModal(false); setEditClass(null); setClassTab('details'); }}>Cancel</button>
+          {classTab === 'details'
+            ? <button type="button" className="btn btn-secondary" onClick={() => setClassTab('teachers')}>Subject Teachers <ChevronRight size={15} /></button>
+            : <button type="button" className="btn btn-secondary" onClick={() => setClassTab('details')}><ChevronLeft size={15} /> Back</button>}
           <button className="btn btn-primary" onClick={handleSubmit(d => {
             if (!d.classTeacher) delete d.classTeacher;
             const subjectTeachers = Object.entries(subjectTeacherMap)
@@ -282,7 +287,22 @@ export function Classes() {
             {createMutation.isLoading ? 'Saving...' : editClass ? 'Update Class' : 'Add Class'}
           </button>
         </>}>
+        {/* Tabs */}
+        <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', marginBottom: 18 }}>
+          {[['details', 'Details'], ['teachers', 'Subject Teachers']].map(([k, l]) => (
+            <button key={k} type="button" onClick={() => setClassTab(k)}
+              style={{
+                padding: '10px 18px', border: 'none', background: 'none', cursor: 'pointer', marginBottom: -2,
+                fontSize: 14, fontWeight: classTab === k ? 700 : 500,
+                color: classTab === k ? 'var(--primary)' : 'var(--text-secondary)',
+                borderBottom: `2px solid ${classTab === k ? 'var(--primary)' : 'transparent'}`,
+              }}>
+              {l}{k === 'teachers' && selectedSubjects.length > 0 ? ` (${selectedSubjects.length})` : ''}
+            </button>
+          ))}
+        </div>
         <form>
+          {classTab === 'details' && (<>
           <FormRow>
             <div className="form-group">
               <label className="form-label">Class Name *</label>
@@ -389,10 +409,12 @@ export function Classes() {
               })}
             </div>
           </div>
+          </>)}
 
-          {selectedSubjects.length > 0 && (
+          {classTab === 'teachers' && (
+            selectedSubjects.length > 0 ? (
             <div className="form-group">
-              <label className="form-label">Subject Teachers</label>
+              <label className="form-label">Assign a teacher to each subject</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {allSubjects.filter(s => selectedSubjects.includes(s._id)).map(sub => {
                   const subTeachers = sub.teachers?.length > 0
@@ -434,6 +456,11 @@ export function Classes() {
                 })}
               </div>
             </div>
+            ) : (
+              <div style={{ padding: '36px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                Select subjects in the <b>Details</b> tab first to assign teachers.
+              </div>
+            )
           )}
         </form>
       </Modal>
