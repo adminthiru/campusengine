@@ -601,6 +601,52 @@ const cloneTerms = (tmpl) => (tmpl || []).map(t => {
   return { name: t.name, feeBreakdown: fb, totalAmount, discount: { amount: discAmt, reason: t.discount?.reason || '' }, netAmount, paidAmount: 0, pendingAmount: netAmount, status: 'pending' };
 });
 
+// Apply a class fee structure: create records for students who don't have one
+// and update the terms of those who do — a single add/edit operation.
+const applyClassFeeStructure = async (req, res) => {
+  try {
+    const schoolId = req.user.school;
+    let { classId, academicYear, terms: termsInput } = req.body;
+    if (!classId) return res.status(400).json({ success: false, message: 'Class is required' });
+    if (!termsInput?.length) return res.status(400).json({ success: false, message: 'At least one fee category is required' });
+    if (!academicYear) academicYear = await getAcademicYear(schoolId);
+
+    const students = await Student.find({ school: schoolId, currentClass: classId, status: 'active' }).select('_id');
+    if (!students.length) return res.status(404).json({ success: false, message: 'No active students in this class' });
+
+    let created = 0, updated = 0;
+    for (const s of students) {
+      let fee = await FeeCollection.findOne({ school: schoolId, student: s._id, academicYear });
+      if (!fee) {
+        fee = new FeeCollection({ school: schoolId, student: s._id, academicYear, terms: buildTerms(termsInput) });
+        recalcAggregates(fee);
+        await fee.save();
+        created++;
+      } else {
+        for (const tu of termsInput) {
+          const bd = (tu.feeBreakdown || []).map(f => ({ type: f.type, amount: Number(f.amount) || 0 }));
+          const totalAmount = bd.reduce((a, b) => a + b.amount, 0);
+          const termObj = fee.terms.find(t => t.name === tu.name);
+          if (termObj) {
+            termObj.feeBreakdown = bd;
+            termObj.totalAmount = totalAmount;
+            const discAmt = Number(termObj.discount?.amount) || 0;
+            termObj.netAmount = Math.max(0, totalAmount - discAmt);
+            termObj.pendingAmount = Math.max(0, termObj.netAmount - termObj.paidAmount);
+            termObj.status = termObj.pendingAmount <= 0 ? 'paid' : termObj.paidAmount > 0 ? 'partial' : 'pending';
+          } else {
+            fee.terms.push({ name: tu.name, feeBreakdown: bd, totalAmount, discount: { amount: 0, reason: '' }, netAmount: totalAmount, paidAmount: 0, pendingAmount: totalAmount, status: 'pending' });
+          }
+        }
+        recalcAggregates(fee);
+        await fee.save();
+        updated++;
+      }
+    }
+    res.json({ success: true, created, updated, message: `${created} added, ${updated} updated` });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+};
+
 const getUnsyncedCount = async (req, res) => {
   try {
     const schoolId = req.user.school;
@@ -630,4 +676,4 @@ const syncClassStudents = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
-module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, createRazorpayOrder, verifyRazorpayPayment, getFees, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm, getUnsyncedCount, syncClassStudents };
+module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, createRazorpayOrder, verifyRazorpayPayment, getFees, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm, getUnsyncedCount, syncClassStudents, applyClassFeeStructure };

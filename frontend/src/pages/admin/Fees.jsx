@@ -34,7 +34,6 @@ export default function Fees() {
   const [reverseTarget, setReverseTarget] = useState(null); // { feeId, paymentId, amount, termName }
   const [selected, setSelected] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [showEditClassFee, setShowEditClassFee] = useState(false);
 
   const { data: classData } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes') });
   const classes = classData?.classes || [];
@@ -51,13 +50,9 @@ export default function Fees() {
   const fees = data?.fees || [];
   const total = data?.total || 0;
 
-  const { register, handleSubmit, reset, control } = useForm();
-
-  const createMutation = useMutation({
-    mutationFn: (d) => api.post('/fees', d),
-    onSuccess: () => { qc.invalidateQueries(['fees']); toast.success('Fee record created!'); setShowCreate(false); },
-    onError: (err) => toast.error(err.message || 'Failed')
-  });
+  const { register, handleSubmit, reset, control, watch } = useForm();
+  const selectedClassId = watch('classId');
+  const [hasExisting, setHasExisting] = useState(false);
 
   // Students in classes with a fee structure who don't yet have a record.
   const { data: unsyncedData } = useQuery({
@@ -72,20 +67,37 @@ export default function Fees() {
     onError: (err) => toast.error(err.message || 'Failed to sync'),
   });
 
-  const bulkMutation = useMutation({
-    mutationFn: (d) => api.post('/fees/bulk', d),
-    onSuccess: (res) => { qc.invalidateQueries(['fees']); toast.success(res.message || 'Fee records created!'); setShowCreate(false); },
-    onError: (err) => toast.error(err.message || 'Failed')
+  // Upsert a class fee structure: creates records for students without one and
+  // updates existing — the unified add/edit save.
+  const applyMutation = useMutation({
+    mutationFn: (d) => api.post('/fees/apply-structure', d),
+    onSuccess: (res) => { qc.invalidateQueries(['fees']); qc.invalidateQueries(['fees-unsynced']); toast.success(res.message || 'Fee structure saved'); setShowCreate(false); },
+    onError: (err) => toast.error(err.message || 'Failed'),
   });
 
-  const { data: studentData } = useQuery({ queryKey: ['students-all'], queryFn: () => api.get('/students?limit=500&status=active') });
-  const students = studentData?.students || [];
+  // Load the selected class's existing fee structure into the editor (edit mode).
+  const { data: structurePreview } = useQuery({
+    queryKey: ['fee-structure-preview', selectedClassId, selectedYear],
+    enabled: showCreate && !!selectedClassId,
+    queryFn: () => api.get(`/fees?classId=${selectedClassId}&academicYear=${encodeURIComponent(selectedYear)}&limit=1`),
+  });
+  useEffect(() => {
+    if (!showCreate || !selectedClassId) return;
+    const rec = structurePreview?.fees?.[0];
+    if (rec?.terms?.length) {
+      setFeeItems(rec.terms.map(t => ({ type: t.name, amount: (t.feeBreakdown || []).reduce((s, f) => s + (f.amount || 0), 0) || t.totalAmount || '' })));
+      setHasExisting(true);
+    } else {
+      setHasExisting(false);
+    }
+  }, [structurePreview, selectedClassId, showCreate]);
 
   const openCreateModal = () => {
     const items = feeTerms.length > 0
       ? feeTerms.map(t => ({ type: t.name, amount: '' }))
       : [{ type: 'Tuition Fee', amount: '' }];
     setFeeItems(items);
+    setHasExisting(false);
     reset();
     setShowCreate(true);
   };
@@ -163,7 +175,7 @@ export default function Fees() {
       name: f.type,
       feeBreakdown: [{ type: f.type, amount: Number(f.amount) || 0 }]
     }));
-    bulkMutation.mutate({ classId: formData.classId, academicYear: formData.academicYear, terms });
+    applyMutation.mutate({ classId: formData.classId, academicYear: (formData.academicYear || '').trim() || selectedYear, terms });
   });
 
   const [visibleCols, setVisibleCols] = useColumnSelector('fees', FEE_COLS);
@@ -172,7 +184,7 @@ export default function Fees() {
   const totalPending = fees.reduce((s, f) => s + (f.pendingAmount || 0), 0);
   const totalCollected = fees.reduce((s, f) => s + (f.paidAmount || 0), 0);
   const totalDiscount = fees.reduce((s, f) => s + (f.terms || []).reduce((ts, t) => ts + (t.discount?.amount || 0), 0), 0);
-  const isPending = bulkMutation.isPending;
+  const isPending = applyMutation.isPending;
 
   return (
     <div>
@@ -197,13 +209,8 @@ export default function Fees() {
               <RefreshCw size={16} /> {syncMutation.isPending ? 'Syncing…' : `Sync Students (${unsyncedCount})`}
             </button>
           )}
-          {total > 0 && (
-            <button className="btn btn-secondary" onClick={() => setShowEditClassFee(true)}>
-              <Edit2 size={16} /> Edit Fee Structure
-            </button>
-          )}
           <button className="btn btn-primary" onClick={openCreateModal}>
-            <Plus size={16} /> Add Fee Record
+            <Plus size={16} /> Add / Edit Fee Record
           </button>
         </div>
       </div>
@@ -313,12 +320,12 @@ export default function Fees() {
         </div>
       )}
 
-      {/* Create Fee Modal — class-level only (individual students sync automatically) */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Add Fee Record" size="lg"
+      {/* Add / Edit Fee Record — selecting a class loads its existing structure */}
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Add / Edit Fee Record" size="lg"
         footer={<>
           <button className="btn btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
           <button className="btn btn-primary" onClick={handleCreate} disabled={isPending}>
-            {isPending ? 'Assigning…' : 'Assign to Class'}
+            {isPending ? 'Saving…' : hasExisting ? 'Update Class Fees' : 'Assign to Class'}
           </button>
         </>}>
         <form onSubmit={e => e.preventDefault()}>
@@ -345,6 +352,12 @@ export default function Fees() {
               <input className="form-control" {...register('academicYear')} placeholder="Auto-detected if empty" />
             </div>
           </FormRow>
+
+          {hasExisting && (
+            <div style={{ fontSize: 12.5, color: '#0369a1', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '8px 12px', marginBottom: 12 }}>
+              This class already has a fee structure — saving updates existing records and creates records for any new students.
+            </div>
+          )}
 
           {/* Fee Categories */}
           <div style={{ marginTop: 4 }}>
@@ -480,16 +493,6 @@ export default function Fees() {
 
           </div>
         </Modal>
-      )}
-
-      {/* Edit Fee Structure — class-level modal */}
-      {showEditClassFee && (
-        <EditClassFeeModal
-          classes={classes}
-          schoolFeeTerms={feeTerms}
-          onClose={() => setShowEditClassFee(false)}
-          onSuccess={() => { qc.invalidateQueries(['fees']); setShowEditClassFee(false); }}
-        />
       )}
 
       {/* Reverse payment confirmation — must render AFTER view modal to stack on top */}
