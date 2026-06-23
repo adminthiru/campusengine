@@ -7,7 +7,7 @@ import dayjs from 'dayjs';
 import {
   Plus, Download, Trash2, GraduationCap, ArrowLeft,
   Edit, Phone, Mail, MapPin, BookOpen, Camera, ChevronLeft, ChevronRight, Upload,
-  IndianRupee, CreditCard
+  IndianRupee, CreditCard, Lock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
@@ -187,6 +187,7 @@ export default function Students() {
       admissionDate: data.admissionDate,
       currentClass: classDoc?._id,
       rollNumber: data.rollNumber,
+      rollNumberManual: !!data.rollNumberManual,
       guardians: guardiansPayload,
       nationality: data.nationality,
       religion: data.religion,
@@ -204,6 +205,8 @@ export default function Students() {
     if (!payload.currentClass) delete payload.currentClass;
     if (!payload.phone) delete payload.phone;
     if (!payload.admissionDate) delete payload.admissionDate;
+    if (!payload.admissionNumber) delete payload.admissionNumber;   // blank → server auto-generates
+    if (!payload.rollNumber) delete payload.rollNumber;             // blank → server auto-assigns (A–Z)
     if (editStudent) {
       updateMutation.mutate({ id: editStudent._id, data: payload });
     } else {
@@ -254,6 +257,7 @@ export default function Students() {
       classGroup: classDoc?.name || '',
       section: classDoc?.section || '',
       rollNumber: stu.rollNumber || '',
+      rollNumberManual: stu.rollNumberManual || false,
       nationality: stu.nationality || '',
       religion: stu.religion || '',
       motherTongue: stu.motherTongue || '',
@@ -497,9 +501,25 @@ function AddEditModal({
   const watched = useWatch({
     control,
     name: ['firstName', 'lastName', 'gender', 'dateOfBirth', 'parentName', 'parentRelationship',
-           'mobile', 'address', 'admissionNumber', 'admissionDate', 'classGroup', 'rollNumber']
+           'mobile', 'address', 'admissionDate', 'classGroup']
   });
   const isFormReady = watched.every(v => v !== undefined && v !== null && String(v).trim() !== '');
+
+  // Admission & roll numbers auto-generate; an edit toggle unlocks manual entry.
+  const [editAdmission, setEditAdmission] = useState(false);
+  const [editRoll, setEditRoll] = useState(false);
+  useEffect(() => {
+    setEditAdmission(false);
+    setEditRoll(!!editStudent?.rollNumberManual);
+  }, [open, editStudent]);
+  const toggleRoll = () => {
+    setEditRoll(prev => {
+      const next = !prev;
+      setValue('rollNumberManual', next, { shouldDirty: true });
+      if (!next) setValue('rollNumber', '');
+      return next;
+    });
+  };
   const saveParent = () => {
     if (!parentDraft.name || !parentDraft.mobile) return toast.error('Name and mobile are required');
     if (typeof parentForm === 'number') {
@@ -775,9 +795,21 @@ function AddEditModal({
           <>
             <FormRow>
               <div className="form-group">
-                <label className="form-label">Admission Number <span style={{ color: '#ef4444' }}>*</span></label>
-                <input className="form-control" {...register('admissionNumber', { required: 'Required' })} placeholder="e.g. ADM2024001" />
-                {errors.admissionNumber && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.admissionNumber.message}</p>}
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  Admission Number
+                  {!editAdmission && <span style={{ fontSize: 10, fontWeight: 700, color: '#1a56e8', background: '#eff6ff', padding: '1px 7px', borderRadius: 6 }}>AUTO</span>}
+                </label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input className="form-control" {...register('admissionNumber')} readOnly={!editAdmission}
+                    placeholder={editStudent ? '' : 'Auto-generated on save'}
+                    style={{ background: editAdmission ? '#fff' : '#f8fafc', flex: 1 }} />
+                  <button type="button" className="btn btn-secondary btn-icon" title={editAdmission ? 'Lock' : 'Edit'} onClick={() => setEditAdmission(e => !e)}>
+                    {editAdmission ? <Lock size={15} /> : <Edit size={15} />}
+                  </button>
+                </div>
+                <small style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                  {editAdmission ? 'Custom admission number.' : 'Generated automatically — click edit to override.'}
+                </small>
               </div>
               <div className="form-group">
                 <label className="form-label">Admission Date <span style={{ color: '#ef4444' }}>*</span></label>
@@ -825,9 +857,22 @@ function AddEditModal({
               </div>
             </FormRow>
             <div className="form-group" style={{ maxWidth: '50%' }}>
-              <label className="form-label">Roll Number <span style={{ color: '#ef4444' }}>*</span></label>
-              <input className="form-control" {...register('rollNumber', { required: 'Required' })} placeholder="e.g. 01" />
-              {errors.rollNumber && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.rollNumber.message}</p>}
+              <input type="hidden" {...register('rollNumberManual')} />
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                Roll Number
+                {!editRoll && <span style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', background: '#f0fdf4', padding: '1px 7px', borderRadius: 6 }}>AUTO · A–Z</span>}
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input className="form-control" {...register('rollNumber')} readOnly={!editRoll}
+                  placeholder={editStudent ? '' : 'Auto-assigned (A–Z)'}
+                  style={{ background: editRoll ? '#fff' : '#f8fafc', flex: 1 }} />
+                <button type="button" className="btn btn-secondary btn-icon" title={editRoll ? 'Use auto' : 'Edit'} onClick={toggleRoll}>
+                  {editRoll ? <Lock size={15} /> : <Edit size={15} />}
+                </button>
+              </div>
+              <small style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                {editRoll ? 'Custom roll number.' : 'Assigned alphabetically by name within the class — click edit to override.'}
+              </small>
             </div>
           </>
         )}

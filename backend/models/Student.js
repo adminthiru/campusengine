@@ -5,6 +5,7 @@ const studentSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   admissionNumber: { type: String, required: true },
   rollNumber: { type: String },
+  rollNumberManual: { type: Boolean, default: false },   // true = admin-set, exempt from A–Z auto-renumber
   name: { type: String, required: true },
   email: { type: String },
   phone: { type: String },
