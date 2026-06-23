@@ -389,14 +389,14 @@ export default function Students() {
                   <th style={{ whiteSpace: 'nowrap', minWidth: 36 }}>
                     <input type="checkbox" onChange={e => setSelected(e.target.checked ? students.map(s => s._id) : [])} />
                   </th>
-                  <th style={{ whiteSpace: 'nowrap', minWidth: 180 }}>Student Name</th>
+                  <th style={{ whiteSpace: 'nowrap', minWidth: 200 }}>Student Name</th>
                   {col('classSection')       && <th style={{ whiteSpace: 'nowrap', minWidth: 130 }}>Class &amp; Section</th>}
                   {col('admissionNumber')    && <th style={{ whiteSpace: 'nowrap', minWidth: 160 }}>Admission Number</th>}
                   {col('rollNumber')         && <th style={{ whiteSpace: 'nowrap', minWidth: 110 }}>Roll Number</th>}
                   {col('gender')             && <th style={{ whiteSpace: 'nowrap', minWidth: 90 }}>Gender</th>}
                   {col('dob')                && <th style={{ whiteSpace: 'nowrap', minWidth: 130 }}>Date of Birth</th>}
                   {col('status')             && <th style={{ whiteSpace: 'nowrap', minWidth: 100 }}>Status</th>}
-                  {col('parentName')          && <th style={{ whiteSpace: 'nowrap', minWidth: 150 }}>Parent Name</th>}
+                  {col('parentName')          && <th style={{ whiteSpace: 'nowrap', minWidth: 180 }}>Parent Name</th>}
                   {col('parentRelation')      && <th style={{ whiteSpace: 'nowrap', minWidth: 120 }}>Relationship</th>}
                   {col('mobile')             && <th style={{ whiteSpace: 'nowrap', minWidth: 170 }}>Parent Mobile Number</th>}
                   {col('alternateMobile')    && <th style={{ whiteSpace: 'nowrap', minWidth: 190 }}>Alternate Mobile Number</th>}
@@ -420,7 +420,7 @@ export default function Students() {
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <Avatar src={stu.photo} name={stu.name} size={32} />
-                        <span className="text-14-semibold">{stu.name}</span>
+                        <span className="text-14-semibold" style={{ whiteSpace: 'nowrap' }}>{stu.name}</span>
                       </div>
                     </td>
                     {col('classSection')       && <td style={{ fontSize: 13 }}>{stu.currentClass ? `${stu.currentClass.name} – ${stu.currentClass.section}` : '—'}</td>}
@@ -429,7 +429,7 @@ export default function Students() {
                     {col('gender')             && <td style={{ fontSize: 13, textTransform: 'capitalize' }}>{stu.gender || '—'}</td>}
                     {col('dob')                && <td style={{ fontSize: 13 }}>{stu.dateOfBirth ? format(new Date(stu.dateOfBirth), 'dd MMM yyyy') : '—'}</td>}
                     {col('status')             && <td><StatusBadge status={stu.status} /></td>}
-                    {col('parentName')          && <td style={{ fontSize: 13 }}>{stu.guardians?.[0]?.name || '—'}</td>}
+                    {col('parentName')          && <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{stu.guardians?.[0]?.name || '—'}</td>}
                     {col('parentRelation')      && <td style={{ fontSize: 13, textTransform: 'capitalize' }}>{stu.guardians?.[0]?.relation || '—'}</td>}
                     {col('mobile')             && <td style={{ fontSize: 13 }}>{stu.phone || '—'}</td>}
                     {col('alternateMobile')    && <td style={{ fontSize: 13 }}>{stu.alternativeMobile || '—'}</td>}
