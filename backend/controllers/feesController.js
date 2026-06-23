@@ -124,20 +124,13 @@ const collectPayment = async (req, res) => {
       term.pendingAmount = Math.max(0, term.netAmount - (term.paidAmount || 0));
       term.status = term.pendingAmount <= 0 ? 'paid' : term.paidAmount > 0 ? 'partial' : 'pending';
     };
-    if (discount && Number(discount.amount) > 0) {
-      if (termName) {
-        const term = fee.terms.find(t => t.name === termName);
-        if (term) applyDiscountToTerm(term, Number(discount.amount) || 0, discount.reason);
-      } else {
-        let remaining = Number(discount.amount) || 0;
-        for (const term of fee.terms) {
-          if (remaining <= 0) break;
-          if (term.pendingAmount <= 0) continue;
-          const applying = Math.min(remaining, term.pendingAmount);
-          applyDiscountToTerm(term, applying, discount.reason);
-          remaining -= applying;
-        }
-      }
+    const discountList = Array.isArray(req.body.discounts)
+      ? req.body.discounts
+      : (discount && Number(discount.amount) > 0 && termName ? [{ termName, amount: discount.amount, reason: discount.reason }] : []);
+    for (const d of discountList) {
+      if (!d || !d.termName || !(Number(d.amount) > 0)) continue;
+      const term = fee.terms.find(t => t.name === d.termName);
+      if (term) applyDiscountToTerm(term, Number(d.amount) || 0, d.reason);
     }
 
     let receiptNumber = null;
