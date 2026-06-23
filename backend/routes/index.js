@@ -551,6 +551,24 @@ router.delete('/classes/:id', protect, checkSubscription, authorize('admin', 'co
     res.json({ success: true });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
+// Per-class daily period structure (periods + breaks template for the timetable)
+router.put('/classes/:id/period-structure', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const { periodStructure } = req.body;
+    const clean = Array.isArray(periodStructure) ? periodStructure.map(s => ({
+      kind: s.kind === 'break' ? 'break' : 'period',
+      name: s.name || '',
+      startTime: s.startTime || '',
+      endTime: s.endTime || '',
+    })) : [];
+    const cls = await Class.findOneAndUpdate(
+      { _id: req.params.id, school: req.user.school },
+      { periodStructure: clean }, { returnDocument: 'after' }
+    );
+    if (!cls) return res.status(404).json({ success: false, message: 'Class not found' });
+    res.json({ success: true, class: cls });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
 
 // ============== SUBJECTS ==============
 router.get('/subjects', protect, checkSubscription, async (req, res) => {

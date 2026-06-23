@@ -20,6 +20,15 @@ const classSchema = new mongoose.Schema({
     lateFee: { type: Number, default: 0 },
     lateFeePerDay: { type: Number, default: 0 }
   },
+  // Ordered daily slot template — periods and breaks in sequence (e.g.
+  // P1, P2, Break, P3, P4, Lunch, P5…). Drives the timetable grid columns.
+  // Empty = fall back to school.periodsPerDay (all periods, no breaks).
+  periodStructure: [{
+    kind: { type: String, enum: ['period', 'break'], default: 'period' },
+    name: { type: String },        // break label e.g. "Lunch" (periods auto-number P1, P2…)
+    startTime: { type: String },
+    endTime: { type: String },
+  }],
   subjects: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Subject' }],
   subjectTeachers: [{
     subject: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject' },

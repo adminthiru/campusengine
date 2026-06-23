@@ -82,6 +82,8 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
   const [editPeriodTime, setEditPeriodTime] = useState(null);
   const [saving, setSaving] = useState(false);
   const [conflict, setConflict] = useState(null);
+  const [showStructure, setShowStructure] = useState(false);
+  const [localStructure, setLocalStructure] = useState(null);
 
   const { data: subjectData } = useQuery({
     queryKey: ['subjects'],
@@ -94,6 +96,22 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
     ? allSubjects.filter(s => selectedClass.subjects.some(cs => (cs._id || cs) === s._id))
     : allSubjects;
 
+  // Per-class period structure (periods + breaks). null = no structure → fall back
+  // to school.periodsPerDay (all periods, no breaks).
+  const struct = localStructure || (selectedClass?.periodStructure?.length ? selectedClass.periodStructure : null);
+  const periodCount = struct ? struct.length : periodsPerDay;
+  const activeDaysList = DAYS.filter(d => !workingDays || workingDays[d] !== false);
+  // Build a day schedule from a structure, preserving existing subject/teacher
+  // assignments by period number.
+  const buildFromStructure = (slots, existing, days) => days.map(day => {
+    const prevPeriods = existing.find(s => s.day === day)?.periods || [];
+    return { day, periods: slots.map((slot, i) => {
+      const prev = prevPeriods.find(p => p.periodNumber === i + 1) || {};
+      if (slot.kind === 'break') return { periodNumber: i + 1, isBreak: true, breakName: slot.name || 'Break', startTime: slot.startTime || '', endTime: slot.endTime || '', subject: null, teacher: null, room: '' };
+      return { periodNumber: i + 1, isBreak: false, breakName: '', startTime: slot.startTime || prev.startTime || '', endTime: slot.endTime || prev.endTime || '', subject: prev.isBreak ? null : (prev.subject || null), teacher: prev.isBreak ? null : (prev.teacher || null), room: prev.isBreak ? '' : (prev.room || '') };
+    }) };
+  });
+
   const { data: ttData, isLoading } = useQuery({
     queryKey: ['timetable', classId, academicYear],
     enabled: !!classId,
@@ -102,13 +120,15 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
 
   useEffect(() => {
     if (!ttData) return;
-    if (ttData.timetable) setSchedule(ttData.timetable.schedule || []);
-    else initSchedule();
+    if (ttData.timetable) {
+      const loaded = ttData.timetable.schedule || [];
+      setSchedule(struct ? buildFromStructure(struct, loaded, activeDaysList) : loaded);
+    } else initSchedule();
   }, [ttData]);
 
   const initSchedule = () => {
-    const activeDays = DAYS.filter(d => !workingDays || workingDays[d] !== false);
-    setSchedule(activeDays.map(day => ({
+    if (struct) { setSchedule(buildFromStructure(struct, [], activeDaysList)); return; }
+    setSchedule(activeDaysList.map(day => ({
       day,
       periods: Array.from({ length: periodsPerDay }, (_, i) => ({
         periodNumber: i + 1, startTime: '', endTime: '', subject: null, teacher: null, room: '', isBreak: false
@@ -168,11 +188,12 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
           placeholder="Select class"
           showSearch
           optionFilterProp="label"
-          onChange={val => { setClassId(val); setEditMode(false); setConflict(null); }}
+          onChange={val => { setClassId(val); setEditMode(false); setConflict(null); setLocalStructure(null); }}
           options={classes.map(c => ({ value: c._id, label: `${c.name}${c.section ? ` ${c.section}` : ''}` }))}
         />
         <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{academicYear}</span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          {classId && !editMode && <button className="btn btn-secondary" onClick={() => setShowStructure(true)}><Clock size={16} /> Period Structure</button>}
           {classId && !editMode && <button className="btn btn-secondary" onClick={() => { setEditMode(true); if (!schedule.length) initSchedule(); }}><Plus size={16} /> Edit Timetable</button>}
           {editMode && <>
             <button className="btn btn-secondary" onClick={() => { setEditMode(false); qc.invalidateQueries(['timetable']); }}>Cancel</button>
@@ -194,7 +215,7 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
         <div className="card"><EmptyState icon={Clock} message="Select a class to view or edit its timetable" /></div>
       ) : isLoading ? <PageLoader /> : (() => {
         const fmtTime = t => { if (!t) return ''; const [h, m] = t.split(':'); const hr = parseInt(h); return `${hr % 12 || 12}:${m} ${hr >= 12 ? 'PM' : 'AM'}`; };
-        const periods = Array.from({ length: periodsPerDay }, (_, i) => i + 1);
+        const periods = Array.from({ length: periodCount }, (_, i) => i + 1);
         const breakInfoByPeriod = {};
         periods.forEach(p => {
           const cell = activeDays.map(d => getCell(d, p)).find(c => c?.isBreak);
@@ -353,7 +374,74 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
           }}
         />
       )}
+
+      {showStructure && (
+        <StructureEditor
+          initial={struct || Array.from({ length: periodsPerDay }, () => ({ kind: 'period', name: '', startTime: '', endTime: '' }))}
+          onClose={() => setShowStructure(false)}
+          onSave={async (slots) => {
+            try {
+              await api.put(`/classes/${classId}/period-structure`, { periodStructure: slots });
+              setLocalStructure(slots.length ? slots : null);
+              qc.invalidateQueries(['classes']);
+              const eff = slots.length ? slots : Array.from({ length: periodsPerDay }, () => ({ kind: 'period' }));
+              setSchedule(buildFromStructure(eff, schedule, activeDaysList));
+              setShowStructure(false);
+              setEditMode(true);
+              toast.success('Period structure saved — now assign subjects & save');
+            } catch (e) { toast.error(e.message || 'Failed to save structure'); }
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+// ─── Period Structure editor (per-class daily template) ─────────────────────────
+function StructureEditor({ initial, onClose, onSave }) {
+  const [slots, setSlots] = useState(initial.map(s => ({ kind: s.kind || 'period', name: s.name || '', startTime: s.startTime || '', endTime: s.endTime || '' })));
+  const add = (kind) => setSlots(p => [...p, { kind, name: kind === 'break' ? 'Break' : '', startTime: '', endTime: '' }]);
+  const update = (i, u) => setSlots(p => p.map((s, idx) => idx === i ? { ...s, ...u } : s));
+  const remove = (i) => setSlots(p => p.filter((_, idx) => idx !== i));
+  const move = (i, dir) => setSlots(p => { const j = i + dir; if (j < 0 || j >= p.length) return p; const n = [...p]; [n[i], n[j]] = [n[j], n[i]]; return n; });
+  let pc = 0;
+  const labels = slots.map(s => s.kind === 'break' ? (s.name || 'Break') : `P${++pc}`);
+  return (
+    <Modal open onClose={onClose} title="Period Structure" size="lg"
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={() => onSave(slots)}><Save size={16} /> Save Structure</button>
+      </>}>
+      <div style={{ marginBottom: 14, fontSize: 13, color: 'var(--text-secondary)' }}>
+        Build the daily sequence of periods and breaks, then set each one&apos;s timing.
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+          {labels.map((l, i) => (
+            <span key={i} style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: slots[i].kind === 'break' ? '#fffbeb' : '#eff6ff', color: slots[i].kind === 'break' ? '#b45309' : 'var(--primary)' }}>{l}</span>
+          ))}
+          {!slots.length && <span style={{ color: 'var(--text-muted)' }}>No slots yet</span>}
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
+        {slots.map((s, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 10, background: s.kind === 'break' ? '#fffdf5' : '#fff' }}>
+            <span style={{ width: 64, fontWeight: 700, fontSize: 13, color: s.kind === 'break' ? '#b45309' : 'var(--primary)', flexShrink: 0 }}>{labels[i]}</span>
+            {s.kind === 'break'
+              ? <input className="form-control" style={{ flex: 1, height: 34 }} placeholder="Break name (e.g. Lunch)" value={s.name} onChange={e => update(i, { name: e.target.value })} />
+              : <span style={{ flex: 1, fontSize: 13, color: 'var(--text-muted)' }}>Teaching period</span>}
+            <input type="time" className="form-control" style={{ width: 116, height: 34 }} value={s.startTime} onChange={e => update(i, { startTime: e.target.value })} />
+            <span style={{ color: 'var(--text-muted)' }}>–</span>
+            <input type="time" className="form-control" style={{ width: 116, height: 34 }} value={s.endTime} onChange={e => update(i, { endTime: e.target.value })} />
+            <button type="button" className="btn btn-secondary btn-sm btn-icon" onClick={() => move(i, -1)} disabled={i === 0} title="Move up">↑</button>
+            <button type="button" className="btn btn-secondary btn-sm btn-icon" onClick={() => move(i, 1)} disabled={i === slots.length - 1} title="Move down">↓</button>
+            <button type="button" className="btn btn-danger btn-sm btn-icon" onClick={() => remove(i)} title="Remove"><X size={14} /></button>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => add('period')}><Plus size={14} /> Add Period</button>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => add('break')}><Plus size={14} /> Add Break</button>
+      </div>
+    </Modal>
   );
 }
 
