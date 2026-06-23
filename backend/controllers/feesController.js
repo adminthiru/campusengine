@@ -116,14 +116,27 @@ const collectPayment = async (req, res) => {
     const fee = await FeeCollection.findOne({ _id: feeId, school: schoolId });
     if (!fee) return res.status(404).json({ success: false, message: 'Fee record not found' });
 
-    // Optional discount applied to the selected term before collecting.
-    if (termName && discount && Number(discount.amount) > 0) {
-      const term = fee.terms.find(t => t.name === termName);
-      if (term) {
-        term.discount = { amount: (Number(term.discount?.amount) || 0) + (Number(discount.amount) || 0), reason: discount.reason || term.discount?.reason || '' };
-        term.netAmount = Math.max(0, (term.totalAmount || 0) - term.discount.amount);
-        term.pendingAmount = Math.max(0, term.netAmount - (term.paidAmount || 0));
-        term.status = term.pendingAmount <= 0 ? 'paid' : term.paidAmount > 0 ? 'partial' : 'pending';
+    // Optional discount applied before collecting. For a specific term it goes
+    // to that term; for "pay all" it's distributed across pending terms in order.
+    const applyDiscountToTerm = (term, add, reason) => {
+      term.discount = { amount: (Number(term.discount?.amount) || 0) + add, reason: reason || term.discount?.reason || '' };
+      term.netAmount = Math.max(0, (term.totalAmount || 0) - term.discount.amount);
+      term.pendingAmount = Math.max(0, term.netAmount - (term.paidAmount || 0));
+      term.status = term.pendingAmount <= 0 ? 'paid' : term.paidAmount > 0 ? 'partial' : 'pending';
+    };
+    if (discount && Number(discount.amount) > 0) {
+      if (termName) {
+        const term = fee.terms.find(t => t.name === termName);
+        if (term) applyDiscountToTerm(term, Number(discount.amount) || 0, discount.reason);
+      } else {
+        let remaining = Number(discount.amount) || 0;
+        for (const term of fee.terms) {
+          if (remaining <= 0) break;
+          if (term.pendingAmount <= 0) continue;
+          const applying = Math.min(remaining, term.pendingAmount);
+          applyDiscountToTerm(term, applying, discount.reason);
+          remaining -= applying;
+        }
       }
     }
 

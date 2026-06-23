@@ -575,8 +575,7 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
     return String(pendingTerms.reduce((s, t) => s + t.pendingAmount, 0));
   });
 
-  // Discount applies to a specific term only (not "Pay All").
-  const discAmtNum = selectedTerm !== 'all' ? Math.max(0, Number(discountAmt) || 0) : 0;
+  const discAmtNum = Math.max(0, Number(discountAmt) || 0);
   const basePending = selectedTerm === 'all'
     ? pendingTerms.reduce((s, t) => s + t.pendingAmount, 0)
     : fee.terms?.find(t => t.name === selectedTerm)?.pendingAmount || 0;
@@ -698,7 +697,7 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
                   ₹{pendingTerms.reduce((s, t) => s + t.pendingAmount, 0).toLocaleString('en-IN')}
                 </span>
               </label>
-              {selectedTerm === 'all' && <AmountInput pendingAmt={pendingTerms.reduce((s, t) => s + t.pendingAmount, 0)} />}
+              {selectedTerm === 'all' && <AmountInput pendingAmt={Math.max(0, pendingTerms.reduce((s, t) => s + t.pendingAmount, 0) - discAmtNum)} />}
             </div>
           )}
 
@@ -723,20 +722,19 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
         </div>
       </div>
 
-      {selectedTerm !== 'all' && (
-        <div className="form-group" style={{ marginTop: 16 }}>
-          <label className="form-label">Discount (optional)</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input className="form-control" type="number" min={0} value={discountAmt} onChange={e => onDiscountChange(e.target.value)} placeholder="Discount ₹" style={{ flex: 1 }} />
-            <input className="form-control" value={discountReason} onChange={e => setDiscountReason(e.target.value)} placeholder="Reason (e.g. Merit, Sibling)" style={{ flex: 2 }} />
-          </div>
-          {discAmtNum > 0 && (
-            <p style={{ fontSize: 12, color: '#16a34a', marginTop: 4 }}>
-              Discount ₹{discAmtNum.toLocaleString('en-IN')} applied · net pending now ₹{maxAmount.toLocaleString('en-IN')}
-            </p>
-          )}
+      <div className="form-group" style={{ marginTop: 16 }}>
+        <label className="form-label">Discount (optional)</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input className="form-control" type="number" min={0} value={discountAmt} onChange={e => onDiscountChange(e.target.value)} placeholder="Discount ₹" style={{ flex: 1 }} />
+          <input className="form-control" value={discountReason} onChange={e => setDiscountReason(e.target.value)} placeholder="Reason (e.g. Merit, Sibling)" style={{ flex: 2 }} />
         </div>
-      )}
+        {discAmtNum > 0 && (
+          <p style={{ fontSize: 12, color: '#16a34a', marginTop: 4 }}>
+            Discount ₹{discAmtNum.toLocaleString('en-IN')} applied · net pending now ₹{maxAmount.toLocaleString('en-IN')}
+            {selectedTerm === 'all' && <span style={{ color: 'var(--text-muted)' }}> (spread across pending terms)</span>}
+          </p>
+        )}
+      </div>
 
       <div className="form-group" style={{ marginTop: 16 }}>
         <label className="form-label">Payment Method</label>
