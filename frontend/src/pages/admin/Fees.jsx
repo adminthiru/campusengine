@@ -27,8 +27,6 @@ export default function Fees() {
   const [statusFilter, setStatusFilter] = useState('');
   const [classFilter, setClassFilter] = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const [createMode, setCreateMode] = useState('individual');
-  const [indivClassId, setIndivClassId] = useState('');
   const [feeItems, setFeeItems] = useState([{ type: 'Tuition Fee', amount: '' }]);
   const [showCollect, setShowCollect] = useState(null);
   const [viewFee, setViewFee] = useState(null);
@@ -89,8 +87,6 @@ export default function Fees() {
       : [{ type: 'Tuition Fee', amount: '' }];
     setFeeItems(items);
     reset();
-    setCreateMode('individual');
-    setIndivClassId('');
     setShowCreate(true);
   };
 
@@ -161,17 +157,13 @@ export default function Fees() {
   });
 
   const handleCreate = handleSubmit((formData) => {
-    if (createMode === 'class' && !formData.classId) return toast.error('Select a class');
-    if (createMode === 'individual' && !formData.studentId) return toast.error('Select a student');
+    if (!formData.classId) return toast.error('Select a class');
     if (!feeItems.length || feeItems.some(f => !f.type.trim())) return toast.error('All categories need a name');
     const terms = feeItems.map(f => ({
       name: f.type,
       feeBreakdown: [{ type: f.type, amount: Number(f.amount) || 0 }]
     }));
-    const payload = createMode === 'class'
-      ? { classId: formData.classId, academicYear: formData.academicYear, terms }
-      : { studentId: formData.studentId, academicYear: formData.academicYear, terms };
-    createMode === 'class' ? bulkMutation.mutate(payload) : createMutation.mutate(payload);
+    bulkMutation.mutate({ classId: formData.classId, academicYear: formData.academicYear, terms });
   });
 
   const [visibleCols, setVisibleCols] = useColumnSelector('fees', FEE_COLS);
@@ -180,7 +172,7 @@ export default function Fees() {
   const totalPending = fees.reduce((s, f) => s + (f.pendingAmount || 0), 0);
   const totalCollected = fees.reduce((s, f) => s + (f.paidAmount || 0), 0);
   const totalDiscount = fees.reduce((s, f) => s + (f.terms || []).reduce((ts, t) => ts + (t.discount?.amount || 0), 0), 0);
-  const isPending = createMutation.isPending || bulkMutation.isPending;
+  const isPending = bulkMutation.isPending;
 
   return (
     <div>
@@ -321,99 +313,38 @@ export default function Fees() {
         </div>
       )}
 
-      {/* Create Fee Modal */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Create Fee Record" size="lg"
+      {/* Create Fee Modal — class-level only (individual students sync automatically) */}
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Add Fee Record" size="lg"
         footer={<>
           <button className="btn btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
           <button className="btn btn-primary" onClick={handleCreate} disabled={isPending}>
-            {isPending ? 'Creating...' : createMode === 'class' ? 'Assign to Class' : 'Create Record'}
+            {isPending ? 'Assigning…' : 'Assign to Class'}
           </button>
         </>}>
         <form onSubmit={e => e.preventDefault()}>
-          {/* Mode toggle */}
-          <div style={{ display: 'flex', gap: 6, marginBottom: 20, padding: 4, background: '#f1f5f9', borderRadius: 10 }}>
-            {[{ key: 'individual', label: 'Individual Student', Icon: User }, { key: 'class', label: 'Entire Class', Icon: Users }].map(({ key, label, Icon }) => (
-              <button key={key} type="button" onClick={() => setCreateMode(key)}
-                style={{
-                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13,
-                  fontWeight: createMode === key ? 600 : 400,
-                  background: createMode === key ? 'white' : 'transparent',
-                  color: createMode === key ? 'var(--primary)' : 'var(--text-secondary)',
-                  boxShadow: createMode === key ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
-                  transition: 'all 0.15s'
-                }}>
-                <Icon size={15} /> {label}
-              </button>
-            ))}
-          </div>
-
-          {createMode === 'individual' ? (
-            <>
-              <FormRow>
-                <div className="form-group">
-                  <label className="form-label">Class *</label>
+          <FormRow>
+            <div className="form-group">
+              <label className="form-label">Class *</label>
+              <Controller
+                name="classId"
+                control={control}
+                render={({ field }) => (
                   <AntSelect
+                    {...field}
                     style={{ width: '100%' }}
-                    value={indivClassId || undefined}
                     placeholder="Select class"
                     showSearch
                     optionFilterProp="label"
-                    onChange={val => { setIndivClassId(val ?? ''); reset({ studentId: '', academicYear: '' }); }}
                     options={classes.map(c => ({ value: c._id, label: `${c.name}${c.section ? ` ${c.section}` : ''}` }))}
                   />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Academic Year</label>
-                  <input className="form-control" {...register('academicYear')} placeholder="Auto-detected if empty" />
-                </div>
-              </FormRow>
-              <div className="form-group">
-                <label className="form-label">Student *</label>
-                <Controller
-                  name="studentId"
-                  control={control}
-                  render={({ field }) => (
-                    <AntSelect
-                      {...field}
-                      style={{ width: '100%' }}
-                      placeholder={indivClassId ? 'Select student' : 'Select a class first'}
-                      disabled={!indivClassId}
-                      showSearch
-                      optionFilterProp="label"
-                      options={students
-                        .filter(s => s.currentClass?._id === indivClassId || s.currentClass === indivClassId)
-                        .map(s => ({ value: s._id, label: `${s.name} (${s.admissionNumber})` }))}
-                    />
-                  )}
-                />
-              </div>
-            </>
-          ) : (
-            <FormRow>
-              <div className="form-group">
-                <label className="form-label">Class *</label>
-                <Controller
-                  name="classId"
-                  control={control}
-                  render={({ field }) => (
-                    <AntSelect
-                      {...field}
-                      style={{ width: '100%' }}
-                      placeholder="Select class"
-                      showSearch
-                      optionFilterProp="label"
-                      options={classes.map(c => ({ value: c._id, label: `${c.name}${c.section ? ` ${c.section}` : ''}` }))}
-                    />
-                  )}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Academic Year</label>
-                <input className="form-control" {...register('academicYear')} placeholder="Auto-detected if empty" />
-              </div>
-            </FormRow>
-          )}
+                )}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Academic Year</label>
+              <input className="form-control" {...register('academicYear')} placeholder="Auto-detected if empty" />
+            </div>
+          </FormRow>
 
           {/* Fee Categories */}
           <div style={{ marginTop: 4 }}>
