@@ -479,10 +479,16 @@ function AddEditEmployeeModal({
   // Staff Employee ID auto-generates; an edit toggle unlocks manual entry.
   const [editEmpId, setEditEmpId] = useState(false);
   useEffect(() => { setEditEmpId(false); }, [open, editEmployee]);
+  // Add mode: preview EMP<DOJ year><seq>, recomputed when Date of Joining changes.
+  const wDoj = useWatch({ control, name: 'dateOfJoining' });
   useEffect(() => {
     if (editEmployee || !open) return;
-    api.get('/employees/next-code').then(r => setValue('employeeId', r.employeeId || '')).catch(() => {});
-  }, [open, editEmployee]);
+    const t = setTimeout(() => {
+      const q = wDoj ? `?doj=${encodeURIComponent(wDoj)}` : '';
+      api.get(`/employees/next-code${q}`).then(r => { if (!editEmpId) setValue('employeeId', r.employeeId || ''); }).catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [open, editEmployee, wDoj]);
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
