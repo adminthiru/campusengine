@@ -2,8 +2,16 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Clock, Plus, Save, AlertTriangle, BookOpen, Users, UserX, ChevronRight, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Select as AntSelect, DatePicker } from 'antd';
+import { Select as AntSelect, DatePicker, TimePicker } from 'antd';
 import dayjs from 'dayjs';
+
+// Build a dayjs from an "HH:mm" string without needing the customParseFormat plugin.
+const hhmmToDayjs = (hhmm) => {
+  if (!hhmm) return null;
+  const [h, m] = String(hhmm).split(':').map(Number);
+  if (isNaN(h)) return null;
+  return dayjs().hour(h).minute(m || 0).second(0).millisecond(0);
+};
 import api from '../../utils/api';
 import { PageLoader, EmptyState, Modal, FormRow } from '../../components/ui';
 import { useAuth } from '../../store/AuthContext';
@@ -402,6 +410,12 @@ function StructureEditor({ initial, onClose, onSave }) {
   const [slots, setSlots] = useState(initial.map(s => ({ kind: s.kind || 'period', name: s.name || '', startTime: s.startTime || '', endTime: s.endTime || '' })));
   const add = (kind) => setSlots(p => [...p, { kind, name: kind === 'break' ? 'Break' : '', startTime: '', endTime: '' }]);
   const update = (i, u) => setSlots(p => p.map((s, idx) => idx === i ? { ...s, ...u } : s));
+  // Setting a slot's end time auto-fills the next slot's start time (sequential flow).
+  const setTime = (i, field, hhmm) => setSlots(prev => {
+    const n = prev.map((s, idx) => idx === i ? { ...s, [field]: hhmm } : s);
+    if (field === 'endTime' && hhmm && i + 1 < n.length) n[i + 1] = { ...n[i + 1], startTime: hhmm };
+    return n;
+  });
   const remove = (i) => setSlots(p => p.filter((_, idx) => idx !== i));
   const move = (i, dir) => setSlots(p => { const j = i + dir; if (j < 0 || j >= p.length) return p; const n = [...p]; [n[i], n[j]] = [n[j], n[i]]; return n; });
   let pc = 0;
@@ -428,9 +442,15 @@ function StructureEditor({ initial, onClose, onSave }) {
             {s.kind === 'break'
               ? <input className="form-control" style={{ flex: 1, height: 34 }} placeholder="Break name (e.g. Lunch)" value={s.name} onChange={e => update(i, { name: e.target.value })} />
               : <span style={{ flex: 1, fontSize: 13, color: 'var(--text-muted)' }}>Teaching period</span>}
-            <input type="time" className="form-control" style={{ width: 116, height: 34 }} value={s.startTime} onChange={e => update(i, { startTime: e.target.value })} />
+            <TimePicker use12Hours format="h:mm A" minuteStep={5} allowClear placeholder="Start"
+              style={{ width: 124 }} getPopupContainer={() => document.body}
+              value={hhmmToDayjs(s.startTime)}
+              onChange={d => setTime(i, 'startTime', d ? d.format('HH:mm') : '')} />
             <span style={{ color: 'var(--text-muted)' }}>–</span>
-            <input type="time" className="form-control" style={{ width: 116, height: 34 }} value={s.endTime} onChange={e => update(i, { endTime: e.target.value })} />
+            <TimePicker use12Hours format="h:mm A" minuteStep={5} allowClear placeholder="End"
+              style={{ width: 124 }} getPopupContainer={() => document.body}
+              value={hhmmToDayjs(s.endTime)}
+              onChange={d => setTime(i, 'endTime', d ? d.format('HH:mm') : '')} />
             <button type="button" className="btn btn-secondary btn-sm btn-icon" onClick={() => move(i, -1)} disabled={i === 0} title="Move up">↑</button>
             <button type="button" className="btn btn-secondary btn-sm btn-icon" onClick={() => move(i, 1)} disabled={i === slots.length - 1} title="Move down">↓</button>
             <button type="button" className="btn btn-danger btn-sm btn-icon" onClick={() => remove(i)} title="Remove"><X size={14} /></button>
