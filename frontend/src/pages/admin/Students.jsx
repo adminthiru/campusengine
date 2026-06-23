@@ -320,7 +320,7 @@ export default function Students() {
           editStudent={editStudent} isMutating={isMutating}
           formTab={formTab} setFormTab={setFormTab} tabIdx={tabIdx}
           register={register} errors={errors} handleSubmit={handleSubmit} onSubmit={onSubmit}
-          uniqueClassNames={uniqueClassNames} filteredSections={filteredSections} watchedClassGroup={watchedClassGroup}
+          uniqueClassNames={uniqueClassNames} filteredSections={filteredSections} watchedClassGroup={watchedClassGroup} classes={classes}
           parents={parents} setParents={setParents}
           parentForm={parentForm} setParentForm={setParentForm}
           parentDraft={parentDraft} setParentDraft={setParentDraft}
@@ -491,7 +491,7 @@ function AddEditModal({
   open, onClose, editStudent, isMutating,
   formTab, setFormTab, tabIdx,
   register, errors, handleSubmit, onSubmit,
-  uniqueClassNames, filteredSections, watchedClassGroup,
+  uniqueClassNames, filteredSections, watchedClassGroup, classes,
   parents, setParents, parentForm, setParentForm, parentDraft, setParentDraft,
   profilePreview, setProfilePreview, imgInputRef,
   studentStatus, setStudentStatus, control, setValue,
@@ -520,6 +520,30 @@ function AddEditModal({
       return next;
     });
   };
+
+  // Add mode: preview the auto-generated admission & roll numbers in the form
+  // (debounced) so the admin sees the values before saving.
+  const wClassGroup = useWatch({ control, name: 'classGroup' });
+  const wSection = useWatch({ control, name: 'section' });
+  const wFirst = useWatch({ control, name: 'firstName' });
+  const wLast = useWatch({ control, name: 'lastName' });
+  useEffect(() => {
+    if (editStudent || !open) return;
+    const t = setTimeout(() => {
+      const fullName = [wFirst, wLast].filter(Boolean).join(' ').trim();
+      const classDoc = wSection
+        ? (classes || []).find(c => c.name === wClassGroup && c.section === wSection)
+        : (classes || []).find(c => c.name === wClassGroup);
+      const params = new URLSearchParams();
+      if (classDoc?._id) params.set('classId', classDoc._id);
+      if (fullName) params.set('name', fullName);
+      api.get(`/students/next-codes?${params}`).then(r => {
+        if (!editAdmission) setValue('admissionNumber', r.admissionNumber || '');
+        if (!editRoll) setValue('rollNumber', r.rollNumber || '');
+      }).catch(() => {});
+    }, 350);
+    return () => clearTimeout(t);
+  }, [open, editStudent, wClassGroup, wSection, wFirst, wLast, editAdmission, editRoll]);
   const saveParent = () => {
     if (!parentDraft.name || !parentDraft.mobile) return toast.error('Name and mobile are required');
     if (typeof parentForm === 'number') {
@@ -565,11 +589,10 @@ function AddEditModal({
         if (!values[f.key]) return toast.error(`Please fill the mandatory field: ${f.label}`);
       }
     } else if (formTab === 'academics') {
+      // Admission & roll numbers auto-generate, so they aren't required here.
       const req = [
-        { key: 'admissionNumber', label: 'Admission Number' },
         { key: 'admissionDate', label: 'Admission Date' },
-        { key: 'classGroup', label: 'Class Group' },
-        { key: 'rollNumber', label: 'Roll Number' }
+        { key: 'classGroup', label: 'Class Group' }
       ];
       for (const f of req) {
         if (!values[f.key]) return toast.error(`Please fill the mandatory field: ${f.label}`);

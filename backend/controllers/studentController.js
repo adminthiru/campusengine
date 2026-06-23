@@ -352,7 +352,33 @@ const getIDCardData = async (req, res) => {
   }
 };
 
+// Preview the next admission number and (alphabetical) roll number for the form.
+const suggestCodes = async (req, res) => {
+  try {
+    const schoolId = req.user.school;
+    const { classId, name } = req.query;
+    const year = new Date().getFullYear();
+    const yearCount = await Student.countDocuments({ school: schoolId, admissionNumber: new RegExp(`^ADM${year}`) });
+    const admissionNumber = `ADM${year}${String(yearCount + 1).padStart(2, '0')}`;
+    let rollNumber = '';
+    if (classId) {
+      const cls = await Class.findOne({ _id: classId, school: schoolId }).select('name section').lean();
+      if (cls) {
+        const prefix = classRollPrefix(cls);
+        const students = await Student.find({ school: schoolId, currentClass: classId, status: 'active' }).select('name').lean();
+        const target = (name || '').trim();
+        const names = students.map(s => s.name || '');
+        const combined = (target ? [...names, target] : names)
+          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }));
+        const pos = target ? Math.max(1, combined.indexOf(target) + 1) : combined.length + 1;
+        rollNumber = `${prefix}${String(pos).padStart(2, '0')}`;
+      }
+    }
+    res.json({ success: true, admissionNumber, rollNumber });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+};
+
 module.exports = {
   createStudent, getStudents, getStudent, updateStudent, deleteStudent,
-  promoteStudents, getAdmissionLetterPDF, getIDCardData
+  promoteStudents, getAdmissionLetterPDF, getIDCardData, suggestCodes
 };

@@ -272,6 +272,7 @@ router.post('/employees/bulk', protect, checkSubscription, authorize('admin', 'c
 
 // ============== STUDENTS ==============
 router.get('/students', protect, checkSubscription, stuCtrl.getStudents);
+router.get('/students/next-codes', protect, checkSubscription, stuCtrl.suggestCodes);
 router.post('/students', protect, checkSubscription, authorize('admin', 'correspondent', 'principal', 'accountant'), stuCtrl.createStudent);
 router.get('/students/:id', protect, checkSubscription, stuCtrl.getStudent);
 router.put('/students/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'principal', 'accountant'), stuCtrl.updateStudent);
