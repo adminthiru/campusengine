@@ -18,6 +18,7 @@ import { format } from 'date-fns';
 
 const STUDENT_COLS = [
   { key: 'classSection',      label: 'Class & Section',       required: true },
+  { key: 'admissionNumber',   label: 'Admission Number',      required: true },
   { key: 'rollNumber',        label: 'Roll Number',           required: true },
   { key: 'gender',            label: 'Gender',                required: true },
   { key: 'dob',               label: 'Date of Birth',         required: true },
@@ -26,7 +27,6 @@ const STUDENT_COLS = [
   { key: 'parentRelation',    label: 'Relationship',          required: true },
   { key: 'mobile',            label: 'Parent Mobile Number',  required: true },
   { key: 'alternateMobile',   label: 'Alternate Mobile Number' },
-  { key: 'admissionNumber',   label: 'Admission Number',      required: true },
   { key: 'admissionDate',     label: 'Admission Date',        default: false },
   { key: 'transport',         label: 'Transport',             default: false },
   { key: 'address',           label: 'Home Address',          default: false },
@@ -391,6 +391,7 @@ export default function Students() {
                   </th>
                   <th style={{ whiteSpace: 'nowrap', minWidth: 180 }}>Student Name</th>
                   {col('classSection')       && <th style={{ whiteSpace: 'nowrap', minWidth: 130 }}>Class &amp; Section</th>}
+                  {col('admissionNumber')    && <th style={{ whiteSpace: 'nowrap', minWidth: 160 }}>Admission Number</th>}
                   {col('rollNumber')         && <th style={{ whiteSpace: 'nowrap', minWidth: 110 }}>Roll Number</th>}
                   {col('gender')             && <th style={{ whiteSpace: 'nowrap', minWidth: 90 }}>Gender</th>}
                   {col('dob')                && <th style={{ whiteSpace: 'nowrap', minWidth: 130 }}>Date of Birth</th>}
@@ -399,7 +400,6 @@ export default function Students() {
                   {col('parentRelation')      && <th style={{ whiteSpace: 'nowrap', minWidth: 120 }}>Relationship</th>}
                   {col('mobile')             && <th style={{ whiteSpace: 'nowrap', minWidth: 170 }}>Parent Mobile Number</th>}
                   {col('alternateMobile')    && <th style={{ whiteSpace: 'nowrap', minWidth: 190 }}>Alternate Mobile Number</th>}
-                  {col('admissionNumber')    && <th style={{ whiteSpace: 'nowrap', minWidth: 160 }}>Admission Number</th>}
                   {col('admissionDate')      && <th style={{ whiteSpace: 'nowrap', minWidth: 130 }}>Admission Date</th>}
                   {col('transport')          && <th style={{ whiteSpace: 'nowrap', minWidth: 150 }}>Transport</th>}
                   {col('address')            && <th style={{ whiteSpace: 'nowrap', minWidth: 200 }}>Home Address</th>}
@@ -424,6 +424,7 @@ export default function Students() {
                       </div>
                     </td>
                     {col('classSection')       && <td style={{ fontSize: 13 }}>{stu.currentClass ? `${stu.currentClass.name} – ${stu.currentClass.section}` : '—'}</td>}
+                    {col('admissionNumber')    && <td style={{ fontSize: 13 }}><span className="badge badge-info">{stu.admissionNumber || '—'}</span></td>}
                     {col('rollNumber')         && <td style={{ fontSize: 13 }}>{stu.rollNumber || '—'}</td>}
                     {col('gender')             && <td style={{ fontSize: 13, textTransform: 'capitalize' }}>{stu.gender || '—'}</td>}
                     {col('dob')                && <td style={{ fontSize: 13 }}>{stu.dateOfBirth ? format(new Date(stu.dateOfBirth), 'dd MMM yyyy') : '—'}</td>}
@@ -432,7 +433,6 @@ export default function Students() {
                     {col('parentRelation')      && <td style={{ fontSize: 13, textTransform: 'capitalize' }}>{stu.guardians?.[0]?.relation || '—'}</td>}
                     {col('mobile')             && <td style={{ fontSize: 13 }}>{stu.phone || '—'}</td>}
                     {col('alternateMobile')    && <td style={{ fontSize: 13 }}>{stu.alternativeMobile || '—'}</td>}
-                    {col('admissionNumber')    && <td style={{ fontSize: 13 }}><span className="badge badge-info">{stu.admissionNumber || '—'}</span></td>}
                     {col('admissionDate')      && <td style={{ fontSize: 13 }}>{stu.admissionDate ? format(new Date(stu.admissionDate), 'dd MMM yyyy') : '—'}</td>}
                     {col('transport')          && <td style={{ fontSize: 13 }}>{stu.transportRoute ? `${stu.transportRoute.routeNumber ? '#' + stu.transportRoute.routeNumber + ' · ' : ''}${stu.transportRoute.vehicleNumber || stu.transportRoute.routeName}` : '—'}</td>}
                     {col('address')            && <td style={{ fontSize: 13, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stu.address?.street || '—'}</td>}
