@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Clock, Plus, Save, AlertTriangle, BookOpen, Users, UserX, ChevronRight, Check, X } from 'lucide-react';
+import { Clock, Plus, Save, AlertTriangle, BookOpen, Users, UserX, ChevronRight, Check, X, GripVertical } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Select as AntSelect, DatePicker, TimePicker } from 'antd';
 import dayjs from 'dayjs';
@@ -398,7 +398,18 @@ function StructureEditor({ initial, onClose, onSave }) {
     return n;
   });
   const remove = (i) => setSlots(p => p.filter((_, idx) => idx !== i));
-  const move = (i, dir) => setSlots(p => { const j = i + dir; if (j < 0 || j >= p.length) return p; const n = [...p]; [n[i], n[j]] = [n[j], n[i]]; return n; });
+  // Drag-and-drop reordering
+  const dragItem = useRef(null), dragOverItem = useRef(null);
+  const [dragIdx, setDragIdx] = useState(null);
+  const onDragStart = (i) => { dragItem.current = i; setDragIdx(i); };
+  const onDragEnter = (i) => { dragOverItem.current = i; };
+  const onDragEnd = () => {
+    const from = dragItem.current, to = dragOverItem.current;
+    if (from != null && to != null && from !== to) {
+      setSlots(prev => { const n = [...prev]; const [m] = n.splice(from, 1); n.splice(to, 0, m); return n; });
+    }
+    dragItem.current = null; dragOverItem.current = null; setDragIdx(null);
+  };
   let pc = 0;
   const labels = slots.map(s => s.kind === 'break' ? (s.name || 'Break') : `P${++pc}`);
   return (
@@ -418,8 +429,15 @@ function StructureEditor({ initial, onClose, onSave }) {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
         {slots.map((s, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 10, background: s.kind === 'break' ? '#fffdf5' : '#fff' }}>
-            <span style={{ width: 64, fontWeight: 700, fontSize: 13, color: s.kind === 'break' ? '#b45309' : 'var(--primary)', flexShrink: 0 }}>{labels[i]}</span>
+          <div key={i}
+            onDragEnter={() => onDragEnter(i)}
+            onDragOver={e => e.preventDefault()}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 10, background: s.kind === 'break' ? '#fffdf5' : '#fff', opacity: dragIdx === i ? 0.4 : 1, transition: 'opacity .15s' }}>
+            <span draggable onDragStart={() => onDragStart(i)} onDragEnd={onDragEnd}
+              style={{ cursor: 'grab', color: '#cbd5e1', display: 'flex', alignItems: 'center', flexShrink: 0 }} title="Drag to reorder">
+              <GripVertical size={16} />
+            </span>
+            <span style={{ width: 54, fontWeight: 700, fontSize: 13, color: s.kind === 'break' ? '#b45309' : 'var(--primary)', flexShrink: 0 }}>{labels[i]}</span>
             {s.kind === 'break'
               ? <input className="form-control" style={{ flex: 1, height: 34 }} placeholder="Break name (e.g. Lunch)" value={s.name} onChange={e => update(i, { name: e.target.value })} />
               : <span style={{ flex: 1, fontSize: 13, color: 'var(--text-muted)' }}>Teaching period</span>}
@@ -432,8 +450,6 @@ function StructureEditor({ initial, onClose, onSave }) {
               style={{ width: 124 }} getPopupContainer={() => document.body}
               value={hhmmToDayjs(s.endTime)}
               onChange={d => setTime(i, 'endTime', d ? d.format('HH:mm') : '')} />
-            <button type="button" className="btn btn-secondary btn-sm btn-icon" onClick={() => move(i, -1)} disabled={i === 0} title="Move up">↑</button>
-            <button type="button" className="btn btn-secondary btn-sm btn-icon" onClick={() => move(i, 1)} disabled={i === slots.length - 1} title="Move down">↓</button>
             <button type="button" className="btn btn-danger btn-sm btn-icon" onClick={() => remove(i)} title="Remove"><X size={14} /></button>
           </div>
         ))}
