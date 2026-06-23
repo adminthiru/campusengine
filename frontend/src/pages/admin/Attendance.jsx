@@ -301,9 +301,11 @@ export default function Attendance() {
   };
 
   const { data: existingData } = useQuery({
-    queryKey: ['attendance-existing', date, classId, tab],
+    queryKey: ['attendance-existing', date, tab === 'student' ? classId : '', tab],
     enabled: tab === 'student' ? !!classId : true,
-    queryFn: () => api.get(`/attendance?type=${tab}&classId=${classId}&date=${date}`)
+    // Employee attendance has no class — never pass classId for it, or the
+    // backend filters by a (stale) class and returns nothing.
+    queryFn: () => api.get(`/attendance?type=${tab}${tab === 'student' ? `&classId=${classId}` : ''}&date=${date}`)
   });
 
   // Populate attendance from saved data whenever query result changes
@@ -359,11 +361,15 @@ export default function Attendance() {
     if (people.length === 0) return toast.error('No students/employees to mark');
     setSaving(true);
     try {
-      const records = people.map(p => ({
-        [tab === 'student' ? 'student' : 'employee']: p._id,
-        status: attendance[p._id]?.status || 'present',
-        remarks: attendance[p._id]?.remarks || ''
-      }));
+      // Only save people who were explicitly marked — never auto-mark present
+      // for untouched rows.
+      const records = people
+        .filter(p => attendance[p._id]?.status)
+        .map(p => ({
+          [tab === 'student' ? 'student' : 'employee']: p._id,
+          status: attendance[p._id].status,
+          remarks: attendance[p._id]?.remarks || ''
+        }));
       let res;
       if (tab === 'student') {
         res = await api.post('/attendance/student', { classId, date, records });

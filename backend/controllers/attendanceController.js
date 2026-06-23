@@ -160,7 +160,9 @@ const getAttendance = async (req, res) => {
     const { type, classId, date, month, year, employeeId, studentId, startDate, endDate } = req.query;
     const query = { school: req.user.school };
     if (type) query.type = type;
-    if (classId) query.class = classId;
+    // Employee attendance carries no class — ignore classId for it so a stale
+    // class filter can't hide the records.
+    if (classId && type !== 'employee') query.class = classId;
     if (date) query.date = new Date(date);
     if (month && year) {
       query.date = {
