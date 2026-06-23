@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { Select as AntSelect } from 'antd';
-import { Plus, Trash2, BookOpen, Users, Edit, GripVertical, Eye, ChevronLeft, ChevronRight, UserCheck, DoorOpen, CreditCard } from 'lucide-react';
+import { Plus, Trash2, BookOpen, Users, Edit, GripVertical, Eye, ChevronLeft, ChevronRight, UserCheck, DoorOpen } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, EmptyState, PageLoader, FormRow, StatusBadge, Select, SearchInput } from '../../components/ui';
@@ -188,10 +188,6 @@ export function Classes() {
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
                   <DoorOpen size={14} style={{ color: 'var(--text-muted)' }} /> Room <b style={{ color: 'var(--text-primary)' }}>{cls.room || '—'}</b>
                 </span>
-                <span style={{ width: 1, height: 14, background: 'var(--border)' }} />
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)', textTransform: 'capitalize' }}>
-                  <CreditCard size={14} style={{ color: 'var(--text-muted)' }} /> {cls.fees?.feeType || '—'}
-                </span>
                 <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'baseline', gap: 5 }}>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Fee</span>
                   <b style={{ fontSize: 14, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>₹{feeAmt.toLocaleString('en-IN')}</b>
@@ -368,32 +364,8 @@ export function Classes() {
               <input className="form-control" {...register('room')} placeholder="e.g. Room 101" />
             </div>
             <div className="form-group">
-              <label className="form-label">Fee Type</label>
-              <Controller
-                name="fees.feeType"
-                control={control}
-                render={({ field }) => (
-                  <AntSelect
-                    {...field}
-                    style={{ width: '100%' }}
-                    options={[
-                      { value: 'yearly', label: 'Yearly' },
-                      { value: 'monthly', label: 'Monthly' },
-                      { value: 'installment', label: 'Installment' },
-                    ]}
-                  />
-                )}
-              />
-            </div>
-          </FormRow>
-          <FormRow>
-            <div className="form-group">
-              <label className="form-label">Yearly Fee (₹)</label>
-              <input className="form-control" type="number" {...register('fees.yearly')} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Late Fee per Day (₹)</label>
-              <input className="form-control" type="number" {...register('fees.lateFee')} />
+              <label className="form-label">Fee (₹)</label>
+              <input className="form-control" type="number" {...register('fees.yearly')} placeholder="e.g. 40000" />
             </div>
           </FormRow>
           <div className="form-group">
