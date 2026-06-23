@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
-import { Select as AntSelect } from 'antd';
-import { Plus, Trash2, BookOpen, Users, Edit, GripVertical, Eye, ChevronLeft, ChevronRight, UserCheck, DoorOpen } from 'lucide-react';
+import { Select as AntSelect, Dropdown } from 'antd';
+import { Plus, Trash2, BookOpen, Users, Edit, GripVertical, Eye, ChevronLeft, ChevronRight, UserCheck, DoorOpen, MoreVertical } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, EmptyState, PageLoader, FormRow, StatusBadge, Select, SearchInput } from '../../components/ui';
@@ -144,7 +144,8 @@ export function Classes() {
               onDragEnter={() => handleDragEnter(idx)}
               onDragEnd={handleDragEnd}
               onDragOver={e => e.preventDefault()}
-              style={{ padding: 18, cursor: 'grab', opacity: draggingIdx === idx ? 0.5 : 1, transition: 'opacity 0.15s', userSelect: 'none' }}>
+              onClick={() => setViewClass(cls)}
+              style={{ padding: 18, cursor: 'pointer', opacity: draggingIdx === idx ? 0.5 : 1, transition: 'opacity 0.15s', userSelect: 'none' }}>
               {/* Header */}
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, marginBottom: 16 }}>
                 <GripVertical size={16} style={{ color: '#cbd5e1', marginTop: 13, flexShrink: 0 }} />
@@ -161,10 +162,17 @@ export function Classes() {
                     {cls.classTeacher ? cls.classTeacher.name : <span style={{ color: 'var(--text-muted)' }}>No class teacher</span>}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                  <button className="btn btn-secondary btn-sm btn-icon" onClick={e => { e.stopPropagation(); setViewClass(cls); }} title="View details"><Eye size={14} /></button>
-                  <button className="btn btn-secondary btn-sm btn-icon" onClick={e => { e.stopPropagation(); openEdit(cls); }} title="Edit"><Edit size={14} /></button>
-                  <button className="btn btn-danger btn-sm btn-icon" onClick={e => { e.stopPropagation(); setDeleteId(cls._id); }} title="Delete"><Trash2 size={14} /></button>
+                <div style={{ flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                  <Dropdown trigger={['click']} placement="bottomRight"
+                    menu={{
+                      items: [
+                        { key: 'edit', label: 'Edit', icon: <Edit size={14} /> },
+                        { key: 'delete', label: 'Delete', danger: true, icon: <Trash2 size={14} /> },
+                      ],
+                      onClick: ({ key, domEvent }) => { domEvent.stopPropagation(); key === 'edit' ? openEdit(cls) : setDeleteId(cls._id); },
+                    }}>
+                    <button className="btn btn-secondary btn-sm btn-icon" onClick={e => e.stopPropagation()} title="More"><MoreVertical size={16} /></button>
+                  </Dropdown>
                 </div>
               </div>
 
