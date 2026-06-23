@@ -109,33 +109,47 @@ const createBulkFeeRecords = async (req, res) => {
 // Collect payment — termName can be a specific term name or null/undefined for full payment
 const collectPayment = async (req, res) => {
   try {
-    const { feeId, termName, amount, method, remarks } = req.body;
+    const { feeId, termName, amount, method, remarks, discount } = req.body;
     const schoolId = req.user.school;
+    const amt = Math.max(0, Number(amount) || 0);
 
     const fee = await FeeCollection.findOne({ _id: feeId, school: schoolId });
     if (!fee) return res.status(404).json({ success: false, message: 'Fee record not found' });
 
-    const receiptNumber = `RCP${Date.now()}`;
-    fee.payments.push({ termName: termName || null, amount, method, date: new Date(), receiptNumber, collectedBy: req.user._id, remarks });
-
-    if (termName) {
+    // Optional discount applied to the selected term before collecting.
+    if (termName && discount && Number(discount.amount) > 0) {
       const term = fee.terms.find(t => t.name === termName);
       if (term) {
-        term.paidAmount += amount;
-        term.pendingAmount = Math.max(0, term.netAmount - term.paidAmount);
+        term.discount = { amount: (Number(term.discount?.amount) || 0) + (Number(discount.amount) || 0), reason: discount.reason || term.discount?.reason || '' };
+        term.netAmount = Math.max(0, (term.totalAmount || 0) - term.discount.amount);
+        term.pendingAmount = Math.max(0, term.netAmount - (term.paidAmount || 0));
         term.status = term.pendingAmount <= 0 ? 'paid' : term.paidAmount > 0 ? 'partial' : 'pending';
       }
-    } else {
-      // Distribute across pending terms in order
-      let remaining = amount;
-      for (const term of fee.terms) {
-        if (remaining <= 0) break;
-        const applying = Math.min(remaining, term.pendingAmount);
-        if (applying > 0) {
-          term.paidAmount += applying;
-          term.pendingAmount = Math.max(0, term.pendingAmount - applying);
-          term.status = term.pendingAmount <= 0 ? 'paid' : 'partial';
-          remaining -= applying;
+    }
+
+    let receiptNumber = null;
+    if (amt > 0) {
+      receiptNumber = `RCP${Date.now()}`;
+      fee.payments.push({ termName: termName || null, amount: amt, method, date: new Date(), receiptNumber, collectedBy: req.user._id, remarks });
+      if (termName) {
+        const term = fee.terms.find(t => t.name === termName);
+        if (term) {
+          term.paidAmount += amt;
+          term.pendingAmount = Math.max(0, term.netAmount - term.paidAmount);
+          term.status = term.pendingAmount <= 0 ? 'paid' : term.paidAmount > 0 ? 'partial' : 'pending';
+        }
+      } else {
+        // Distribute across pending terms in order
+        let remaining = amt;
+        for (const term of fee.terms) {
+          if (remaining <= 0) break;
+          const applying = Math.min(remaining, term.pendingAmount);
+          if (applying > 0) {
+            term.paidAmount += applying;
+            term.pendingAmount = Math.max(0, term.pendingAmount - applying);
+            term.status = term.pendingAmount <= 0 ? 'paid' : 'partial';
+            remaining -= applying;
+          }
         }
       }
     }
@@ -144,18 +158,18 @@ const collectPayment = async (req, res) => {
     await fee.save();
 
     const student = await Student.findById(fee.student).populate('guardians');
-    if (student) {
+    if (student && amt > 0) {
       const school = await School.findById(schoolId);
       for (const guardian of student.guardians) {
         if (guardian.phone) {
           await sendSMS(schoolId, guardian.phone, 'fee_paid',
-            [student.name, amount, receiptNumber], guardian.language || school.language,
+            [student.name, amt, receiptNumber], guardian.language || school.language,
             { student: student._id, parent: guardian._id }
           );
         }
       }
       const termLabel = termName ? ` (${termName})` : '';
-      const feePayMsg = `₹${Number(amount).toLocaleString('en-IN')} received for ${student.name}${termLabel}. Receipt: ${receiptNumber}.`;
+      const feePayMsg = `₹${amt.toLocaleString('en-IN')} received for ${student.name}${termLabel}. Receipt: ${receiptNumber}.`;
       notifyParentUsers(schoolId, [fee.student], 'notifyOnFeePayment', 'Fee Payment Received', feePayMsg, 'success');
       notifyStudentUsers(schoolId, [fee.student], 'notifyOnFeePayment', 'Fee Payment Received', feePayMsg, 'success');
     }
