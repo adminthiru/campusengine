@@ -267,7 +267,9 @@ const getFees = async (req, res) => {
       .skip((page - 1) * limit)
       .limit(Number(limit));
 
-    res.json({ success: true, fees, total });
+    // Hide records whose student was deleted (orphaned fee records).
+    const visible = fees.filter(f => f.student);
+    res.json({ success: true, fees: visible, total: total - (fees.length - visible.length) });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

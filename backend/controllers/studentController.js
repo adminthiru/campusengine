@@ -273,6 +273,15 @@ const deleteStudent = async (req, res) => {
     if (student.user) {
       await User.findByIdAndDelete(student.user);
     }
+    // Cascade-delete the student's own records so nothing is left orphaned.
+    const FeeCollection = require('../models/FeeCollection');
+    const StudentLeave = require('../models/StudentLeave');
+    const HostelAllocation = require('../models/HostelAllocation');
+    await Promise.all([
+      FeeCollection.deleteMany({ school: req.user.school, student: student._id }),
+      StudentLeave.deleteMany({ school: req.user.school, student: student._id }),
+      HostelAllocation.deleteMany({ school: req.user.school, student: student._id }),
+    ]);
     res.json({ success: true, message: 'Student deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
