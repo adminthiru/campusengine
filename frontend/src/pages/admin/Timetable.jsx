@@ -241,23 +241,17 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
                     const timeLabel = brk?.startTime && brk?.endTime ? `${fmtTime(brk.startTime)} – ${fmtTime(brk.endTime)}` : getPeriodTimeLabel(p);
                     return brk ? (
                       <th key={p}
-                        onClick={editMode ? () => { const t = getPeriodRawTime(p); setEditPeriodTime({ period: p, ...t }); } : undefined}
-                        style={{ padding: '12px 8px', textAlign: 'center', background: '#78350f', width: 80, cursor: editMode ? 'pointer' : 'default', userSelect: 'none' }}
-                        title={editMode ? 'Click to set time for this period' : undefined}>
+                        style={{ padding: '12px 8px', textAlign: 'center', background: '#78350f', width: 80, userSelect: 'none' }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#fde68a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                           {brk.breakName || 'Break'}
                         </div>
                         {timeLabel && <div style={{ fontSize: 10, color: 'rgba(253,230,138,0.6)', fontWeight: 400, marginTop: 2 }}>{timeLabel}</div>}
-                        {editMode && <div style={{ fontSize: 9, color: 'rgba(253,230,138,0.3)', marginTop: 3 }}>set time</div>}
                       </th>
                     ) : (
                       <th key={p}
-                        onClick={editMode ? () => { const t = getPeriodRawTime(p); setEditPeriodTime({ period: p, ...t }); } : undefined}
-                        style={{ padding: '12px 8px', color: 'white', textAlign: 'center', fontSize: 13, fontWeight: 700, minWidth: 110, cursor: editMode ? 'pointer' : 'default', userSelect: 'none' }}
-                        title={editMode ? 'Click to set time for this period' : undefined}>
+                        style={{ padding: '12px 8px', color: 'white', textAlign: 'center', fontSize: 13, fontWeight: 700, minWidth: 110, userSelect: 'none' }}>
                         <div>P{p}</div>
                         {getPeriodTimeLabel(p) && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', fontWeight: 400, marginTop: 2 }}>{getPeriodTimeLabel(p)}</div>}
-                        {editMode && <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginTop: 3, letterSpacing: '0.03em' }}>set time</div>}
                       </th>
                     );
                   })}
@@ -341,19 +335,6 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
           </div>
         );
       })()}
-
-      {editPeriodTime && (
-        <PeriodTimeModal
-          period={editPeriodTime.period}
-          currentStart={editPeriodTime.startTime}
-          currentEnd={editPeriodTime.endTime}
-          onSave={(start, end) => {
-            activeDays.forEach(d => updateCell(d, editPeriodTime.period, { startTime: start, endTime: end }));
-            setEditPeriodTime(null);
-          }}
-          onClose={() => setEditPeriodTime(null)}
-        />
-      )}
 
       {editCell && (
         <EditCellModal
