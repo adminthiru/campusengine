@@ -212,6 +212,7 @@ router.get('/subscription/payments/:id/invoice', protect, subCtrl.getInvoicePdf)
 
 // ============== EMPLOYEES ==============
 router.get('/employees', protect, checkSubscription, empCtrl.getEmployees);
+router.get('/employees/next-code', protect, checkSubscription, empCtrl.suggestEmployeeId);
 router.post('/employees', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), empCtrl.createEmployee);
 router.get('/employees/:id', protect, checkSubscription, empCtrl.getEmployee);
 router.put('/employees/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), empCtrl.updateEmployee);

@@ -1,9 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, Controller } from 'react-hook-form';
 import { Select, DatePicker } from 'antd';
 import dayjs from 'dayjs';
-import { Plus, Download, Eye, Trash2, Users, ClipboardList, ChevronLeft, ChevronRight, Camera, Edit, ArrowLeft, Mail, MapPin, Briefcase, Phone, BookOpen, User as UserIcon, FileText, Upload, Banknote, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Download, Eye, Trash2, Users, ClipboardList, ChevronLeft, ChevronRight, Camera, Edit, ArrowLeft, Mail, MapPin, Briefcase, Phone, BookOpen, User as UserIcon, FileText, Upload, Banknote, ChevronDown, ChevronUp, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useAuth } from '../../store/AuthContext';
@@ -136,7 +136,7 @@ export default function Employees() {
   const atStaffCap = staffCap > 0 && total >= staffCap;
   const pages = data?.pages || 1;
 
-  const { register, handleSubmit, reset, control, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, control, setValue, formState: { errors } } = useForm();
 
   const createMutation = useMutation({
     mutationFn: (d) => api.post('/employees', d),
@@ -261,6 +261,7 @@ export default function Employees() {
       documents,
       phone: data.phone || data.mobile,
     };
+    if (!payload.employeeId || !payload.employeeId.trim()) delete payload.employeeId;   // blank → server auto-generates
 
     if (editEmployee) {
       updateMutation.mutate({ id: editEmployee._id, data: payload });
@@ -293,7 +294,7 @@ export default function Employees() {
           editEmployee={editEmployee} isMutating={isMutating}
           formTab={formTab} setFormTab={setFormTab} tabIdx={tabIdx}
           register={register} errors={errors} handleSubmit={handleSubmit} onSubmit={onSubmit}
-          control={control} employeeStatus={employeeStatus} setEmployeeStatus={setEmployeeStatus}
+          control={control} setValue={setValue} employeeStatus={employeeStatus} setEmployeeStatus={setEmployeeStatus}
           profilePreview={profilePreview} setProfilePreview={setProfilePreview} imgInputRef={imgInputRef}
           academics={academics} setAcademics={setAcademics} experience={experience} setExperience={setExperience}
           emergency={emergency} setEmergency={setEmergency} documents={documents} setDocuments={setDocuments}
@@ -462,7 +463,7 @@ function AddEditEmployeeModal({
   open, onClose, editEmployee, isMutating,
   formTab, setFormTab, tabIdx,
   register, errors, handleSubmit, onSubmit,
-  control, employeeStatus, setEmployeeStatus,
+  control, setValue, employeeStatus, setEmployeeStatus,
   profilePreview, setProfilePreview, imgInputRef,
   academics, setAcademics, experience, setExperience,
   emergency, setEmergency, documents, setDocuments, roles,
@@ -472,8 +473,16 @@ function AddEditEmployeeModal({
     name: ['firstName', 'lastName', 'email', 'phone', 'role', 'employeeId']
   });
 
-  // Checking if core fields are present
-  const isFormReady = watched[0] && watched[1] && watched[2] && watched[3] && watched[4] && watched[5];
+  // Checking if core fields are present (employee ID auto-generates, so it's optional)
+  const isFormReady = watched[0] && watched[1] && watched[2] && watched[3] && watched[4];
+
+  // Staff Employee ID auto-generates; an edit toggle unlocks manual entry.
+  const [editEmpId, setEditEmpId] = useState(false);
+  useEffect(() => { setEditEmpId(false); }, [open, editEmployee]);
+  useEffect(() => {
+    if (editEmployee || !open) return;
+    api.get('/employees/next-code').then(r => setValue('employeeId', r.employeeId || '')).catch(() => {});
+  }, [open, editEmployee]);
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
@@ -521,8 +530,8 @@ function AddEditEmployeeModal({
         if (!values[f.key]?.trim()) return toast.error(`Please fill the mandatory field: ${f.label}`);
       }
     } else if (formTab === 'work') {
+      // Employee ID auto-generates, so it isn't required here.
       const req = [
-        { key: 'employeeId', label: 'Employee ID' },
         { key: 'role', label: 'Role' }
       ];
       for (const f of req) {
@@ -720,9 +729,21 @@ function AddEditEmployeeModal({
           <>
             <FormRow>
               <div className="form-group">
-                <label className="form-label">Staff Employee ID <span style={{ color: '#ef4444' }}>*</span></label>
-                <input className="form-control" {...register('employeeId', { required: 'Required' })} placeholder="e.g. EMP001" />
-                {errors.employeeId && <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.employeeId.message}</p>}
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  Staff Employee ID
+                  {!editEmpId && <span style={{ fontSize: 10, fontWeight: 700, color: '#1a56e8', background: '#eff6ff', padding: '1px 7px', borderRadius: 6 }}>AUTO</span>}
+                </label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input className="form-control" {...register('employeeId')} readOnly={!editEmpId}
+                    placeholder={editEmployee ? '' : 'Auto-generated on save'}
+                    style={{ background: editEmpId ? '#fff' : '#f8fafc', flex: 1 }} />
+                  <button type="button" className="btn btn-secondary btn-icon" title={editEmpId ? 'Lock' : 'Edit'} onClick={() => setEditEmpId(e => !e)}>
+                    {editEmpId ? <Lock size={15} /> : <Edit size={15} />}
+                  </button>
+                </div>
+                <small style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                  {editEmpId ? 'Custom employee ID.' : 'Generated automatically — click edit to override.'}
+                </small>
               </div>
               <div className="form-group">
                 <label className="form-label">Role <span style={{ color: '#ef4444' }}>*</span></label>
