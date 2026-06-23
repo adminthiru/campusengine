@@ -189,11 +189,6 @@ function SchoolSettings() {
         </div>
         <FormRow>
           <div className="form-group">
-            <label className="form-label">Periods Per Day</label>
-            <input className="form-control" type="number" min={1} max={15} {...register('periodsPerDay', { min: 1, max: 15, valueAsNumber: true })} defaultValue={school?.periodsPerDay ?? 8} />
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Controls the number of period columns in the Timetable module</div>
-          </div>
-          <div className="form-group">
             <label className="form-label">Language (SMS)</label>
             <Controller name="language" control={control} defaultValue={school?.language} render={({ field }) => (
               <AntSelect
