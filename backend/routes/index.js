@@ -517,17 +517,22 @@ router.post('/classes', protect, checkSubscription, authorize('admin', 'correspo
     const defaultYear = now.getMonth() >= 5 ? `${y}-${String(y + 1).slice(-2)}` : `${y - 1}-${String(y).slice(-2)}`;
     const academicYear = req.body.academicYear || school.academicYear?.current || defaultYear;
     const { subjects, subjectTeachers, ...rest } = req.body;
+    if (rest.name != null) rest.name = String(rest.name).trim();
+    if (rest.section != null) rest.section = String(rest.section).trim();
     const cls = await Class.create({ ...rest, subjects: subjects || [], subjectTeachers: subjectTeachers || [], school: req.user.school, academicYear });
     if (subjects?.length) {
       await Subject.updateMany({ _id: { $in: subjects } }, { $addToSet: { classes: cls._id } });
     }
     res.status(201).json({ success: true, class: cls });
-  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err) {
+    if (err.code === 11000) return res.status(400).json({ success: false, message: `A class "${String(req.body.name || '').trim()}${req.body.section ? ' ' + String(req.body.section).trim() : ''}" already exists for ${req.body.academicYear || 'this academic year'}.` });
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 router.put('/classes/:id', protect, checkSubscription, async (req, res) => {
   try {
     const { name, section, capacity, room, classTeacher, academicYear, fees, subjects, subjectTeachers } = req.body;
-    const $set = { name, section, capacity, room, academicYear };
+    const $set = { name: name != null ? String(name).trim() : name, section: section != null ? String(section).trim() : section, capacity, room, academicYear };
     if (fees) $set.fees = fees;
     if (subjects !== undefined) $set.subjects = subjects;
     if (subjectTeachers !== undefined) $set.subjectTeachers = subjectTeachers;
@@ -543,7 +548,10 @@ router.put('/classes/:id', protect, checkSubscription, async (req, res) => {
       }
     }
     res.json({ success: true, class: cls });
-  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err) {
+    if (err.code === 11000) return res.status(400).json({ success: false, message: `A class "${String(req.body.name || '').trim()}${req.body.section ? ' ' + String(req.body.section).trim() : ''}" already exists for ${req.body.academicYear || 'this academic year'}.` });
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 router.delete('/classes/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
   try {
