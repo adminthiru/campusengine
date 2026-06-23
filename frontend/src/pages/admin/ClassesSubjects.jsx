@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { Select as AntSelect } from 'antd';
-import { Plus, Trash2, BookOpen, Users, Edit, GripVertical, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, BookOpen, Users, Edit, GripVertical, Eye, ChevronLeft, ChevronRight, UserCheck, DoorOpen, CreditCard } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, EmptyState, PageLoader, FormRow, StatusBadge, Select, SearchInput } from '../../components/ui';
@@ -127,72 +127,96 @@ export function Classes() {
               </div>
             </div>
           )}
-          {orderedClasses.map((cls, idx) => (
+          {orderedClasses.map((cls, idx) => {
+            const count = cls.studentCount || 0;
+            const cap = cls.capacity || 0;
+            const pct = cap ? Math.round((count / cap) * 100) : 0;
+            const occColor = pct >= 100 ? '#ef4444' : pct >= 85 ? '#f59e0b' : '#1a56e8';
+            const feeAmt = cls.fees?.yearly || cls.fees?.monthly || 0;
+            const badge = (cls.name.match(/\d+/) || [])[0] || (cls.name || '').replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || '#';
+            const satLabel = cls.saturdaySchedule && cls.saturdaySchedule !== 'school_default'
+              ? ({ all_working: 'All Working', all_holiday: 'All Holiday', alternate: 'Alternate', one_in_three: '1-in-3' }[cls.saturdaySchedule] || cls.saturdaySchedule)
+              : null;
+            return (
             <div key={cls._id} className="card"
               draggable
               onDragStart={() => handleDragStart(idx)}
               onDragEnter={() => handleDragEnter(idx)}
               onDragEnd={handleDragEnd}
               onDragOver={e => e.preventDefault()}
-              style={{ padding: 20, cursor: 'grab', opacity: draggingIdx === idx ? 0.5 : 1, transition: 'opacity 0.15s', userSelect: 'none' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                  <GripVertical size={16} style={{ color: 'var(--text-muted)', marginTop: 4, flexShrink: 0 }} />
-                  <div>
-                    <div className="text-20-bold" style={{ color: 'var(--primary)' }}>
-                      {cls.name}
-                      <span style={{ fontSize: 14, background: '#eff6ff', padding: '2px 8px', borderRadius: 6, marginLeft: 6 }}>{cls.section}</span>
-                    </div>
-                    {cls.classTeacher && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Teacher: {cls.classTeacher.name}</div>}
+              style={{ padding: 18, cursor: 'grab', opacity: draggingIdx === idx ? 0.5 : 1, transition: 'opacity 0.15s', userSelect: 'none' }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, marginBottom: 16 }}>
+                <GripVertical size={16} style={{ color: '#cbd5e1', marginTop: 13, flexShrink: 0 }} />
+                <div style={{ width: 46, height: 46, borderRadius: 12, background: 'linear-gradient(135deg,#eff6ff,#dbe8ff)', color: 'var(--primary)', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 16, flexShrink: 0, letterSpacing: '-0.02em' }}>
+                  {badge}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="text-16-bold" style={{ color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cls.name}</span>
+                    {cls.section && <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', background: '#eff6ff', padding: '1px 9px', borderRadius: 20, flexShrink: 0 }}>{cls.section}</span>}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5, fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                    <UserCheck size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                    {cls.classTeacher ? cls.classTeacher.name : <span style={{ color: 'var(--text-muted)' }}>No class teacher</span>}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 4 }}>
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                   <button className="btn btn-secondary btn-sm btn-icon" onClick={e => { e.stopPropagation(); setViewClass(cls); }} title="View details"><Eye size={14} /></button>
                   <button className="btn btn-secondary btn-sm btn-icon" onClick={e => { e.stopPropagation(); openEdit(cls); }} title="Edit"><Edit size={14} /></button>
                   <button className="btn btn-danger btn-sm btn-icon" onClick={e => { e.stopPropagation(); setDeleteId(cls._id); }} title="Delete"><Trash2 size={14} /></button>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 16, fontSize: 13, marginBottom: cls.subjects?.length ? 10 : 0 }}>
-                <div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>STUDENTS</div>
-                  <div style={{ fontWeight: 600 }}>{cls.studentCount || 0} / {cls.capacity}</div>
+
+              {/* Enrolment */}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>Enrolment</span>
+                  <span style={{ fontSize: 13 }}>
+                    <b style={{ color: 'var(--text-primary)' }}>{count}</b>
+                    <span style={{ color: 'var(--text-muted)' }}> / {cap || '—'}</span>
+                    {cap > 0 && <span style={{ color: occColor, fontWeight: 700, marginLeft: 8 }}>{pct}%</span>}
+                  </span>
                 </div>
-                <div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>ROOM</div>
-                  <div style={{ fontWeight: 600 }}>{cls.room || '—'}</div>
+                <div style={{ height: 7, background: '#eef2f8', borderRadius: 7, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${Math.min(100, pct)}%`, background: occColor, borderRadius: 7, transition: 'width .4s' }} />
                 </div>
-                <div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>FEE TYPE</div>
-                  <div style={{ fontWeight: 600, textTransform: 'capitalize' }}>{cls.fees?.feeType || '—'}</div>
-                </div>
-                <div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>FEE AMT</div>
-                  <div style={{ fontWeight: 600 }}>₹{(cls.fees?.yearly || cls.fees?.monthly || 0).toLocaleString('en-IN')}</div>
-                </div>
-                {cls.saturdaySchedule && cls.saturdaySchedule !== 'school_default' && (
-                  <div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>SAT</div>
-                    <div style={{ fontWeight: 600, fontSize: 12 }}>
-                      {{ all_working: 'All Working', all_holiday: 'All Holiday', alternate: 'Alternate', one_in_three: '1-in-3' }[cls.saturdaySchedule] || cls.saturdaySchedule}
-                    </div>
-                  </div>
-                )}
               </div>
-              {cls.subjects?.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-                  {cls.subjects.slice(0, 5).map(s => (
-                    <span key={s._id || s} className="badge badge-secondary"
-                      style={{ fontSize: 11, borderLeft: s.color ? `3px solid ${s.color}` : undefined }}>
+
+              {/* Meta strip */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12.5, flexWrap: 'wrap' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+                  <DoorOpen size={14} style={{ color: 'var(--text-muted)' }} /> Room <b style={{ color: 'var(--text-primary)' }}>{cls.room || '—'}</b>
+                </span>
+                <span style={{ width: 1, height: 14, background: 'var(--border)' }} />
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)', textTransform: 'capitalize' }}>
+                  <CreditCard size={14} style={{ color: 'var(--text-muted)' }} /> {cls.fees?.feeType || '—'}
+                </span>
+                <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'baseline', gap: 5 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Fee</span>
+                  <b style={{ fontSize: 14, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>₹{feeAmt.toLocaleString('en-IN')}</b>
+                </span>
+              </div>
+
+              {/* Subjects + Saturday */}
+              {(cls.subjects?.length > 0 || satLabel) && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12, alignItems: 'center' }}>
+                  {satLabel && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#d97706', background: '#fffbeb', padding: '3px 9px', borderRadius: 20 }}>Sat · {satLabel}</span>
+                  )}
+                  {cls.subjects?.slice(0, 5).map(s => (
+                    <span key={s._id || s} style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', background: '#fff', border: '1px solid var(--border)', padding: '3px 9px', borderRadius: 20, borderLeft: s.color ? `3px solid ${s.color}` : '1px solid var(--border)' }}>
                       {s.name || s}
                     </span>
                   ))}
-                  {cls.subjects.length > 5 && (
-                    <span className="badge badge-secondary" style={{ fontSize: 11 }}>+{cls.subjects.length - 5}</span>
+                  {cls.subjects?.length > 5 && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>+{cls.subjects.length - 5}</span>
                   )}
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
