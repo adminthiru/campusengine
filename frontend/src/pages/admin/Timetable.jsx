@@ -921,6 +921,13 @@ function EditCellModal({ cell, day, period, subjects, teachers, onSave, onClose,
   const [teacherId, setTeacherId] = useState(cell?.teacher?._id || cell?.teacher || '');
   const [room, setRoom] = useState(cell?.room || '');
 
+  // Teachers assigned to the chosen subject (Subjects module). Fall back to all
+  // teachers only when the subject has none assigned.
+  const subjOf = (id) => subjects.find(s => s._id === id);
+  const teachersForSubject = (subj) => subj ? (subj.teachers?.length ? subj.teachers : (subj.teacher ? [subj.teacher] : [])) : [];
+  const subjectTeachers = teachersForSubject(subjOf(subjectId));
+  const teacherOpts = subjectTeachers.length ? subjectTeachers : teachers;
+
   return (
     <Modal open onClose={onClose} title={`${day.charAt(0).toUpperCase() + day.slice(1)} — Period ${period}`} size="sm"
       footer={<>
@@ -941,7 +948,12 @@ function EditCellModal({ cell, day, period, subjects, teachers, onSave, onClose,
             showSearch
             optionFilterProp="label"
             value={subjectId || undefined}
-            onChange={val => setSubjectId(val ?? '')}
+            onChange={val => {
+              const next = val ?? '';
+              setSubjectId(next);
+              const list = teachersForSubject(subjOf(next));
+              if (list.length && !list.some(t => (t._id || t) === teacherId)) setTeacherId('');
+            }}
             options={subjects.map(s => ({ value: s._id, label: s.name, color: s.color }))}
             optionRender={(option) => (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -961,7 +973,8 @@ function EditCellModal({ cell, day, period, subjects, teachers, onSave, onClose,
             optionFilterProp="label"
             value={teacherId || undefined}
             onChange={val => setTeacherId(val ?? '')}
-            options={teachers.map(t => ({ value: t._id, label: t.name, designation: t.designation }))}
+            disabled={!subjectId}
+            options={teacherOpts.map(t => ({ value: t._id || t, label: t.name || t, designation: t.designation }))}
             optionRender={(option) => (
               <div>
                 <div style={{ fontSize: 14, fontWeight: 500 }}>{option.data.label}</div>
