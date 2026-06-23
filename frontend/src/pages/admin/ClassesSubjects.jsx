@@ -305,14 +305,16 @@ export function Classes() {
           {classTab === 'details'
             ? <button type="button" className="btn btn-secondary" onClick={() => setClassTab('teachers')}>Subject Teachers <ChevronRight size={15} /></button>
             : <button type="button" className="btn btn-secondary" onClick={() => setClassTab('details')}><ChevronLeft size={15} /> Back</button>}
-          <button className="btn btn-primary" onClick={handleSubmit(d => {
+          <button className="btn btn-primary" disabled={createMutation.isPending} onClick={handleSubmit(d => {
             if (!d.classTeacher) delete d.classTeacher;
             const subjectTeachers = Object.entries(subjectTeacherMap)
               .filter(([, teachId]) => teachId)
               .map(([subId, teachId]) => ({ subject: subId, teacher: teachId }));
             createMutation.mutate({ ...d, subjects: selectedSubjects, subjectTeachers });
           })}>
-            {createMutation.isLoading ? 'Saving...' : editClass ? 'Update Class' : 'Add Class'}
+            {createMutation.isPending
+              ? <><div className="spinner" style={{ width: 16, height: 16 }} /> Saving…</>
+              : editClass ? 'Update Class' : 'Add Class'}
           </button>
         </>}>
         {/* Tabs */}
