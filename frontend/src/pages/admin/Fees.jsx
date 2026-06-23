@@ -148,12 +148,16 @@ export default function Fees() {
   });
 
   const handleCreate = handleSubmit((formData) => {
+    if (createMode === 'class' && !formData.classId) return toast.error('Select a class');
+    if (createMode === 'individual' && !formData.studentId) return toast.error('Select a student');
     if (!feeItems.length || feeItems.some(f => !f.type.trim())) return toast.error('All categories need a name');
     const terms = feeItems.map(f => ({
       name: f.type,
       feeBreakdown: [{ type: f.type, amount: Number(f.amount) || 0 }]
     }));
-    const payload = { ...formData, terms };
+    const payload = createMode === 'class'
+      ? { classId: formData.classId, academicYear: formData.academicYear, terms }
+      : { studentId: formData.studentId, academicYear: formData.academicYear, terms };
     createMode === 'class' ? bulkMutation.mutate(payload) : createMutation.mutate(payload);
   });
 
@@ -351,7 +355,6 @@ export default function Fees() {
                 <Controller
                   name="studentId"
                   control={control}
-                  rules={{ required: true }}
                   render={({ field }) => (
                     <AntSelect
                       {...field}
@@ -375,7 +378,6 @@ export default function Fees() {
                 <Controller
                   name="classId"
                   control={control}
-                  rules={{ required: true }}
                   render={({ field }) => (
                     <AntSelect
                       {...field}
