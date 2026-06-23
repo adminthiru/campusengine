@@ -594,7 +594,6 @@ export function Subjects() {
                   <th>Code</th>
                   <th>Type</th>
                   <th>Teachers</th>
-                  <th>Classes</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
@@ -623,16 +622,6 @@ export function Subjects() {
                       <td>{sub.code ? <span className="badge badge-secondary">{sub.code}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                       <td style={{ fontSize: 13, textTransform: 'capitalize' }}>{sub.type}</td>
                       <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{subTeachers.length ? subTeachers.join(', ') : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-                      <td>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                          {sub.classes?.length
-                            ? <>
-                                {sub.classes.slice(0, 4).map(c => <span key={c._id} className="badge badge-info" style={{ fontSize: 11 }}>{c.name} {c.section}</span>)}
-                                {sub.classes.length > 4 && <span className="badge badge-secondary" style={{ fontSize: 11 }}>+{sub.classes.length - 4}</span>}
-                              </>
-                            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                        </div>
-                      </td>
                       <td>
                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                           <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openEdit(sub)}><Edit size={14} /></button>
