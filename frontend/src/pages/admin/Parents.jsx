@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { UsersRound, Phone, Search, ChevronRight } from 'lucide-react';
+import { UsersRound, Phone, ChevronRight } from 'lucide-react';
 import api from '../../utils/api';
-import { PageLoader, EmptyState, Avatar, Modal } from '../../components/ui';
+import { PageLoader, EmptyState, Avatar, Modal, SearchInput } from '../../components/ui';
 
 const RELATION_COLORS = {
   father:   { bg: '#eff6ff', color: '#1d4ed8', label: 'Father' },
@@ -42,17 +42,8 @@ export default function Parents() {
       </div>
 
       {/* Search */}
-      <div style={{ marginBottom: 16, maxWidth: 320 }}>
-        <div style={{ position: 'relative' }}>
-          <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-          <input
-            className="form-control"
-            placeholder="Search by name or mobile..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{ paddingLeft: 36, fontSize: 13 }}
-          />
-        </div>
+      <div className="filter-bar">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search by name or mobile..." />
       </div>
 
       {isLoading ? (
