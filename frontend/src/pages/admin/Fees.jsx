@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { Select as AntSelect } from 'antd';
-import { Plus, Download, MessageSquare, CreditCard, IndianRupee, Trash2, Edit2, Users, User, RotateCcw, Tag } from 'lucide-react';
+import { Plus, Download, MessageSquare, CreditCard, IndianRupee, Trash2, Edit2, Users, User, RotateCcw, Tag, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useYear } from '../../store/YearContext';
@@ -59,6 +59,19 @@ export default function Fees() {
     mutationFn: (d) => api.post('/fees', d),
     onSuccess: () => { qc.invalidateQueries(['fees']); toast.success('Fee record created!'); setShowCreate(false); },
     onError: (err) => toast.error(err.message || 'Failed')
+  });
+
+  // Students in classes with a fee structure who don't yet have a record.
+  const { data: unsyncedData } = useQuery({
+    queryKey: ['fees-unsynced', selectedYear],
+    queryFn: () => api.get(`/fees/unsynced-count?academicYear=${encodeURIComponent(selectedYear)}`),
+  });
+  const unsyncedCount = unsyncedData?.count || 0;
+
+  const syncMutation = useMutation({
+    mutationFn: () => api.post('/fees/sync', { academicYear: selectedYear }),
+    onSuccess: (res) => { qc.invalidateQueries(['fees']); qc.invalidateQueries(['fees-unsynced']); toast.success(res.message || 'Students synced'); },
+    onError: (err) => toast.error(err.message || 'Failed to sync'),
   });
 
   const bulkMutation = useMutation({
@@ -186,6 +199,11 @@ export default function Fees() {
                 <Trash2 size={16} /> Delete ({selected.length})
               </button>
             </>
+          )}
+          {unsyncedCount > 0 && (
+            <button className="btn btn-secondary" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}>
+              <RefreshCw size={16} /> {syncMutation.isPending ? 'Syncing…' : `Sync Students (${unsyncedCount})`}
+            </button>
           )}
           {total > 0 && (
             <button className="btn btn-secondary" onClick={() => setShowEditClassFee(true)}>

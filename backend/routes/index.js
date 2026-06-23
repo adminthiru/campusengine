@@ -757,6 +757,8 @@ router.get('/attendance/leave-balance', protect, checkSubscription, async (req, 
 // ============== FEES ==============
 router.get('/fees', protect, checkSubscription, feesCtrl.getFees);
 router.get('/fees/report', protect, checkSubscription, feesCtrl.getFeesReport);
+router.get('/fees/unsynced-count', protect, checkSubscription, feesCtrl.getUnsyncedCount);
+router.post('/fees/sync', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.syncClassStudents);
 router.post('/fees', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.createFeeRecord);
 router.post('/fees/collect', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.collectPayment);
 router.post('/fees/razorpay-order', protect, checkSubscription, feesCtrl.createRazorpayOrder);

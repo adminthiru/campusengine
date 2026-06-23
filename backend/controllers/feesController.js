@@ -571,4 +571,63 @@ const getFeesReport = async (req, res) => {
   }
 };
 
-module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, createRazorpayOrder, verifyRazorpayPayment, getFees, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm };
+// ── Sync: create fee records for class students who don't have one yet,
+// cloning their class's existing fee structure (template). ──────────────────
+async function computeUnsynced(schoolId, academicYear) {
+  const [fees, students] = await Promise.all([
+    FeeCollection.find({ school: schoolId, academicYear }).select('student terms').lean(),
+    Student.find({ school: schoolId, status: 'active' }).select('_id name currentClass').lean(),
+  ]);
+  const feeStudentIds = new Set(fees.map(f => String(f.student)));
+  const classOf = {};
+  students.forEach(s => { classOf[String(s._id)] = s.currentClass ? String(s.currentClass) : null; });
+  const templateByClass = {};
+  for (const f of fees) {
+    const cls = classOf[String(f.student)];
+    if (cls && !templateByClass[cls] && f.terms?.length) templateByClass[cls] = f.terms;
+  }
+  const unsynced = students.filter(s => {
+    const cls = s.currentClass ? String(s.currentClass) : null;
+    return cls && templateByClass[cls] && !feeStudentIds.has(String(s._id));
+  });
+  return { unsynced, templateByClass };
+}
+
+const cloneTerms = (tmpl) => (tmpl || []).map(t => {
+  const fb = (t.feeBreakdown || []).map(x => ({ type: x.type, amount: Number(x.amount) || 0 }));
+  const totalAmount = fb.reduce((a, b) => a + b.amount, 0);
+  const discAmt = Number(t.discount?.amount) || 0;
+  const netAmount = Math.max(0, totalAmount - discAmt);
+  return { name: t.name, feeBreakdown: fb, totalAmount, discount: { amount: discAmt, reason: t.discount?.reason || '' }, netAmount, paidAmount: 0, pendingAmount: netAmount, status: 'pending' };
+});
+
+const getUnsyncedCount = async (req, res) => {
+  try {
+    const schoolId = req.user.school;
+    let { academicYear } = req.query;
+    if (!academicYear) academicYear = await getAcademicYear(schoolId);
+    const { unsynced } = await computeUnsynced(schoolId, academicYear);
+    res.json({ success: true, count: unsynced.length });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+};
+
+const syncClassStudents = async (req, res) => {
+  try {
+    const schoolId = req.user.school;
+    let academicYear = req.body.academicYear || req.query.academicYear;
+    if (!academicYear) academicYear = await getAcademicYear(schoolId);
+    const { unsynced, templateByClass } = await computeUnsynced(schoolId, academicYear);
+    let created = 0;
+    for (const s of unsynced) {
+      const terms = cloneTerms(templateByClass[String(s.currentClass)]);
+      if (!terms.length) continue;
+      const fee = new FeeCollection({ school: schoolId, student: s._id, academicYear, terms });
+      recalcAggregates(fee);
+      await fee.save();
+      created++;
+    }
+    res.json({ success: true, created, message: `Synced ${created} student${created !== 1 ? 's' : ''}` });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+};
+
+module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, createRazorpayOrder, verifyRazorpayPayment, getFees, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm, getUnsyncedCount, syncClassStudents };
