@@ -531,9 +531,13 @@ td {
   font-weight: 500;
   line-height: 20px;
   letter-spacing: -0.02em;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   vertical-align: middle;
 }
+
+/* Identity / emphasized cells (e.g. the first "name" column) keep strong text. */
+td .text-14-bold, td .text-14-semibold, td .text-14-medium,
+td .text-16-bold, td b, td strong { color: var(--text-primary); }
 
 tbody tr:hover { background: #f8fafc; }
 tbody tr:last-child td { border-bottom: none; }
