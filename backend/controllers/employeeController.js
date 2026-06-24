@@ -1,5 +1,6 @@
 const Employee = require('../models/Employee');
 const User = require('../models/User');
+const Salary = require('../models/Salary');
 const { sendEmail, invitationEmail } = require('../utils/email');
 const { sendSMS } = require('../utils/sms');
 const { generateJobOffer } = require('../utils/pdf');
@@ -132,6 +133,8 @@ const deleteEmployee = async (req, res) => {
     if (employee.user) {
       await User.findByIdAndDelete(employee.user);
     }
+    // Cascade: remove the employee's salary records so no orphans remain.
+    await Salary.deleteMany({ school: req.user.school, employee: employee._id });
     res.json({ success: true, message: 'Employee deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

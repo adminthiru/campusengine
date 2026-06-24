@@ -155,7 +155,9 @@ const getSalaries = async (req, res) => {
       .populate('paidBy', 'name')
       .sort({ createdAt: -1 });
 
-    res.json({ success: true, salaries });
+    // Hide orphaned records whose employee was deleted (populate -> null).
+    const visible = salaries.filter(s => s.employee);
+    res.json({ success: true, salaries: visible });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
