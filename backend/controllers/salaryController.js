@@ -199,9 +199,9 @@ const getSalaries = async (req, res) => {
           if (rec.status === 'present') present += 1;
           else if (rec.status === 'half_day' && halfDayEnabled) present += halfDayFactor;
         }
-        // Flag a record as stale only when it carries a real salary and its
-        // stored working/present days disagree with the live attendance figures.
-        s.needsRecalc = (s.grossSalary || 0) > 0 && (s.workingDays !== actualWorking || s.presentDays !== present);
+        // Flag a record as stale when its stored working/present days disagree
+        // with the live attendance figures (so a bulk recalc can resync them).
+        s.needsRecalc = s.workingDays !== actualWorking || s.presentDays !== present;
         s.workingDays = actualWorking;
         s.presentDays = present;
       }

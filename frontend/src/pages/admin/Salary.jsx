@@ -133,10 +133,10 @@ export default function Salary() {
     onError: (err) => toast.error(err.message || 'Failed')
   });
 
-  const recalculateMutation = useMutation({
-    mutationFn: (id) => api.post(`/salaries/${id}/recalculate`),
-    onSuccess: () => { qc.invalidateQueries(['salaries']); toast.success('Salary recalculated from latest attendance'); },
-    onError: (err) => toast.error(err.response?.data?.message || 'Failed to recalculate')
+  const calcAllMutation = useMutation({
+    mutationFn: async (ids) => Promise.all(ids.map(id => api.post(`/salaries/${id}/recalculate`))),
+    onSuccess: (_res, ids) => { qc.invalidateQueries(['salaries']); toast.success(`Recalculated ${ids.length} salar${ids.length > 1 ? 'ies' : 'y'} from attendance`); },
+    onError: (err) => toast.error(err.message || 'Failed to recalculate'),
   });
 
   const syncMutation = useMutation({
@@ -161,6 +161,9 @@ export default function Salary() {
     const matchRole = !roleFilter || s.employee?.role === roleFilter;
     return matchSearch && matchRole;
   });
+
+  // Records whose stored figures are out of sync with the latest attendance.
+  const needsRecalcIds = salaries.filter(s => s.needsRecalc).map(s => s._id);
 
   const downloadPayslip = async (id) => {
     try {
@@ -230,6 +233,13 @@ export default function Salary() {
               onChange={val => setRoleFilter(val ?? '')}
               options={roles.map(r => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
             />
+            {needsRecalcIds.length > 0 && (
+              <button className="btn btn-secondary" style={{ marginLeft: 'auto' }}
+                onClick={() => calcAllMutation.mutate(needsRecalcIds)} disabled={calcAllMutation.isPending}>
+                <RotateCcw size={16} style={calcAllMutation.isPending ? { animation: 'spin 1s linear infinite' } : {}} />
+                {calcAllMutation.isPending ? 'Calculating…' : `Calculate All (${needsRecalcIds.length})`}
+              </button>
+            )}
           </div>
 
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -275,11 +285,6 @@ export default function Salary() {
                       <td><StatusBadge status={sal.status} /></td>
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 4 }}>
-                          {sal.status === 'pending' && sal.needsRecalc && (
-                            <button className="btn btn-secondary btn-sm btn-icon" onClick={() => recalculateMutation.mutate(sal._id)} title="Out of sync with attendance — recalculate" disabled={recalculateMutation.isPending}>
-                              <RotateCcw size={14} />
-                            </button>
-                          )}
                           {(sal.grossSalary || 0) > 0 ? (
                             <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setEditSalary(sal)} title="Edit salary">
                               <Edit2 size={14} />
