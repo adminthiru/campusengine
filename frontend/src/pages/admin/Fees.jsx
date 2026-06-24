@@ -6,7 +6,7 @@ import { Plus, Download, MessageSquare, CreditCard, IndianRupee, Trash2, Edit2, 
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useYear } from '../../store/YearContext';
-import { Modal, ConfirmDialog, StatusBadge, Pagination, SearchInput, PageLoader, FormRow, EmptyState, ColumnSelector, useColumnSelector } from '../../components/ui';
+import { Modal, ConfirmDialog, StatusBadge, Pagination, SearchInput, PageLoader, FormRow, EmptyState, StatCard, ColumnSelector, useColumnSelector } from '../../components/ui';
 
 const FEE_COLS = [
   { key: 'mobile',       label: 'Mobile' },
@@ -26,24 +26,6 @@ const PAYMENT_METHODS = [
   { value: 'cheque',        label: 'Cheque' },
   { value: 'online',        label: 'Online (UPI/NEFT)' },
 ];
-
-// Unified overview card: identical structure for every tile (title + icon on
-// top, big value, then a fixed-height footer slot) so all cards line up — the
-// footer holds a caption on simple cards and the method filter on the last one.
-function MetricCard({ title, value, icon: Icon, color = '#1a56e8', bg = '#eff6ff', footer }) {
-  return (
-    <div className="stat-card" style={{ flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start', gap: 12 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-        <div className="text-14-regular" style={{ color: 'var(--text-secondary)' }}>{title}</div>
-        <div className="stat-icon" style={{ background: bg, flexShrink: 0 }}>
-          {Icon && <Icon size={22} color={color} />}
-        </div>
-      </div>
-      <div className="text-24-bold" style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-primary)' }}>{value}</div>
-      <div style={{ minHeight: 32, display: 'flex', alignItems: 'center' }}>{footer}</div>
-    </div>
-  );
-}
 
 export default function Fees() {
   const qc = useQueryClient();
@@ -263,34 +245,35 @@ export default function Fees() {
       </div>
 
       <div className="grid-4" style={{ marginBottom: 24 }}>
-        <MetricCard
-          title="Total Collected" value={`₹${totalCollected.toLocaleString('en-IN')}`} icon={IndianRupee} color="#10b981" bg="#f0fdf4"
-          footer={<span className="text-12-regular" style={{ color: 'var(--text-muted)' }}>Received so far</span>}
-        />
-        <MetricCard
-          title="Pending Amount" value={`₹${totalPending.toLocaleString('en-IN')}`} icon={IndianRupee} color="#ef4444" bg="#fef2f2"
-          footer={<span className="text-12-regular" style={{ color: 'var(--text-muted)' }}>Still outstanding</span>}
-        />
-        <MetricCard
-          title="Total Discount" value={`₹${totalDiscount.toLocaleString('en-IN')}`} icon={Tag} color="#f59e0b" bg="#fffbeb"
-          footer={<span className="text-12-regular" style={{ color: 'var(--text-muted)' }}>Concessions applied</span>}
-        />
-        <MetricCard
-          title={methodFilter === 'all' ? 'Collected (All Methods)' : `Collected · ${PAYMENT_METHODS.find(m => m.value === methodFilter)?.label}`}
-          value={`₹${methodValue.toLocaleString('en-IN')}`} icon={CreditCard} color="#1a56e8" bg="#eff6ff"
-          footer={
+        <StatCard title="Total Collected" value={`₹${totalCollected.toLocaleString('en-IN')}`} icon={IndianRupee} color="#10b981" bg="#f0fdf4" />
+        <StatCard title="Pending Amount" value={`₹${totalPending.toLocaleString('en-IN')}`} icon={IndianRupee} color="#ef4444" bg="#fef2f2" />
+        <StatCard title="Total Discount" value={`₹${totalDiscount.toLocaleString('en-IN')}`} icon={Tag} color="#f59e0b" bg="#fffbeb" />
+        <div className="stat-card" style={{ flexDirection: 'column', alignItems: 'stretch', justifyContent: 'space-between', gap: 14 }}>
+          {/* Filter on top, collected amount pushed to the bottom */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
             <AntSelect
               size="small"
               value={methodFilter}
               onChange={setMethodFilter}
-              style={{ width: '100%' }}
+              style={{ flex: 1, minWidth: 0 }}
               options={[
                 { value: 'all', label: 'All Methods' },
                 ...PAYMENT_METHODS.map(m => ({ value: m.value, label: `${m.label} · ₹${(methodTotals[m.value] || 0).toLocaleString('en-IN')}` })),
               ]}
             />
-          }
-        />
+            <div className="stat-icon" style={{ background: '#eff6ff', flexShrink: 0 }}>
+              <CreditCard size={22} color="#1a56e8" />
+            </div>
+          </div>
+          <div>
+            <div className="text-14-regular" style={{ color: 'var(--text-secondary)', marginBottom: 4 }}>
+              {methodFilter === 'all' ? 'Collected (All Methods)' : `Collected · ${PAYMENT_METHODS.find(m => m.value === methodFilter)?.label}`}
+            </div>
+            <div className="text-24-bold" style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-primary)' }}>
+              ₹{methodValue.toLocaleString('en-IN')}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="filter-bar">
