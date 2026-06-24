@@ -477,6 +477,8 @@ const reversePayment = async (req, res) => {
     recalcAggregates(fee);
     await fee.save();
 
+    // Populate student so the UI keeps the name/admission no after refresh.
+    await fee.populate({ path: 'student', select: 'name admissionNumber rollNumber phone currentClass', populate: { path: 'currentClass', select: 'name section' } });
     res.json({ success: true, fee });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -506,6 +508,7 @@ const clearTermDiscount = async (req, res) => {
 
     recalcAggregates(fee);
     await fee.save();
+    await fee.populate({ path: 'student', select: 'name admissionNumber rollNumber phone currentClass', populate: { path: 'currentClass', select: 'name section' } });
     res.json({ success: true, fee });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
