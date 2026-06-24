@@ -449,6 +449,11 @@ export default function Fees() {
                           <td className="text-14-regular" style={{ textAlign: 'right' }}>₹{(t.totalAmount || 0).toLocaleString('en-IN')}</td>
                           <td className="text-13-regular" style={{ textAlign: 'right', color: t.discount?.amount > 0 ? '#16a34a' : 'var(--text-muted)' }}>
                             {t.discount?.amount > 0 ? `−₹${t.discount.amount.toLocaleString('en-IN')}` : '—'}
+                            {t.discount?.amount > 0 && t.discount?.reason && (
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginTop: 2, fontStyle: 'italic' }}>
+                                {t.discount.reason}
+                              </div>
+                            )}
                           </td>
                           <td className="text-14-semibold" style={{ textAlign: 'right' }}>₹{(t.netAmount || 0).toLocaleString('en-IN')}</td>
                           <td className="text-14-medium" style={{ textAlign: 'right', color: '#10b981' }}>₹{(t.paidAmount || 0).toLocaleString('en-IN')}</td>
