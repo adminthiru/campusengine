@@ -579,8 +579,11 @@ const getFeesReport = async (req, res) => {
       .populate({ path: 'student', select: 'name admissionNumber phone currentClass', populate: { path: 'currentClass', select: 'name section' } })
       .sort({ createdAt: 1 });
 
+    // Hide orphaned records whose student was deleted (populate -> null).
+    const visible = fees.filter(f => f.student);
+
     const school = await School.findById(req.user.school);
-    const pdf = await generateFeesReport(fees.map(f => f.toObject()), school.toObject(), { className, status, academicYear });
+    const pdf = await generateFeesReport(visible.map(f => f.toObject()), school.toObject(), { className, status, academicYear });
 
     const dateStr = new Date().toISOString().slice(0, 10);
     res.setHeader('Content-Type', 'application/pdf');
