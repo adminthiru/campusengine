@@ -158,7 +158,8 @@ const getSalaries = async (req, res) => {
       .sort({ createdAt: -1 });
 
     // Hide orphaned records whose employee was deleted (populate -> null).
-    const visible = salaries.filter(s => s.employee);
+    // Convert to plain objects so we can attach a non-schema `needsRecalc` flag.
+    const visible = salaries.filter(s => s.employee).map(s => s.toObject());
 
     // For pending records, show the real working days (same basis as the
     // Attendance module) and present days counted from attendance — so the list
@@ -186,7 +187,7 @@ const getSalaries = async (req, res) => {
       }
       for (const s of pending) {
         const key = `${s.year}_${s.month}`;
-        s.workingDays = wdByMonth[key];
+        const actualWorking = wdByMonth[key];
         const holidays = holByMonth[key];
         let present = 0;
         for (const a of (attByMonth[key] || [])) {
@@ -197,6 +198,10 @@ const getSalaries = async (req, res) => {
           if (rec.status === 'present') present += 1;
           else if (rec.status === 'half_day' && halfDayEnabled) present += halfDayFactor;
         }
+        // Flag a record as stale only when it carries a real salary and its
+        // stored working/present days disagree with the live attendance figures.
+        s.needsRecalc = (s.grossSalary || 0) > 0 && (s.workingDays !== actualWorking || s.presentDays !== present);
+        s.workingDays = actualWorking;
         s.presentDays = present;
       }
     }

@@ -275,8 +275,8 @@ export default function Salary() {
                       <td><StatusBadge status={sal.status} /></td>
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 4 }}>
-                          {sal.status === 'pending' && (
-                            <button className="btn btn-secondary btn-sm btn-icon" onClick={() => recalculateMutation.mutate(sal._id)} title="Recalculate from latest attendance" disabled={recalculateMutation.isPending}>
+                          {sal.status === 'pending' && sal.needsRecalc && (
+                            <button className="btn btn-secondary btn-sm btn-icon" onClick={() => recalculateMutation.mutate(sal._id)} title="Out of sync with attendance — recalculate" disabled={recalculateMutation.isPending}>
                               <RotateCcw size={14} />
                             </button>
                           )}
