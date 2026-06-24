@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
-import { Select as AntSelect } from 'antd';
-import { Plus, Download, MessageSquare, CreditCard, IndianRupee, Trash2, Edit2, Users, User, RotateCcw, Tag, RefreshCw, X } from 'lucide-react';
+import { Select as AntSelect, Dropdown } from 'antd';
+import { Plus, Download, MessageSquare, CreditCard, IndianRupee, Trash2, Edit2, Users, User, RotateCcw, Tag, RefreshCw, X, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useYear } from '../../store/YearContext';
@@ -248,30 +248,32 @@ export default function Fees() {
         <StatCard title="Total Collected" value={`₹${totalCollected.toLocaleString('en-IN')}`} icon={IndianRupee} color="#10b981" bg="#f0fdf4" />
         <StatCard title="Pending Amount" value={`₹${totalPending.toLocaleString('en-IN')}`} icon={IndianRupee} color="#ef4444" bg="#fef2f2" />
         <StatCard title="Total Discount" value={`₹${totalDiscount.toLocaleString('en-IN')}`} icon={Tag} color="#f59e0b" bg="#fffbeb" />
-        <div className="stat-card" style={{ flexDirection: 'column', alignItems: 'stretch', justifyContent: 'space-between', gap: 14 }}>
-          {/* Filter on top, collected amount pushed to the bottom */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-            <AntSelect
-              size="small"
-              value={methodFilter}
-              onChange={setMethodFilter}
-              style={{ flex: 1, minWidth: 0 }}
-              options={[
-                { value: 'all', label: 'All Methods' },
-                ...PAYMENT_METHODS.map(m => ({ value: m.value, label: `${m.label} · ₹${(methodTotals[m.value] || 0).toLocaleString('en-IN')}` })),
-              ]}
-            />
-            <div className="stat-icon" style={{ background: '#eff6ff', flexShrink: 0 }}>
-              <CreditCard size={22} color="#1a56e8" />
-            </div>
-          </div>
+        <div className="stat-card">
           <div>
-            <div className="text-14-regular" style={{ color: 'var(--text-secondary)', marginBottom: 4 }}>
-              {methodFilter === 'all' ? 'Collected (All Methods)' : `Collected · ${PAYMENT_METHODS.find(m => m.value === methodFilter)?.label}`}
-            </div>
-            <div className="text-24-bold" style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-primary)' }}>
+            {/* Title doubles as the method picker — click to choose a method */}
+            <Dropdown
+              trigger={['click']}
+              menu={{
+                selectable: true,
+                selectedKeys: [methodFilter],
+                onClick: ({ key }) => setMethodFilter(key),
+                items: [
+                  { key: 'all', label: 'All Methods' },
+                  ...PAYMENT_METHODS.map(m => ({ key: m.value, label: `${m.label} · ₹${(methodTotals[m.value] || 0).toLocaleString('en-IN')}` })),
+                ],
+              }}
+            >
+              <span className="text-14-regular" style={{ color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                {methodFilter === 'all' ? 'Collected (All Methods)' : `Collected · ${PAYMENT_METHODS.find(m => m.value === methodFilter)?.label}`}
+                <ChevronDown size={14} />
+              </span>
+            </Dropdown>
+            <div className="text-24-bold" style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-primary)', marginTop: 4 }}>
               ₹{methodValue.toLocaleString('en-IN')}
             </div>
+          </div>
+          <div className="stat-icon" style={{ background: '#eff6ff' }}>
+            <CreditCard size={22} color="#1a56e8" />
           </div>
         </div>
       </div>
