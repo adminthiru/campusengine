@@ -932,14 +932,15 @@ function EditFeeModal({ fee, onClose, onSuccess }) {
       discAmount: String(t.discount?.amount || ''),
       discReason: t.discount?.reason || '',
       paidAmount: t.paidAmount || 0,
-      isNew: false
+      isNew: false,
+      custom: !!t.custom
     }))
   );
   const [deletedTerms, setDeletedTerms] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const updateRow = (i, field, val) => setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: val } : r));
-  const addRow = () => setRows(prev => [...prev, { termName: '', type: '', amount: '', discAmount: '', discReason: '', paidAmount: 0, isNew: true }]);
+  const addRow = () => setRows(prev => [...prev, { termName: '', type: '', amount: '', discAmount: '', discReason: '', paidAmount: 0, isNew: true, custom: true }]);
   const removeRow = (i) => {
     const row = rows[i];
     if (!row.isNew) setDeletedTerms(prev => [...prev, row.termName]);
@@ -962,7 +963,8 @@ function EditFeeModal({ fee, onClose, onSuccess }) {
         await api.put(`/fees/${fee._id}`, {
           termName: nameToUse,
           feeBreakdown: [{ type: r.type, amount: Number(r.amount) || 0 }],
-          discount: { amount: Number(r.discAmount) || 0, reason: r.discReason }
+          discount: { amount: Number(r.discAmount) || 0, reason: r.discReason },
+          custom: !!r.custom
         });
       }
       toast.success('Fee updated!');
@@ -990,10 +992,13 @@ function EditFeeModal({ fee, onClose, onSuccess }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {rows.map((r, i) => {
           const net = Math.max(0, (Number(r.amount) || 0) - (Number(r.discAmount) || 0));
-          const tooLow = !r.isNew && Number(r.amount) > 0 && Number(r.amount) < r.paidAmount;
+          // Per-student custom categories (added just for this student) stay editable
+          // and deletable; class-wide categories are managed from "Add / Edit Fee Record".
+          const isCustom = r.isNew || r.custom;
+          const tooLow = !isCustom && Number(r.amount) > 0 && Number(r.amount) < r.paidAmount;
           return (
-            <div key={i} style={{ border: `1px solid ${r.isNew ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, overflow: 'hidden' }}>
-              <div style={{ padding: '7px 14px', background: r.isNew ? '#eff6ff' : '#f8fafc', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            <div key={i} style={{ border: `1px solid ${isCustom ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, overflow: 'hidden' }}>
+              <div style={{ padding: '7px 14px', background: isCustom ? '#eff6ff' : '#f8fafc', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                 {r.isNew ? (
                   <input
                     className="form-control"
@@ -1007,14 +1012,12 @@ function EditFeeModal({ fee, onClose, onSuccess }) {
                   <span className="text-14-semibold">{r.type}</span>
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                  {!r.isNew && r.paidAmount > 0 && (
+                  {r.paidAmount > 0 && (
                     <span style={{ fontSize: 11, color: '#16a34a', background: '#dcfce7', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
                       Paid ₹{r.paidAmount.toLocaleString('en-IN')}
                     </span>
                   )}
-                  {/* Only newly-added per-student categories can be removed here;
-                      class-wide categories are managed from "Add / Edit Fee Record". */}
-                  {r.isNew && (
+                  {isCustom && r.paidAmount === 0 && (
                     <button type="button" className="btn btn-danger btn-sm btn-icon" onClick={() => removeRow(i)} title="Remove category">
                       <Trash2 size={13} />
                     </button>
@@ -1024,10 +1027,12 @@ function EditFeeModal({ fee, onClose, onSuccess }) {
               <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div>
                   <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Amount (₹)</label>
-                  <input className="form-control" type="number" min={0} value={r.amount} readOnly={!r.isNew}
+                  <input className="form-control" type="number" min={0} value={r.amount} readOnly={!isCustom}
                     onChange={e => updateRow(i, 'amount', e.target.value)}
-                    style={!r.isNew ? { background: '#f8fafc', color: 'var(--text-secondary)' } : undefined} />
-                  {!r.isNew && <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>Class-wide fee — change it for the whole class from “Add / Edit Fee Record”. Apply discounts when collecting.</p>}
+                    style={!isCustom ? { background: '#f8fafc', color: 'var(--text-secondary)' } : undefined} />
+                  {isCustom
+                    ? <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>Added for this student only — editable and removable here.</p>
+                    : <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>Class-wide fee — change it for the whole class from “Add / Edit Fee Record”. Apply discounts when collecting.</p>}
                   {tooLow && <p style={{ fontSize: 11, color: '#ef4444', marginTop: 2 }}>Can't be less than paid ₹{r.paidAmount.toLocaleString('en-IN')}</p>}
                 </div>
                 <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-muted)' }}>

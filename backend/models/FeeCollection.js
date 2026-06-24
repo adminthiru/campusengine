@@ -15,7 +15,10 @@ const feeTermSchema = new mongoose.Schema({
   netAmount: { type: Number, default: 0 },
   paidAmount: { type: Number, default: 0 },
   pendingAmount: { type: Number, default: 0 },
-  status: { type: String, enum: ['pending', 'partial', 'paid', 'overdue'], default: 'pending' }
+  status: { type: String, enum: ['pending', 'partial', 'paid', 'overdue'], default: 'pending' },
+  // true when this category was added for this student only (not part of the
+  // class-wide fee structure) — such categories stay editable/deletable per student.
+  custom: { type: Boolean, default: false }
 }, { _id: true });
 
 const feeCollectionSchema = new mongoose.Schema({

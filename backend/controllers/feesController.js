@@ -383,13 +383,13 @@ const sendFeeReminder = async (req, res) => {
 // Update fee record — edit breakdown and/or discount for a specific term
 const updateFeeRecord = async (req, res) => {
   try {
-    const { termName, discount, feeBreakdown } = req.body;
+    const { termName, discount, feeBreakdown, custom } = req.body;
     const fee = await FeeCollection.findOne({ _id: req.params.id, school: req.user.school });
     if (!fee) return res.status(404).json({ success: false, message: 'Fee record not found' });
 
     let term = termName ? fee.terms.find(t => t.name === termName) : fee.terms[0];
 
-    // If term not found by name, create a new one
+    // If term not found by name, create a new one (per-student custom category)
     if (!term && termName) {
       const bd = (feeBreakdown || []).map(f => ({ type: f.type, amount: Number(f.amount) || 0 }));
       const totalAmount = bd.reduce((s, f) => s + f.amount, 0);
@@ -403,7 +403,8 @@ const updateFeeRecord = async (req, res) => {
         netAmount,
         paidAmount: 0,
         pendingAmount: netAmount,
-        status: netAmount <= 0 ? 'paid' : 'pending'
+        status: netAmount <= 0 ? 'paid' : 'pending',
+        custom: !!custom
       });
       recalcAggregates(fee);
       await fee.save();
@@ -565,6 +566,10 @@ const updateClassFeeStructure = async (req, res) => {
           });
         }
       }
+      // Class structure is authoritative: listed terms are class-wide; any
+      // other term on the student is a per-student custom category.
+      const classNames = new Set(termsInput.map(t => t.name));
+      for (const t of fee.terms) t.custom = !classNames.has(t.name);
       recalcAggregates(fee);
       await fee.save();
     }
@@ -710,6 +715,10 @@ const applyClassFeeStructure = async (req, res) => {
             fee.terms.push({ name: tu.name, feeBreakdown: bd, totalAmount, discount: { amount: 0, reason: '' }, netAmount: totalAmount, paidAmount: 0, pendingAmount: totalAmount, status: 'pending' });
           }
         }
+        // Class structure is authoritative: listed terms are class-wide; any
+        // other term on the student is a per-student custom category.
+        const classNames = new Set(termsInput.map(t => t.name));
+        for (const t of fee.terms) t.custom = !classNames.has(t.name);
         recalcAggregates(fee);
         await fee.save();
         updated++;
