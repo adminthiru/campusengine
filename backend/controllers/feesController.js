@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const FeeCollection = require('../models/FeeCollection');
 const Student = require('../models/Student');
 const Class = require('../models/Class');
@@ -294,6 +295,49 @@ const getFees = async (req, res) => {
     // Hide records whose student was deleted (orphaned fee records).
     const visible = fees.filter(f => f.student);
     res.json({ success: true, fees: visible, total: total - (fees.length - visible.length) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Amount collected per payment method (across ALL matching records, not just a page)
+const getPaymentSummary = async (req, res) => {
+  try {
+    const { classId, status, academicYear, search } = req.query;
+    const schoolId = req.user.school;
+    const query = { school: new mongoose.Types.ObjectId(schoolId) };
+    if (status) query.status = status;
+    if (academicYear) query.academicYear = academicYear;
+
+    if (classId) {
+      const students = await Student.find({ school: schoolId, currentClass: classId }).select('_id');
+      query.student = { $in: students.map(s => s._id) };
+    }
+    if (search && search.trim()) {
+      const regex = new RegExp(escapeRegex(search.trim()), 'i');
+      const matched = await Student.find({ school: schoolId, $or: [{ name: regex }, { admissionNumber: regex }] }).select('_id');
+      const ids = matched.map(s => String(s._id));
+      if (query.student?.$in) query.student.$in = query.student.$in.filter(id => ids.includes(String(id)));
+      else query.student = { $in: matched.map(s => s._id) };
+    }
+
+    const rows = await FeeCollection.aggregate([
+      { $match: query },
+      { $unwind: '$payments' },
+      { $group: { _id: '$payments.method', total: { $sum: '$payments.amount' }, count: { $sum: 1 } } },
+    ]);
+
+    const methods = { cash: 0, bank_transfer: 0, cheque: 0, online: 0 };
+    const counts = { cash: 0, bank_transfer: 0, cheque: 0, online: 0 };
+    let total = 0;
+    for (const r of rows) {
+      const key = r._id || 'cash';
+      if (methods[key] === undefined) { methods[key] = 0; counts[key] = 0; }
+      methods[key] += r.total || 0;
+      counts[key] += r.count || 0;
+      total += r.total || 0;
+    }
+    res.json({ success: true, methods, counts, total });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -761,4 +805,4 @@ const syncClassStudents = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
-module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, clearTermDiscount, createRazorpayOrder, verifyRazorpayPayment, getFees, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm, getUnsyncedCount, syncClassStudents, applyClassFeeStructure };
+module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, clearTermDiscount, createRazorpayOrder, verifyRazorpayPayment, getFees, getPaymentSummary, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm, getUnsyncedCount, syncClassStudents, applyClassFeeStructure };

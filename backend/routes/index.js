@@ -756,6 +756,7 @@ router.get('/attendance/leave-balance', protect, checkSubscription, async (req, 
 
 // ============== FEES ==============
 router.get('/fees', protect, checkSubscription, feesCtrl.getFees);
+router.get('/fees/payment-summary', protect, checkSubscription, feesCtrl.getPaymentSummary);
 router.get('/fees/report', protect, checkSubscription, feesCtrl.getFeesReport);
 router.get('/fees/unsynced-count', protect, checkSubscription, feesCtrl.getUnsyncedCount);
 router.post('/fees/sync', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.syncClassStudents);

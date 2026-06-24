@@ -20,6 +20,13 @@ const FEE_COLS = [
 
 const emptyItem = () => ({ type: '', amount: '' });
 
+const PAYMENT_METHODS = [
+  { value: 'cash',          label: 'Cash' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'cheque',        label: 'Cheque' },
+  { value: 'online',        label: 'Online (UPI/NEFT)' },
+];
+
 export default function Fees() {
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
@@ -50,6 +57,16 @@ export default function Fees() {
   });
   const fees = data?.fees || [];
   const total = data?.total || 0;
+
+  // Amount collected per payment method (across all matching records).
+  const [methodFilter, setMethodFilter] = useState('all');
+  const { data: paySummary } = useQuery({
+    queryKey: ['fees-payment-summary', statusFilter, classFilter, search, selectedYear],
+    queryFn: () => api.get(`/fees/payment-summary?status=${statusFilter}&classId=${classFilter}&search=${encodeURIComponent(search)}&academicYear=${encodeURIComponent(selectedYear)}`),
+  });
+  const methodTotals = paySummary?.methods || { cash: 0, bank_transfer: 0, cheque: 0, online: 0 };
+  const collectedAllMethods = paySummary?.total || 0;
+  const methodValue = methodFilter === 'all' ? collectedAllMethods : (methodTotals[methodFilter] || 0);
 
   const { register, handleSubmit, reset, control, watch } = useForm();
   const selectedClassId = watch('classId');
@@ -231,7 +248,29 @@ export default function Fees() {
         <StatCard title="Total Collected" value={`₹${totalCollected.toLocaleString('en-IN')}`} icon={IndianRupee} color="#10b981" bg="#f0fdf4" />
         <StatCard title="Pending Amount" value={`₹${totalPending.toLocaleString('en-IN')}`} icon={IndianRupee} color="#ef4444" bg="#fef2f2" />
         <StatCard title="Total Discount" value={`₹${totalDiscount.toLocaleString('en-IN')}`} icon={Tag} color="#f59e0b" bg="#fffbeb" />
-        <StatCard title="Total Records" value={total} icon={CreditCard} color="#1a56e8" bg="#eff6ff" />
+        <div className="stat-card" style={{ alignItems: 'flex-start' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="text-14-regular" style={{ color: 'var(--text-secondary)', marginBottom: 4 }}>
+              {methodFilter === 'all' ? 'Collected (All Methods)' : `Collected · ${PAYMENT_METHODS.find(m => m.value === methodFilter)?.label}`}
+            </div>
+            <div className="text-24-bold" style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-primary)' }}>
+              ₹{methodValue.toLocaleString('en-IN')}
+            </div>
+            <AntSelect
+              size="small"
+              value={methodFilter}
+              onChange={setMethodFilter}
+              style={{ width: '100%', marginTop: 8 }}
+              options={[
+                { value: 'all', label: 'All Methods' },
+                ...PAYMENT_METHODS.map(m => ({ value: m.value, label: `${m.label} · ₹${(methodTotals[m.value] || 0).toLocaleString('en-IN')}` })),
+              ]}
+            />
+          </div>
+          <div className="stat-icon" style={{ background: '#eff6ff' }}>
+            <CreditCard size={22} color="#1a56e8" />
+          </div>
+        </div>
       </div>
 
       <div className="filter-bar">
@@ -820,12 +859,7 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
           style={{ width: '100%' }}
           value={method}
           onChange={val => setMethod(val)}
-          options={[
-            { value: 'cash',          label: 'Cash' },
-            { value: 'bank_transfer', label: 'Bank Transfer' },
-            { value: 'cheque',        label: 'Cheque' },
-            { value: 'online',        label: 'Online (UPI/NEFT)' },
-          ]}
+          options={PAYMENT_METHODS}
         />
       </div>
     </Modal>
