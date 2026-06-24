@@ -975,7 +975,9 @@ function EditFeeModal({ fee, onClose, onSuccess }) {
     setLoading(true);
     try {
       for (const termName of deletedTerms) {
-        await api.delete(`/fees/${fee._id}/term`, { data: { termName } });
+        // termName in the query string — DELETE request bodies are unreliable
+        // through some production proxies.
+        await api.delete(`/fees/${fee._id}/term?termName=${encodeURIComponent(termName)}`, { data: { termName } });
       }
       for (const r of rows) {
         const nameToUse = r.isNew ? r.type : r.termName;

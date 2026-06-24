@@ -586,7 +586,8 @@ const updateClassFeeStructure = async (req, res) => {
 // Remove a single term from a fee record (only allowed when paidAmount === 0)
 const deleteFeeTerm = async (req, res) => {
   try {
-    const { termName } = req.body;
+    // Prefer the query param — DELETE bodies are unreliable through some proxies.
+    const termName = req.query.termName || req.body?.termName;
     if (!termName) return res.status(400).json({ success: false, message: 'termName is required' });
     const fee = await FeeCollection.findOne({ _id: req.params.id, school: req.user.school });
     if (!fee) return res.status(404).json({ success: false, message: 'Fee record not found' });
