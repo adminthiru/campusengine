@@ -1012,7 +1012,9 @@ function EditFeeModal({ fee, onClose, onSuccess }) {
                       Paid ₹{r.paidAmount.toLocaleString('en-IN')}
                     </span>
                   )}
-                  {r.paidAmount === 0 && (
+                  {/* Only newly-added per-student categories can be removed here;
+                      class-wide categories are managed from "Add / Edit Fee Record". */}
+                  {r.isNew && (
                     <button type="button" className="btn btn-danger btn-sm btn-icon" onClick={() => removeRow(i)} title="Remove category">
                       <Trash2 size={13} />
                     </button>
