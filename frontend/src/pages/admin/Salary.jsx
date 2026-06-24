@@ -71,6 +71,7 @@ export default function Salary() {
   const [viewSalary, setViewSalary] = useState(null);
   const [selected, setSelected] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteOneTarget, setDeleteOneTarget] = useState(null); // single salary record to delete
 
   const autoGenAttempted = useRef(new Set());
   const [autoGenerating, setAutoGenerating] = useState(false);
@@ -115,6 +116,12 @@ export default function Salary() {
       setConfirmDelete(false);
     },
     onError: () => { toast.error('Failed to delete'); setConfirmDelete(false); }
+  });
+
+  const deleteOneMutation = useMutation({
+    mutationFn: (id) => api.delete(`/salaries/${id}`),
+    onSuccess: () => { qc.invalidateQueries(['salaries']); toast.success('Salary record deleted'); setDeleteOneTarget(null); },
+    onError: (err) => { toast.error(err.message || 'Failed to delete'); setDeleteOneTarget(null); }
   });
 
   const revertMutation = useMutation({
@@ -280,9 +287,17 @@ export default function Salary() {
                               <RotateCcw size={14} />
                             </button>
                           )}
-                          <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setEditSalary(sal)} title="Edit salary">
-                            <Edit2 size={14} />
-                          </button>
+                          {(sal.grossSalary || 0) > 0 ? (
+                            <button className="btn btn-sm btn-icon" onClick={() => setDeleteOneTarget(sal)} title="Delete salary record"
+                              style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                              <Trash2 size={14} />
+                            </button>
+                          ) : (
+                            <button className="btn btn-sm btn-icon" onClick={() => setEditSalary(sal)} title="Add salary"
+                              style={{ background: '#eff6ff', color: 'var(--primary)', border: '1px solid #bfdbfe' }}>
+                              <Plus size={14} />
+                            </button>
+                          )}
                           <button className="btn btn-secondary btn-sm btn-icon" onClick={() => downloadPayslip(sal._id)} title="Download Payslip">
                             <Download size={14} />
                           </button>
@@ -342,6 +357,16 @@ export default function Salary() {
         danger
         onConfirm={() => deleteMutation.mutate()}
         onClose={() => setConfirmDelete(false)}
+      />
+
+      <ConfirmDialog
+        open={!!deleteOneTarget}
+        title="Delete Salary Record"
+        message={deleteOneTarget ? `Delete the salary record for ${deleteOneTarget.employee?.name || 'this employee'}? You can add it again later.` : ''}
+        confirmLabel="Delete"
+        danger
+        onConfirm={() => deleteOneMutation.mutate(deleteOneTarget._id)}
+        onClose={() => setDeleteOneTarget(null)}
       />
 
       {showAddModal && (
