@@ -424,6 +424,9 @@ const updateFeeRecord = async (req, res) => {
       term.discount = { amount: Number(discount.amount) || 0, reason: discount.reason || '' };
     }
 
+    // Persist the custom flag if the client resolved it (e.g. legacy categories).
+    if (custom !== undefined) term.custom = !!custom;
+
     // Recalculate term amounts
     const discAmt = Number(term.discount?.amount) || 0;
     term.netAmount = Math.max(0, term.totalAmount - discAmt);

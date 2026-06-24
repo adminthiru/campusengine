@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { Select as AntSelect } from 'antd';
@@ -939,6 +939,25 @@ function EditFeeModal({ fee, onClose, onSuccess }) {
   const [deletedTerms, setDeletedTerms] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // Backward-compat: legacy per-student categories predate the `custom` flag.
+  // A term that appears only on THIS student (not on classmates) is per-student.
+  const classId = fee.student?.currentClass?._id || fee.student?.currentClass;
+  const { data: classFeesData } = useQuery({
+    queryKey: ['class-fees-custom', classId, fee.academicYear],
+    queryFn: () => api.get(`/fees?classId=${classId}&limit=500`),
+    enabled: !!classId,
+  });
+  const { siblingTermNames, hasSiblings } = useMemo(() => {
+    const names = new Set();
+    let siblings = false;
+    for (const f of (classFeesData?.fees || [])) {
+      if (String(f._id) === String(fee._id)) continue;
+      siblings = true;
+      for (const t of (f.terms || [])) names.add(t.name);
+    }
+    return { siblingTermNames: names, hasSiblings: siblings };
+  }, [classFeesData, fee._id]);
+
   const updateRow = (i, field, val) => setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: val } : r));
   const addRow = () => setRows(prev => [...prev, { termName: '', type: '', amount: '', discAmount: '', discReason: '', paidAmount: 0, isNew: true, custom: true }]);
   const removeRow = (i) => {
@@ -960,11 +979,12 @@ function EditFeeModal({ fee, onClose, onSuccess }) {
       }
       for (const r of rows) {
         const nameToUse = r.isNew ? r.type : r.termName;
+        const rowCustom = r.isNew || r.custom || (hasSiblings && !!r.termName && !siblingTermNames.has(r.termName));
         await api.put(`/fees/${fee._id}`, {
           termName: nameToUse,
           feeBreakdown: [{ type: r.type, amount: Number(r.amount) || 0 }],
           discount: { amount: Number(r.discAmount) || 0, reason: r.discReason },
-          custom: !!r.custom
+          custom: rowCustom
         });
       }
       toast.success('Fee updated!');
@@ -994,7 +1014,8 @@ function EditFeeModal({ fee, onClose, onSuccess }) {
           const net = Math.max(0, (Number(r.amount) || 0) - (Number(r.discAmount) || 0));
           // Per-student custom categories (added just for this student) stay editable
           // and deletable; class-wide categories are managed from "Add / Edit Fee Record".
-          const isCustom = r.isNew || r.custom;
+          // isNew = added this session, custom = persisted flag, sibling check = legacy fallback.
+          const isCustom = r.isNew || r.custom || (hasSiblings && !!r.termName && !siblingTermNames.has(r.termName));
           const tooLow = !isCustom && Number(r.amount) > 0 && Number(r.amount) < r.paidAmount;
           return (
             <div key={i} style={{ border: `1px solid ${isCustom ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, overflow: 'hidden' }}>
