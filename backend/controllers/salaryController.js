@@ -114,7 +114,9 @@ const generateSalary = async (req, res) => {
 
       const salary = await Salary.create({
         school: schoolId, employee: emp._id, month, year,
-        workingDays: divisor, presentDays, leaveDays: lopDays,
+        // Display the actual calendar working days (matches Attendance); the LOP
+        // divisor is applied separately to the per-day pay above.
+        workingDays: actualWorkingDays, presentDays, leaveDays: lopDays,
         earnings: { basic, hra, da, otherAllowances: other, overtime: 0, bonus: 0 },
         deductions: { pf, esi, tax: 0, loan: 0, lossOfPay: lop, other: 0 },
         grossSalary, totalDeductions, netSalary, slipNumber
@@ -267,7 +269,15 @@ const createSalaryRecord = async (req, res) => {
     const bonus = Number(earnings.bonus) || 0;
     const grossSalary = basic + hra + da + otherAllowances + overtime + bonus;
 
-    const wDays = Number(workingDays) || new Date(year, month, 0).getDate();
+    // Default to actual working days (matches Attendance) when not supplied.
+    let defaultWorkingDays;
+    {
+      const schoolDoc = await School.findById(schoolId).select('workingDays salaryConfig');
+      const satSchedule = schoolDoc?.salaryConfig?.empSaturdaySchedule || 'school_default';
+      const r = await getWorkingDaysForMonth(schoolId, Number(year), Number(month), schoolDoc?.workingDays || {}, satSchedule);
+      defaultWorkingDays = r.workingDays;
+    }
+    const wDays = Number(workingDays) || defaultWorkingDays || new Date(year, month, 0).getDate();
     const pDays = Math.min(Number(presentDays) || wDays, wDays);
     const lopDays = Math.max(0, wDays - pDays);
     const lop = lopDays > 0 && basic > 0 ? Math.round((basic / wDays) * lopDays) : 0;
@@ -323,7 +333,12 @@ const getAttendanceSummary = async (req, res) => {
       return res.status(400).json({ success: false, message: 'employeeId, month, year are required' });
     }
 
-    const workingDays = new Date(year, month, 0).getDate();
+    // Actual working days for the month (same basis as the Attendance module),
+    // not raw calendar days.
+    const schoolDoc = await School.findById(schoolId).select('workingDays salaryConfig');
+    const satSchedule = schoolDoc?.salaryConfig?.empSaturdaySchedule || 'school_default';
+    const { workingDays } = await getWorkingDaysForMonth(schoolId, Number(year), Number(month), schoolDoc?.workingDays || {}, satSchedule);
+
     const records = await Attendance.find({
       school: schoolId, type: 'employee',
       date: { $gte: new Date(year, month - 1, 1), $lt: new Date(year, month, 1) },
@@ -449,7 +464,8 @@ const recalculateSalary = async (req, res) => {
     const netSalary = grossSalary - totalDeductions;
 
     const updated = await Salary.findByIdAndUpdate(req.params.id, {
-      workingDays: divisor, presentDays, leaveDays: lopDays,
+      // Display actual working days (matches Attendance); divisor is LOP-only.
+      workingDays: actualWorkingDays, presentDays, leaveDays: lopDays,
       earnings: { basic, hra, da, otherAllowances: other, overtime: existing.earnings?.overtime || 0, bonus: existing.earnings?.bonus || 0 },
       deductions: { pf, esi, tax: existing.deductions?.tax || 0, loan: existing.deductions?.loan || 0, lossOfPay: lop, other: existing.deductions?.other || 0 },
       grossSalary, totalDeductions, netSalary
