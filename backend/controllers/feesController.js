@@ -127,16 +127,20 @@ const collectPayment = async (req, res) => {
     const discountList = Array.isArray(req.body.discounts)
       ? req.body.discounts
       : (discount && Number(discount.amount) > 0 && termName ? [{ termName, amount: discount.amount, reason: discount.reason }] : []);
+    const appliedDiscounts = [];
     for (const d of discountList) {
       if (!d || !d.termName || !(Number(d.amount) > 0)) continue;
       const term = fee.terms.find(t => t.name === d.termName);
-      if (term) applyDiscountToTerm(term, Number(d.amount) || 0, d.reason);
+      if (term) {
+        applyDiscountToTerm(term, Number(d.amount) || 0, d.reason);
+        appliedDiscounts.push({ termName: d.termName, amount: Number(d.amount) || 0, reason: d.reason || '' });
+      }
     }
 
     let receiptNumber = null;
     if (amt > 0) {
       receiptNumber = `RCP${Date.now()}`;
-      fee.payments.push({ termName: termName || null, amount: amt, method, date: new Date(), receiptNumber, collectedBy: req.user._id, remarks });
+      fee.payments.push({ termName: termName || null, amount: amt, method, date: new Date(), receiptNumber, collectedBy: req.user._id, remarks, discounts: appliedDiscounts });
       if (termName) {
         const term = fee.terms.find(t => t.name === termName);
         if (term) {
@@ -439,26 +443,34 @@ const reversePayment = async (req, res) => {
 
     const payment = fee.payments[paymentIdx];
 
+    // 1. Undo any discounts that were applied as part of this transaction.
+    for (const d of (payment.discounts || [])) {
+      const term = fee.terms.find(t => t.name === d.termName);
+      if (term && Number(d.amount) > 0) {
+        const newDisc = Math.max(0, (Number(term.discount?.amount) || 0) - (Number(d.amount) || 0));
+        term.discount = { amount: newDisc, reason: newDisc > 0 ? (term.discount?.reason || '') : '' };
+        term.netAmount = Math.max(0, (term.totalAmount || 0) - newDisc);
+      }
+    }
+
+    // 2. Reverse the paid amount.
     if (payment.termName) {
       const term = fee.terms.find(t => t.name === payment.termName);
-      if (term) {
-        term.paidAmount = Math.max(0, term.paidAmount - payment.amount);
-        term.pendingAmount = Math.max(0, term.netAmount - term.paidAmount);
-        term.status = term.paidAmount <= 0 ? 'pending' : term.pendingAmount <= 0 ? 'paid' : 'partial';
-      }
+      if (term) term.paidAmount = Math.max(0, term.paidAmount - payment.amount);
     } else {
       // No specific term — reverse from the last paid terms
       let remaining = payment.amount;
       for (let i = fee.terms.length - 1; i >= 0 && remaining > 0; i--) {
         const term = fee.terms[i];
         const reversing = Math.min(remaining, term.paidAmount);
-        if (reversing > 0) {
-          term.paidAmount -= reversing;
-          term.pendingAmount = Math.max(0, term.netAmount - term.paidAmount);
-          term.status = term.paidAmount <= 0 ? 'pending' : 'partial';
-          remaining -= reversing;
-        }
+        if (reversing > 0) { term.paidAmount -= reversing; remaining -= reversing; }
       }
+    }
+
+    // 3. Recompute pending + status for every term (canonical logic).
+    for (const term of fee.terms) {
+      term.pendingAmount = Math.max(0, (term.netAmount || 0) - (term.paidAmount || 0));
+      term.status = term.pendingAmount <= 0 ? 'paid' : term.paidAmount > 0 ? 'partial' : 'pending';
     }
 
     fee.payments.splice(paymentIdx, 1);

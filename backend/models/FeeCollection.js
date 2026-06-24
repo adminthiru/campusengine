@@ -53,7 +53,9 @@ const feeCollectionSchema = new mongoose.Schema({
     razorpayPaymentId: String,
     receiptNumber: String,
     collectedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    remarks: String
+    remarks: String,
+    // Discounts applied as part of this transaction, so a reversal can undo them too.
+    discounts: [{ termName: String, amount: Number, reason: String }]
   }],
 
   paidAmount: { type: Number, default: 0 },
