@@ -719,7 +719,7 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
               <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer' }}>
                 <input type="radio" name="term" checked={selectedTerm === 'all'} onChange={() => handleSelectTerm('all')} />
                 <div style={{ flex: 1 }}>
-                  <div className="text-14-semibold" style={{ color: selectedTerm === 'all' ? 'var(--primary)' : undefined }}>Pay All Pending</div>
+                  <div className="text-14-semibold" style={{ color: selectedTerm === 'all' ? 'var(--primary)' : undefined }}>Pay All</div>
                   <div className="text-12-regular" style={{ color: 'var(--text-muted)' }}>{pendingTerms.map(t => t.name).join(' + ')}</div>
                 </div>
                 <span className="text-14-semibold" style={{ color: selectedTerm === 'all' ? 'var(--primary)' : undefined }}>
