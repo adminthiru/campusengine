@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { Select as AntSelect } from 'antd';
-import { Plus, Download, MessageSquare, CreditCard, IndianRupee, Trash2, Edit2, Users, User, RotateCcw, Tag, RefreshCw } from 'lucide-react';
+import { Plus, Download, MessageSquare, CreditCard, IndianRupee, Trash2, Edit2, Users, User, RotateCcw, Tag, RefreshCw, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useYear } from '../../store/YearContext';
@@ -32,6 +32,7 @@ export default function Fees() {
   const [viewFee, setViewFee] = useState(null);
   const [editFee, setEditFee] = useState(null);
   const [reverseTarget, setReverseTarget] = useState(null); // { feeId, paymentId, amount, termName }
+  const [clearDiscTarget, setClearDiscTarget] = useState(null); // { feeId, termName, amount }
   const [selected, setSelected] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -160,6 +161,17 @@ export default function Fees() {
       setReverseTarget(null);
     },
     onError: (err) => { toast.error(err.message || 'Failed to reverse'); setReverseTarget(null); }
+  });
+
+  const clearDiscMutation = useMutation({
+    mutationFn: ({ feeId, termName }) => api.post(`/fees/${feeId}/clear-discount`, { termName }),
+    onSuccess: (res) => {
+      qc.invalidateQueries(['fees']);
+      setViewFee(res.fee);
+      toast.success('Discount removed');
+      setClearDiscTarget(null);
+    },
+    onError: (err) => { toast.error(err.message || 'Failed to remove discount'); setClearDiscTarget(null); }
   });
 
   const deleteSelected = useMutation({
@@ -448,7 +460,16 @@ export default function Fees() {
                           <td className="text-14-medium">{t.name}</td>
                           <td className="text-14-regular" style={{ textAlign: 'right' }}>₹{(t.totalAmount || 0).toLocaleString('en-IN')}</td>
                           <td className="text-13-regular" style={{ textAlign: 'right', color: t.discount?.amount > 0 ? '#16a34a' : 'var(--text-muted)' }}>
-                            {t.discount?.amount > 0 ? `−₹${t.discount.amount.toLocaleString('en-IN')}` : '—'}
+                            {t.discount?.amount > 0 ? (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                                <span>−₹{t.discount.amount.toLocaleString('en-IN')}</span>
+                                <button title="Remove this discount"
+                                  onClick={() => setClearDiscTarget({ feeId: viewFee._id, termName: t.name, amount: t.discount.amount })}
+                                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, borderRadius: 4, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', padding: 0 }}>
+                                  <X size={11} />
+                                </button>
+                              </div>
+                            ) : '—'}
                             {t.discount?.amount > 0 && t.discount?.reason && (
                               <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginTop: 2, fontStyle: 'italic' }}>
                                 {t.discount.reason}
@@ -509,6 +530,17 @@ export default function Fees() {
         danger
         onConfirm={() => reverseMutation.mutate({ feeId: reverseTarget.feeId, paymentId: reverseTarget.paymentId })}
         onClose={() => setReverseTarget(null)}
+      />
+
+      {/* Clear / remove a term discount */}
+      <ConfirmDialog
+        open={!!clearDiscTarget}
+        title="Remove Discount"
+        message={clearDiscTarget ? `Remove the ₹${clearDiscTarget.amount.toLocaleString('en-IN')} discount on ${clearDiscTarget.termName}? The term's net amount and pending will be recalculated.` : ''}
+        confirmLabel="Remove"
+        danger
+        onConfirm={() => clearDiscMutation.mutate({ feeId: clearDiscTarget.feeId, termName: clearDiscTarget.termName })}
+        onClose={() => setClearDiscTarget(null)}
       />
     </div>
   );

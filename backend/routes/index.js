@@ -770,6 +770,7 @@ router.post('/fees/send-reminder', protect, checkSubscription, authorize('admin'
 router.put('/fees/class-structure', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.updateClassFeeStructure);
 router.put('/fees/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.updateFeeRecord);
 router.delete('/fees/:id/payment/:paymentId', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.reversePayment);
+router.post('/fees/:id/clear-discount', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.clearTermDiscount);
 router.delete('/fees/:id/term', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.deleteFeeTerm);
 router.delete('/fees/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.deleteFeeRecord);
 

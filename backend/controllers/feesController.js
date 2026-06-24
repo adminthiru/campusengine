@@ -483,6 +483,35 @@ const reversePayment = async (req, res) => {
   }
 };
 
+// Clear a discount on a term (leftover / standalone discounts with no payment to reverse)
+const clearTermDiscount = async (req, res) => {
+  try {
+    const { termName } = req.body;
+    const fee = await FeeCollection.findOne({ _id: req.params.id, school: req.user.school });
+    if (!fee) return res.status(404).json({ success: false, message: 'Fee record not found' });
+
+    const term = fee.terms.find(t => t.name === termName);
+    if (!term) return res.status(404).json({ success: false, message: 'Term not found' });
+
+    term.discount = { amount: 0, reason: '' };
+    term.netAmount = term.totalAmount || 0;
+    term.pendingAmount = Math.max(0, term.netAmount - (term.paidAmount || 0));
+    term.status = term.pendingAmount <= 0 ? 'paid' : term.paidAmount > 0 ? 'partial' : 'pending';
+
+    // Drop any recorded discount for this term from existing payments so a later
+    // reversal won't try to subtract a discount that's already gone.
+    for (const p of fee.payments) {
+      if (Array.isArray(p.discounts)) p.discounts = p.discounts.filter(d => d.termName !== termName);
+    }
+
+    recalcAggregates(fee);
+    await fee.save();
+    res.json({ success: true, fee });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // Update fee structure for all students in a class
 const updateClassFeeStructure = async (req, res) => {
   try {
@@ -711,4 +740,4 @@ const syncClassStudents = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
-module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, createRazorpayOrder, verifyRazorpayPayment, getFees, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm, getUnsyncedCount, syncClassStudents, applyClassFeeStructure };
+module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, clearTermDiscount, createRazorpayOrder, verifyRazorpayPayment, getFees, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm, getUnsyncedCount, syncClassStudents, applyClassFeeStructure };
