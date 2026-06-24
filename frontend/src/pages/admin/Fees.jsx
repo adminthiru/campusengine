@@ -728,7 +728,7 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
               </label>
               {selectedTerm === 'all' && (
                 <>
-                  <div style={{ display: 'flex', gap: 8, padding: '8px 14px 0', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 8, padding: '8px 14px 10px', alignItems: 'center' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 64, flexShrink: 0 }}>Discount</span>
                     <input className="form-control no-spinner" type="number" min={0} value={allDiscount}
                       onChange={e => setAllDiscountVal(e.target.value)} onWheel={e => e.currentTarget.blur()} placeholder="₹0" style={{ flex: 1, fontSize: 13 }} />
