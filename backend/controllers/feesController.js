@@ -337,8 +337,13 @@ const getReceiptPDF = async (req, res) => {
       paymentMethod: lastPayment?.method || 'cash',
     };
     const pdf = await generateFeeReceipt(data, school.toObject());
+    const isStatement = !(data.paidAmount > 0);
+    const safeName = (data.studentName || 'student').replace(/[^a-z0-9]+/gi, '_');
+    const fileName = isStatement
+      ? `Fee_Statement_${safeName}.pdf`
+      : `Receipt_${data.receiptNumber}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=Receipt_${data.receiptNumber}.pdf`);
+    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
     res.send(pdf);
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

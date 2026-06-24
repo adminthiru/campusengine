@@ -119,12 +119,15 @@ const generateFeeReceipt = (feeData, schoolData) => {
     const light   = lighten(primary);
     const W = doc.page.width, L = 50, R = W - 50;
 
-    let y = drawHeader(doc, schoolData, 'FEE RECEIPT');
+    // When nothing has been paid yet, this is a pending statement, not a receipt.
+    const isStatement = !(Number(feeData.paidAmount) > 0);
 
-    // Receipt meta row
+    let y = drawHeader(doc, schoolData, isStatement ? 'FEE STATEMENT' : 'FEE RECEIPT');
+
+    // Meta row
     doc.rect(L, y, R - L, 28).fill('#f8fafc').stroke('#e2e8f0');
     doc.fillColor('#374151').fontSize(9).font('Helvetica-Bold')
-      .text(`Receipt No: ${feeData.receiptNumber || '—'}`, L + 10, y + 9);
+      .text(isStatement ? 'Fee Statement' : `Receipt No: ${feeData.receiptNumber || '—'}`, L + 10, y + 9);
     doc.font('Helvetica').fillColor('#64748b')
       .text(`Date: ${new Date(feeData.date || Date.now()).toLocaleDateString('en-IN')}`, R - 150, y + 9, { width: 140, align: 'right' });
     y += 38;
@@ -196,9 +199,14 @@ const generateFeeReceipt = (feeData, schoolData) => {
     });
     y += 54;
 
-    // Payment method
-    doc.fillColor('#64748b').fontSize(9).font('Helvetica')
-      .text(`Payment Method: ${(feeData.paymentMethod || '').replace(/_/g,' ')}`, L, y);
+    // Payment method (only meaningful once something is paid)
+    if (!isStatement) {
+      doc.fillColor('#64748b').fontSize(9).font('Helvetica')
+        .text(`Payment Method: ${(feeData.paymentMethod || '').replace(/_/g,' ')}`, L, y);
+    } else {
+      doc.fillColor('#991b1b').fontSize(9).font('Helvetica-Bold')
+        .text(`Amount Payable: Rs. ${Number(feeData.pendingAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, L, y);
+    }
 
     drawFooter(doc, schoolData);
     doc.end();

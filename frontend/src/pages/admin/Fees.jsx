@@ -316,9 +316,7 @@ export default function Fees() {
                     <td onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4 }}>
                         <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setEditFee(fee)} title="Edit fee structure"><Edit2 size={14} /></button>
-                        {fee.paidAmount > 0 && (
-                          <button className="btn btn-secondary btn-sm btn-icon" onClick={() => downloadReceipt(fee._id)} title="Download receipt"><Download size={14} /></button>
-                        )}
+                        <button className="btn btn-secondary btn-sm btn-icon" onClick={() => downloadReceipt(fee._id)} title={fee.paidAmount > 0 ? 'Download receipt' : 'Download fee statement'}><Download size={14} /></button>
                         {fee.pendingAmount > 0 && (
                           <button className="btn btn-success btn-sm" onClick={() => setShowCollect(fee)} style={{ padding: '4px 12px', fontSize: 12 }}>Collect Fee</button>
                         )}
