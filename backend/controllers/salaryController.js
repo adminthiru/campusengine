@@ -159,6 +159,48 @@ const getSalaries = async (req, res) => {
 
     // Hide orphaned records whose employee was deleted (populate -> null).
     const visible = salaries.filter(s => s.employee);
+
+    // For pending records, show the real working days (same basis as the
+    // Attendance module) and present days counted from attendance — so the list
+    // is accurate regardless of how/when a record was created. Paid records keep
+    // their stored snapshot.
+    const pending = visible.filter(s => s.status !== 'paid');
+    if (pending.length) {
+      const schoolDoc = await School.findById(req.user.school).select('workingDays salaryConfig');
+      const cfg = schoolDoc?.salaryConfig || {};
+      const satSchedule = cfg.empSaturdaySchedule || 'school_default';
+      const halfDayEnabled = cfg.halfDayEnabled !== false;
+      const halfDayFactor = cfg.halfDayDeductionFactor ?? 0.5;
+
+      const monthKeys = [...new Set(pending.map(s => `${s.year}_${s.month}`))];
+      const wdByMonth = {}, holByMonth = {}, attByMonth = {};
+      for (const key of monthKeys) {
+        const [y, m] = key.split('_').map(Number);
+        const { workingDays } = await getWorkingDaysForMonth(req.user.school, y, m, schoolDoc?.workingDays || {}, satSchedule);
+        wdByMonth[key]  = workingDays;
+        holByMonth[key] = await getHolidaysForMonth(req.user.school, y, m);
+        attByMonth[key] = await Attendance.find({
+          school: req.user.school, type: 'employee',
+          date: { $gte: new Date(y, m - 1, 1), $lt: new Date(y, m, 1) },
+        });
+      }
+      for (const s of pending) {
+        const key = `${s.year}_${s.month}`;
+        s.workingDays = wdByMonth[key];
+        const holidays = holByMonth[key];
+        let present = 0;
+        for (const a of (attByMonth[key] || [])) {
+          const dateStr = new Date(a.date).toISOString().slice(0, 10);
+          if (holidays.has(dateStr)) continue; // holiday — not counted
+          const rec = a.records.find(r => r.employee?.toString() === s.employee._id.toString());
+          if (!rec) continue;
+          if (rec.status === 'present') present += 1;
+          else if (rec.status === 'half_day' && halfDayEnabled) present += halfDayFactor;
+        }
+        s.presentDays = present;
+      }
+    }
+
     res.json({ success: true, salaries: visible });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
