@@ -598,6 +598,21 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
     });
   };
 
+  // "Pay All" discount — a lump sum distributed across pending terms in order.
+  const [allReason, setAllReason] = useState('');
+  const totalDiscount = pendingTerms.reduce((s, t) => s + discOf(t.name), 0);
+  const applyAllDiscount = (amountVal, reasonVal) => {
+    let remaining = Math.max(0, Number(amountVal) || 0);
+    const next = {};
+    for (const t of pendingTerms) {
+      const give = Math.min(remaining, t.pendingAmount);
+      if (give > 0) next[t.name] = { amount: give, reason: reasonVal || '' };
+      remaining -= give;
+    }
+    setDiscounts(next);
+    setPayAmount(String(computeBase('all', next)));
+  };
+
   const enteredAmount = Math.max(0, parseFloat(payAmount) || 0);
   const isPartial = enteredAmount < maxAmount && enteredAmount > 0;
   const isValid = (enteredAmount > 0 || scopeDisc > 0) && enteredAmount <= maxAmount;
@@ -703,7 +718,21 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
                   ₹{computeBase('all').toLocaleString('en-IN')}
                 </span>
               </label>
-              {selectedTerm === 'all' && <AmountInput pendingAmt={computeBase('all')} />}
+              {selectedTerm === 'all' && (
+                <>
+                  <div style={{ display: 'flex', gap: 8, padding: '8px 14px 0', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 64, flexShrink: 0 }}>Discount</span>
+                    <input className="form-control" type="number" min={0} value={totalDiscount || ''}
+                      onChange={e => applyAllDiscount(e.target.value, allReason)} placeholder="₹0" style={{ flex: 1, fontSize: 13 }} />
+                    <input className="form-control" value={allReason}
+                      onChange={e => { setAllReason(e.target.value); applyAllDiscount(totalDiscount, e.target.value); }} placeholder="Reason (e.g. Merit)" style={{ flex: 2, fontSize: 13 }} />
+                  </div>
+                  {totalDiscount > 0 && (
+                    <div style={{ fontSize: 11, color: '#16a34a', padding: '4px 14px 0' }}>−₹{totalDiscount.toLocaleString('en-IN')} discount spread across terms</div>
+                  )}
+                  <AmountInput pendingAmt={computeBase('all')} />
+                </>
+              )}
             </div>
           )}
 
