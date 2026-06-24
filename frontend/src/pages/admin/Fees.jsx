@@ -574,16 +574,21 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
     return String(pendingTerms.reduce((s, t) => s + t.pendingAmount, 0));
   });
 
+  // "Pay All" discount — kept SEPARATE from the per-term discounts so it never
+  // bleeds into the individual term rows. Distributed across terms only at submit.
+  const [allDiscount, setAllDiscount] = useState('');
+  const [allReason, setAllReason] = useState('');
+  const allDiscNum = Math.max(0, Number(allDiscount) || 0);
+  const sumPending = pendingTerms.reduce((s, t) => s + t.pendingAmount, 0);
+
   const discOf = (name, src = discounts) => Math.max(0, Number(src[name]?.amount) || 0);
   const effPending = (t, src = discounts) => Math.max(0, t.pendingAmount - discOf(t.name, src));
-  const computeBase = (term, src = discounts) => term === 'all'
-    ? pendingTerms.reduce((s, t) => s + effPending(t, src), 0)
+  const computeBase = (term, src = discounts, allD = allDiscNum) => term === 'all'
+    ? Math.max(0, sumPending - allD)
     : effPending(fee.terms?.find(x => x.name === term) || { pendingAmount: 0, name: term }, src);
   const basePending = computeBase(selectedTerm);
   const maxAmount = basePending;
-  const scopeDisc = selectedTerm === 'all'
-    ? pendingTerms.reduce((s, t) => s + discOf(t.name), 0)
-    : discOf(selectedTerm);
+  const scopeDisc = selectedTerm === 'all' ? allDiscNum : discOf(selectedTerm);
 
   const handleSelectTerm = (val) => {
     setSelectedTerm(val);
@@ -593,24 +598,15 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
   const setTermDiscount = (name, field, val) => {
     setDiscounts(prev => {
       const next = { ...prev, [name]: { ...prev[name], [field]: val } };
-      if (field === 'amount') setPayAmount(String(computeBase(selectedTerm, next)));
+      // Only the per-term row drives the amount when that term is selected.
+      if (field === 'amount' && selectedTerm === name) setPayAmount(String(computeBase(name, next)));
       return next;
     });
   };
 
-  // "Pay All" discount — a lump sum distributed across pending terms in order.
-  const [allReason, setAllReason] = useState('');
-  const totalDiscount = pendingTerms.reduce((s, t) => s + discOf(t.name), 0);
-  const applyAllDiscount = (amountVal, reasonVal) => {
-    let remaining = Math.max(0, Number(amountVal) || 0);
-    const next = {};
-    for (const t of pendingTerms) {
-      const give = Math.min(remaining, t.pendingAmount);
-      if (give > 0) next[t.name] = { amount: give, reason: reasonVal || '' };
-      remaining -= give;
-    }
-    setDiscounts(next);
-    setPayAmount(String(computeBase('all', next)));
+  const setAllDiscountVal = (val) => {
+    setAllDiscount(val);
+    if (selectedTerm === 'all') setPayAmount(String(Math.max(0, sumPending - Math.max(0, Number(val) || 0))));
   };
 
   const enteredAmount = Math.max(0, parseFloat(payAmount) || 0);
@@ -621,9 +617,20 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
     if (!isValid) return toast.error(`Enter an amount up to ₹${maxAmount.toLocaleString('en-IN')}`);
     setLoading(true);
     try {
-      const discList = Object.entries(discounts)
-        .filter(([, d]) => Number(d?.amount) > 0)
-        .map(([termName, d]) => ({ termName, amount: Number(d.amount) || 0, reason: d.reason || '' }));
+      let discList = [];
+      if (selectedTerm === 'all') {
+        // Distribute the single "Pay All" discount across pending terms in order.
+        let remaining = allDiscNum;
+        for (const t of pendingTerms) {
+          if (remaining <= 0) break;
+          const give = Math.min(remaining, t.pendingAmount);
+          if (give > 0) discList.push({ termName: t.name, amount: give, reason: allReason || '' });
+          remaining -= give;
+        }
+      } else {
+        const da = discOf(selectedTerm);
+        if (da > 0) discList = [{ termName: selectedTerm, amount: da, reason: discounts[selectedTerm]?.reason || '' }];
+      }
       await api.post('/fees/collect', {
         feeId: fee._id,
         termName: selectedTerm === 'all' ? undefined : selectedTerm,
@@ -722,13 +729,13 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
                 <>
                   <div style={{ display: 'flex', gap: 8, padding: '8px 14px 0', alignItems: 'center' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 64, flexShrink: 0 }}>Discount</span>
-                    <input className="form-control" type="number" min={0} value={totalDiscount || ''}
-                      onChange={e => applyAllDiscount(e.target.value, allReason)} placeholder="₹0" style={{ flex: 1, fontSize: 13 }} />
+                    <input className="form-control" type="number" min={0} value={allDiscount}
+                      onChange={e => setAllDiscountVal(e.target.value)} placeholder="₹0" style={{ flex: 1, fontSize: 13 }} />
                     <input className="form-control" value={allReason}
-                      onChange={e => { setAllReason(e.target.value); applyAllDiscount(totalDiscount, e.target.value); }} placeholder="Reason (e.g. Merit)" style={{ flex: 2, fontSize: 13 }} />
+                      onChange={e => setAllReason(e.target.value)} placeholder="Reason (e.g. Merit)" style={{ flex: 2, fontSize: 13 }} />
                   </div>
-                  {totalDiscount > 0 && (
-                    <div style={{ fontSize: 11, color: '#16a34a', padding: '4px 14px 0' }}>−₹{totalDiscount.toLocaleString('en-IN')} discount spread across terms</div>
+                  {allDiscNum > 0 && (
+                    <div style={{ fontSize: 11, color: '#16a34a', padding: '4px 14px 0' }}>−₹{allDiscNum.toLocaleString('en-IN')} discount spread across terms</div>
                   )}
                   {renderAmountInput(computeBase('all'))}
                 </>
