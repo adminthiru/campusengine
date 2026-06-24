@@ -642,7 +642,7 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
     }
   };
 
-  const AmountInput = ({ pendingAmt }) => (
+  const renderAmountInput = (pendingAmt) => (
     <div style={{ padding: '10px 14px', borderTop: '1px solid #dbeafe', background: '#f0f7ff' }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <div style={{ flex: 1 }}>
@@ -730,7 +730,7 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
                   {totalDiscount > 0 && (
                     <div style={{ fontSize: 11, color: '#16a34a', padding: '4px 14px 0' }}>−₹{totalDiscount.toLocaleString('en-IN')} discount spread across terms</div>
                   )}
-                  <AmountInput pendingAmt={computeBase('all')} />
+                  {renderAmountInput(computeBase('all'))}
                 </>
               )}
             </div>
@@ -764,7 +764,7 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
               {d > 0 && (
                 <div style={{ fontSize: 11, color: '#16a34a', padding: '0 14px 8px' }}>−₹{d.toLocaleString('en-IN')} discount · pending now ₹{effPending(t).toLocaleString('en-IN')}</div>
               )}
-              {selectedTerm === t.name && <AmountInput pendingAmt={effPending(t)} />}
+              {selectedTerm === t.name && renderAmountInput(effPending(t))}
             </div>
             );
           })}
