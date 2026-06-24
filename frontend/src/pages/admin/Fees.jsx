@@ -655,12 +655,13 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Amount to Collect (₹)</div>
           <input
-            className="form-control"
+            className="form-control no-spinner"
             type="number"
             min={1}
             max={pendingAmt}
             value={payAmount}
             onChange={e => setPayAmount(e.target.value)}
+            onWheel={e => e.currentTarget.blur()}
             style={{ fontSize: 15, fontWeight: 600, textAlign: 'right' }}
             placeholder={`Max ₹${pendingAmt.toLocaleString('en-IN')}`}
             autoFocus
@@ -729,8 +730,8 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
                 <>
                   <div style={{ display: 'flex', gap: 8, padding: '8px 14px 0', alignItems: 'center' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 64, flexShrink: 0 }}>Discount</span>
-                    <input className="form-control" type="number" min={0} value={allDiscount}
-                      onChange={e => setAllDiscountVal(e.target.value)} placeholder="₹0" style={{ flex: 1, fontSize: 13 }} />
+                    <input className="form-control no-spinner" type="number" min={0} value={allDiscount}
+                      onChange={e => setAllDiscountVal(e.target.value)} onWheel={e => e.currentTarget.blur()} placeholder="₹0" style={{ flex: 1, fontSize: 13 }} />
                     <input className="form-control" value={allReason}
                       onChange={e => setAllReason(e.target.value)} placeholder="Reason (e.g. Merit)" style={{ flex: 2, fontSize: 13 }} />
                   </div>
@@ -763,8 +764,8 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
               {/* Per-category discount */}
               <div style={{ display: 'flex', gap: 8, padding: '0 14px 10px', alignItems: 'center' }}>
                 <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 64, flexShrink: 0 }}>Discount</span>
-                <input className="form-control" type="number" min={0} value={discounts[t.name]?.amount || ''}
-                  onChange={e => setTermDiscount(t.name, 'amount', e.target.value)} placeholder="₹0" style={{ flex: 1, fontSize: 13 }} />
+                <input className="form-control no-spinner" type="number" min={0} value={discounts[t.name]?.amount || ''}
+                  onChange={e => setTermDiscount(t.name, 'amount', e.target.value)} onWheel={e => e.currentTarget.blur()} placeholder="₹0" style={{ flex: 1, fontSize: 13 }} />
                 <input className="form-control" value={discounts[t.name]?.reason || ''}
                   onChange={e => setTermDiscount(t.name, 'reason', e.target.value)} placeholder="Reason (e.g. Merit)" style={{ flex: 2, fontSize: 13 }} />
               </div>

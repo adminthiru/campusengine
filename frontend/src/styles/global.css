@@ -879,3 +879,9 @@ tbody tr:last-child td { border-bottom: none; }
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
   .page-content { padding: 16px; }
 }
+
+/* Hide the up/down spinner arrows on number inputs that opt in via .no-spinner.
+   Pair with onWheel blur in JS so scrolling can't change the value by mistake. */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.no-spinner { -moz-appearance: textfield; appearance: textfield; }
