@@ -52,8 +52,9 @@ const generateSalary = async (req, res) => {
       const existing = await Salary.findOne({ school: schoolId, employee: emp._id, month, year });
       if (existing) continue;
 
-      // Load school salary config
-      const school = await School.findById(schoolId).select('salaryConfig');
+      // Load school salary config + working-days policy (needed for the
+      // actual-working-days calc to match Attendance and getSalaries).
+      const school = await School.findById(schoolId).select('salaryConfig workingDays');
       const cfg = school?.salaryConfig || {};
       const lopMethod           = cfg.lopMethod            || 'calendar_days';
       const workingDaysPerMonth = cfg.workingDaysPerMonth  || 26;
@@ -455,8 +456,9 @@ const recalculateSalary = async (req, res) => {
     const emp = await Employee.findById(empId);
     if (!emp) return res.status(404).json({ success: false, message: 'Employee not found' });
 
-    // Load salary config
-    const school = await School.findById(schoolId).select('salaryConfig');
+    // Load salary config + working-days policy (so actual working days match
+    // Attendance and getSalaries, keeping needsRecalc stable after a recalc).
+    const school = await School.findById(schoolId).select('salaryConfig workingDays');
     const cfg = school?.salaryConfig || {};
     const lopMethod           = cfg.lopMethod            || 'calendar_days';
     const workingDaysPerMonth = cfg.workingDaysPerMonth  || 26;
