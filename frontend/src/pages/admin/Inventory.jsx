@@ -55,6 +55,7 @@ export default function Inventory() {
   const [search, setSearch] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
@@ -95,13 +96,14 @@ export default function Inventory() {
 
   // Items within the selected category (drill-in)
   const { data, isLoading } = useQuery({
-    queryKey: ['inventory', selectedCategory, page, search, locationFilter, statusFilter],
+    queryKey: ['inventory', selectedCategory, page, search, locationFilter, statusFilter, typeFilter],
     queryFn: () => {
       const params = new URLSearchParams({ page, limit: 20 });
       params.set('category', selectedCategory);
       if (search) params.set('search', search);
       if (locationFilter) params.set('location', locationFilter);
       if (statusFilter) params.set('status', statusFilter);
+      if (typeFilter) params.set('type', typeFilter);
       return api.get(`/inventory?${params}`);
     },
     enabled: tab === 'items' && !!selectedCategory,
@@ -161,7 +163,7 @@ export default function Inventory() {
 
   const allSelected = items.length > 0 && items.every(i => selected.includes(i._id));
   const selectedRepairable = items.filter(i => selected.includes(i._id) && i.status !== 'in_repair' && i.status !== 'disposed');
-  const hasFilters = search || locationFilter || statusFilter;
+  const hasFilters = search || locationFilter || statusFilter || typeFilter;
 
   return (
     <div>
@@ -237,10 +239,13 @@ export default function Inventory() {
           </div>
           <div className="filter-bar">
             <SearchInput value={search} onChange={v => { setSearch(v); setPage(1); }} placeholder="Search by name, code or serial..." />
+            <AntSelect style={{ minWidth: 150 }} value={typeFilter || undefined} placeholder="All Types" allowClear
+              onChange={v => { setTypeFilter(v ?? ''); setPage(1); }}
+              options={[{ value: 'asset', label: 'Assets' }, { value: 'consumable', label: 'Consumables' }]} />
             <AntSelect style={{ minWidth: 140 }} value={statusFilter || undefined} placeholder="All Status" allowClear
               onChange={v => { setStatusFilter(v ?? ''); setPage(1); }} options={STATUS_OPTIONS} />
             {hasFilters && (
-              <button className="btn btn-secondary btn-sm" onClick={() => { setSearch(''); setStatusFilter(''); setPage(1); }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setSearch(''); setStatusFilter(''); setTypeFilter(''); setPage(1); }}>
                 <X size={14} /> Clear
               </button>
             )}

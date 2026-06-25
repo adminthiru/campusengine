@@ -2388,11 +2388,14 @@ router.get('/inventory/repairs', protect, checkSubscription, authorize(...INVENT
 
 router.get('/inventory', protect, checkSubscription, authorize(...INVENTORY_ROLES), async (req, res) => {
   try {
-    const { category, location, status, search, page = 1, limit = 20 } = req.query;
+    const { category, location, status, type, search, page = 1, limit = 20 } = req.query;
     const query = { school: req.user.school };
     if (category) query.category = category;
     if (location) query.location = location;
     if (status) query.status = status;
+    // Asset vs consumable. Treat legacy items (no type stored) as assets.
+    if (type === 'asset') query.type = { $ne: 'consumable' };
+    else if (type === 'consumable') query.type = 'consumable';
     if (search) {
       const rx = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
       query.$or = [{ name: rx }, { itemCode: rx }, { serialNumber: rx }, { assetTag: rx }];
