@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { Select as AntSelect, DatePicker } from 'antd';
 import dayjs from 'dayjs';
-import { Plus, Trash2, Edit2, DoorOpen, Users, Clock, BellRing, LogOut, Phone, Mail, X, CheckCircle2, FileText } from 'lucide-react';
+import { Plus, Trash2, Edit2, DoorOpen, Users, Clock, BellRing, LogOut, Phone, Mail, X, CheckCircle2, FileText, User, Tag, GraduationCap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, Pagination, SearchInput, PageLoader, EmptyState, StatCard, FormRow } from '../../components/ui';
@@ -497,6 +497,58 @@ function ActivityTimeline({ activities }) {
   );
 }
 
+// ── Detail-tab presentational helpers ───────────────────────────────────────────
+function StatTile({ icon: Icon, color, bg, label, value }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: '#fff' }}>
+      <div style={{ width: 34, height: 34, borderRadius: 9, background: bg, color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon size={17} />
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{label}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function DetailSection({ title, children }) {
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px', background: '#fff' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>{title}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{children}</div>
+    </div>
+  );
+}
+
+function IconField({ icon: Icon, label, value, children }) {
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+      <div style={{ width: 30, height: 30, borderRadius: 8, background: '#f1f5f9', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon size={15} />
+      </div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500, marginBottom: 2 }}>{label}</div>
+        {children || <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', wordBreak: 'break-word' }}>{value}</div>}
+      </div>
+    </div>
+  );
+}
+
+function TextBlock({ label, value }) {
+  const empty = !value || value === '—';
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500, marginBottom: 5 }}>{label}</div>
+      {empty ? (
+        <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>—</div>
+      ) : (
+        <div style={{ fontSize: 14, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', lineHeight: 1.5 }}>{value}</div>
+      )}
+    </div>
+  );
+}
+
 // ── Detail Modal (tabbed: details + activity log) ───────────────────────────────
 function VisitDetailModal({ id, onClose, onEdit, onCheckout, onCompleteFollowUp, onCheckInAgain }) {
   const { data, isLoading } = useQuery({ queryKey: ['visit', id], queryFn: () => api.get(`/visits/${id}`) });
@@ -507,33 +559,8 @@ function VisitDetailModal({ id, onClose, onEdit, onCheckout, onCompleteFollowUp,
 
   const pendingFollowUp = v?.followUpRequired && v?.status !== 'cancelled';
   const initials = (v?.visitorName || '?').trim().split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase();
-
-  const sections = v ? [
-    { title: 'Contact', items: [
-      { label: 'Phone', value: v.phone },
-      { label: 'Email', value: v.email || '—' },
-      { label: 'No. of Visitors', value: v.numberOfVisitors },
-    ] },
-    { title: 'Visit', items: [
-      { label: 'Purpose', value: metaFor(v.purpose)?.label || '—' },
-      { label: 'Attended By', value: v.attendedBy?.name || '—' },
-      { label: 'Related Student', value: v.relatedStudent ? `${v.relatedStudent.name}${v.relatedStudent.admissionNumber ? ` (${v.relatedStudent.admissionNumber})` : ''}` : '—' },
-      { label: 'Reason', value: v.purposeDetail || '—', full: true },
-    ] },
-    { title: 'Timeline', items: [
-      { label: 'Check-in', value: v.checkInTime ? format(new Date(v.checkInTime), 'dd MMM yyyy, hh:mm a') : '—' },
-      { label: 'Check-out', value: v.checkOutTime ? format(new Date(v.checkOutTime), 'dd MMM yyyy, hh:mm a') : '—' },
-      { label: 'Follow-up', value: v.followUpRequired ? `Pending · ${v.followUpDate ? format(new Date(v.followUpDate), 'dd MMM yyyy') : 'date not set'}` : 'None pending' },
-    ] },
-    { title: 'Notes', items: [
-      { label: 'Outcome', value: v.outcome || '—', full: true },
-      { label: 'Remarks', value: v.remarks || '—', full: true },
-    ] },
-  ] : [];
-
-  const labelStyle = { fontSize: 12, color: 'var(--text-secondary)', marginBottom: 3, fontWeight: 500 };
-  const valueStyle = { fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', margin: 0, wordBreak: 'break-word', whiteSpace: 'pre-wrap' };
-  const headStyle = { fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 };
+  const relatedStudent = v?.relatedStudent
+    ? `${v.relatedStudent.name}${v.relatedStudent.admissionNumber ? ` (${v.relatedStudent.admissionNumber})` : ''}` : '—';
 
   return (
     <Modal open onClose={onClose} title="Visit Details" size="lg"
@@ -579,36 +606,52 @@ function VisitDetailModal({ id, onClose, onEdit, onCheckout, onCompleteFollowUp,
           </div>
 
           {tab === 'details' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {sections.map(sec => (
-                <div key={sec.title}>
-                  <div style={headStyle}>{sec.title}</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 24px' }}>
-                    {sec.items.map(({ label, value, full }) => (
-                      <div key={label} style={full ? { gridColumn: '1 / -1' } : {}}>
-                        <p style={labelStyle}>{label}</p>
-                        <p style={valueStyle}>{value}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Timeline at a glance */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+                <StatTile icon={DoorOpen} color="#1a56e8" bg="#eff6ff" label="Checked In"
+                  value={v.checkInTime ? format(new Date(v.checkInTime), 'dd MMM, hh:mm a') : '—'} />
+                <StatTile icon={LogOut} color="#16a34a" bg="#f0fdf4" label="Checked Out"
+                  value={v.checkOutTime ? format(new Date(v.checkOutTime), 'dd MMM, hh:mm a') : 'Not yet'} />
+                <StatTile icon={BellRing} color="#d97706" bg="#fffbeb" label="Follow-up"
+                  value={v.followUpRequired ? (v.followUpDate ? format(new Date(v.followUpDate), 'dd MMM yyyy') : 'Pending') : 'None'} />
+              </div>
+
+              {/* Contact + Visit */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <DetailSection title="Contact">
+                  <IconField icon={Phone} label="Phone" value={v.phone} />
+                  <IconField icon={Mail} label="Email" value={v.email || '—'} />
+                  <IconField icon={Users} label="No. of Visitors" value={v.numberOfVisitors} />
+                </DetailSection>
+                <DetailSection title="Visit">
+                  <IconField icon={Tag} label="Purpose">
+                    <div style={{ marginTop: 2 }}><Pill meta={metaFor(v.purpose)} /></div>
+                  </IconField>
+                  <IconField icon={User} label="Attended By" value={v.attendedBy?.name || '—'} />
+                  <IconField icon={GraduationCap} label="Related Student" value={relatedStudent} />
+                </DetailSection>
+              </div>
+
+              {/* Notes */}
+              <DetailSection title="Notes & Outcome">
+                <TextBlock label="Reason for visit" value={v.purposeDetail || '—'} />
+                <TextBlock label="Outcome" value={v.outcome || '—'} />
+                {v.remarks && <TextBlock label="Remarks" value={v.remarks} />}
+              </DetailSection>
 
               {history.length > 0 && (
-                <div>
-                  <div style={headStyle}>Previous visits from {v.phone}</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {history.map(h => (
-                      <div key={h._id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Pill meta={metaFor(h.purpose)} />
-                          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{h.checkInTime ? format(new Date(h.checkInTime), 'dd MMM yyyy') : ''}</span>
-                        </div>
-                        <Pill meta={STATUS_META[h.status]} />
+                <DetailSection title={`Previous visits from ${v.phone}`}>
+                  {history.map(h => (
+                    <div key={h._id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Pill meta={metaFor(h.purpose)} />
+                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{h.checkInTime ? format(new Date(h.checkInTime), 'dd MMM yyyy') : ''}</span>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                      <Pill meta={STATUS_META[h.status]} />
+                    </div>
+                  ))}
+                </DetailSection>
               )}
             </div>
           ) : (
