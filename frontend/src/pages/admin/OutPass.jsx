@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Select as AntSelect, DatePicker } from 'antd';
 import dayjs from 'dayjs';
-import { Plus, Trash2, Edit2, LogOut, Users, Clock, CheckCircle, Download, RotateCcw, X, User } from 'lucide-react';
+import { Plus, Trash2, Edit2, LogOut, Users, Clock, CheckCircle, Download, RotateCcw, X, User, Phone, Tag, ShieldCheck, FileText, CreditCard, Hash } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, Pagination, SearchInput, PageLoader, EmptyState, StatCard, FormRow, Avatar } from '../../components/ui';
@@ -479,26 +479,62 @@ function OutPassModal({ pass, onClose, onSaved }) {
 }
 
 // ── Detail Modal ────────────────────────────────────────────────────────────────
+// ── Detail-tab presentational helpers ───────────────────────────────────────────
+function StatTile({ icon: Icon, color, bg, label, value }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: '#fff' }}>
+      <div style={{ width: 34, height: 34, borderRadius: 9, background: bg, color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon size={17} />
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{label}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function DetailSection({ title, children }) {
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px', background: '#fff' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>{title}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{children}</div>
+    </div>
+  );
+}
+
+function IconField({ icon: Icon, label, value, children }) {
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+      <div style={{ width: 30, height: 30, borderRadius: 8, background: '#f1f5f9', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon size={15} />
+      </div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500, marginBottom: 2 }}>{label}</div>
+        {children || <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', wordBreak: 'break-word' }}>{value}</div>}
+      </div>
+    </div>
+  );
+}
+
+function TextBlock({ label, value }) {
+  const empty = !value || value === '—';
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500, marginBottom: 5 }}>{label}</div>
+      {empty ? (
+        <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>—</div>
+      ) : (
+        <div style={{ fontSize: 14, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', lineHeight: 1.5 }}>{value}</div>
+      )}
+    </div>
+  );
+}
+
 function OutPassDetailModal({ id, onClose, onEdit, onDownload, onReturn }) {
   const { data, isLoading } = useQuery({ queryKey: ['outpass', id], queryFn: () => api.get(`/outpasses/${id}`) });
   const op = data?.outpass;
-
-  const rows = op ? [
-    { label: 'Pass No', value: op.passNumber },
-    { label: 'Status', value: STATUS_META[op.status]?.label },
-    { label: 'Reason', value: REASON_META[op.reason]?.label },
-    { label: 'Reason Details', value: op.reasonDetail || '—', full: true },
-    { label: 'Collected By', value: op.pickupName },
-    { label: 'Relation', value: op.pickupRelation || '—' },
-    { label: 'Phone', value: op.pickupPhone || '—' },
-    { label: 'Pickup Type', value: op.pickupType === 'guardian' ? 'Other Guardian' : 'Registered Parent' },
-    ...(op.pickupIdProof ? [{ label: 'ID Proof No.', value: op.pickupIdProof }] : []),
-    { label: 'Exit', value: op.exitDate ? format(new Date(op.exitDate), 'dd MMM yyyy, hh:mm a') : '—' },
-    { label: 'Expected Return', value: op.expectedReturn ? format(new Date(op.expectedReturn), 'dd MMM yyyy, hh:mm a') : '—' },
-    ...(op.returnedAt ? [{ label: 'Returned At', value: format(new Date(op.returnedAt), 'dd MMM yyyy, hh:mm a') }] : []),
-    { label: 'Issued By', value: op.approvedBy?.name || '—' },
-    { label: 'Remarks', value: op.remarks || '—', full: true },
-  ] : [];
+  const fmt = (d) => d ? format(new Date(d), 'dd MMM, hh:mm a') : null;
 
   return (
     <Modal open onClose={onClose} title="Out Pass Details" size="lg"
@@ -510,26 +546,54 @@ function OutPassDetailModal({ id, onClose, onEdit, onDownload, onReturn }) {
       </> : null}>
       {isLoading || !op ? <PageLoader /> : (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
-            <Avatar src={op.student?.photo} name={op.student?.name} size={44} />
-            <div style={{ flex: 1 }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, paddingBottom: 16, borderBottom: '1px solid var(--border)', marginBottom: 18 }}>
+            <Avatar src={op.student?.photo} name={op.student?.name} size={52} />
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{op.student?.name}</h3>
-                <Pill meta={REASON_META[op.reason]} />
                 <Pill meta={STATUS_META[op.status]} />
               </div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
-                {classLabel(op.student?.currentClass)} · {op.student?.admissionNumber}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 5, fontSize: 13, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+                <span>{classLabel(op.student?.currentClass)} · {op.student?.admissionNumber}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>· {op.passNumber}</span>
+                <Pill meta={REASON_META[op.reason]} />
               </div>
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}>
-            {rows.map(({ label, value, full }) => (
-              <div key={label} style={full ? { gridColumn: '1 / -1' } : {}}>
-                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 2, fontWeight: 500 }}>{label}</p>
-                <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', margin: 0, wordBreak: 'break-word' }}>{value}</p>
-              </div>
-            ))}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Timeline */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              <StatTile icon={LogOut} color="#1a56e8" bg="#eff6ff" label="Exit Time" value={fmt(op.exitDate) || '—'} />
+              <StatTile icon={Clock} color="#d97706" bg="#fffbeb" label="Expected Return" value={fmt(op.expectedReturn) || 'Not set'} />
+              <StatTile icon={CheckCircle} color="#16a34a" bg="#f0fdf4" label="Returned"
+                value={op.returnedAt ? fmt(op.returnedAt) : (op.status === 'active' ? 'Still out' : (STATUS_META[op.status]?.label || '—'))} />
+            </div>
+
+            {/* Pickup + Pass */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <DetailSection title="Collected By">
+                <IconField icon={User} label="Pickup Person" value={op.pickupName || '—'} />
+                <IconField icon={Users} label="Relation" value={op.pickupRelation || '—'} />
+                <IconField icon={Phone} label="Phone" value={op.pickupPhone || '—'} />
+                <IconField icon={ShieldCheck} label="Pickup Type" value={op.pickupType === 'guardian' ? 'Other Guardian' : 'Registered Parent'} />
+                {op.pickupIdProof && <IconField icon={CreditCard} label="ID Proof No." value={op.pickupIdProof} />}
+              </DetailSection>
+              <DetailSection title="Pass">
+                <IconField icon={Hash} label="Pass No" value={op.passNumber} />
+                <IconField icon={Tag} label="Reason">
+                  <div style={{ marginTop: 2 }}><Pill meta={REASON_META[op.reason]} /></div>
+                </IconField>
+                <IconField icon={User} label="Issued By" value={op.approvedBy?.name || '—'} />
+              </DetailSection>
+            </div>
+
+            {/* Notes */}
+            <DetailSection title="Notes">
+              <TextBlock label="Reason Details" value={op.reasonDetail || '—'} />
+              {op.remarks && <TextBlock label="Remarks" value={op.remarks} />}
+            </DetailSection>
           </div>
         </>
       )}
