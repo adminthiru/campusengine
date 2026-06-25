@@ -35,6 +35,9 @@ const visitSchema = new mongoose.Schema({
 
   followUpRequired: { type: Boolean, default: false },
   followUpDate: { type: Date },
+  followUpCompleted: { type: Boolean, default: false },
+  followUpCompletedAt: { type: Date },
+  followUpOutcome: { type: String },           // what happened on the follow-up
 
   outcome: { type: String },                   // result / what happened
   remarks: { type: String },

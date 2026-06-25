@@ -57,6 +57,7 @@ export default function Visits() {
   const [editVisit, setEditVisit] = useState(null);
   const [viewId, setViewId] = useState(null);
   const [checkoutTarget, setCheckoutTarget] = useState(null);
+  const [followUpTarget, setFollowUpTarget] = useState(null);
   const [selected, setSelected] = useState([]);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
@@ -91,6 +92,12 @@ export default function Visits() {
   const checkoutMutation = useMutation({
     mutationFn: ({ id, outcome }) => api.post(`/visits/${id}/checkout`, { outcome }),
     onSuccess: () => { refresh(); toast.success('Visitor checked out'); setCheckoutTarget(null); },
+    onError: (err) => toast.error(err.message || 'Failed'),
+  });
+
+  const followUpMutation = useMutation({
+    mutationFn: ({ id, outcome }) => api.post(`/visits/${id}/complete-followup`, { outcome }),
+    onSuccess: () => { refresh(); toast.success('Follow-up completed'); setFollowUpTarget(null); },
     onError: (err) => toast.error(err.message || 'Failed'),
   });
 
@@ -182,7 +189,7 @@ export default function Visits() {
                     <td>
                       <div className="text-14-semibold">{v.visitorName}</div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{v.phone}{v.numberOfVisitors > 1 ? ` · ${v.numberOfVisitors} people` : ''}</div>
-                      {v.followUpRequired && v.status !== 'cancelled' && (
+                      {v.followUpRequired && !v.followUpCompleted && v.status !== 'cancelled' && (
                         <span style={{ fontSize: 11, color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: 3, marginTop: 2 }}>
                           <BellRing size={11} /> Follow-up{v.followUpDate ? ` · ${format(new Date(v.followUpDate), 'dd MMM')}` : ''}
                         </span>
@@ -195,6 +202,12 @@ export default function Visits() {
                     <td><Pill meta={STATUS_META[v.status]} /></td>
                     <td onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        {v.followUpRequired && !v.followUpCompleted && v.status !== 'cancelled' && (
+                          <button className="btn btn-sm" title="Complete follow-up" onClick={() => setFollowUpTarget(v)}
+                            style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '4px 10px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            <BellRing size={13} /> Complete Follow-up
+                          </button>
+                        )}
                         {v.status !== 'completed' && v.status !== 'cancelled' && (
                           <button className="btn btn-secondary btn-sm btn-icon" title="Check out" onClick={() => setCheckoutTarget(v)}><LogOut size={14} /></button>
                         )}
@@ -217,13 +230,20 @@ export default function Visits() {
       {viewId && (
         <VisitDetailModal id={viewId} onClose={() => setViewId(null)}
           onEdit={(v) => { setViewId(null); setEditVisit(v); setShowModal(true); }}
-          onCheckout={(v) => { setViewId(null); setCheckoutTarget(v); }} />
+          onCheckout={(v) => { setViewId(null); setCheckoutTarget(v); }}
+          onCompleteFollowUp={(v) => { setViewId(null); setFollowUpTarget(v); }} />
       )}
 
       {checkoutTarget && (
         <CheckoutModal visit={checkoutTarget} loading={checkoutMutation.isPending}
           onClose={() => setCheckoutTarget(null)}
           onConfirm={(outcome) => checkoutMutation.mutate({ id: checkoutTarget._id, outcome })} />
+      )}
+
+      {followUpTarget && (
+        <CompleteFollowUpModal visit={followUpTarget} loading={followUpMutation.isPending}
+          onClose={() => setFollowUpTarget(null)}
+          onConfirm={(outcome) => followUpMutation.mutate({ id: followUpTarget._id, outcome })} />
       )}
 
       <ConfirmDialog open={bulkDeleteConfirm} onClose={() => setBulkDeleteConfirm(false)}
@@ -380,7 +400,7 @@ function VisitModal({ visit, onClose, onSaved }) {
 }
 
 // ── Detail Modal (with visitor history) ─────────────────────────────────────────
-function VisitDetailModal({ id, onClose, onEdit, onCheckout }) {
+function VisitDetailModal({ id, onClose, onEdit, onCheckout, onCompleteFollowUp }) {
   const { data, isLoading } = useQuery({ queryKey: ['visit', id], queryFn: () => api.get(`/visits/${id}`) });
   const v = data?.visit;
   const history = data?.history || [];
@@ -395,7 +415,9 @@ function VisitDetailModal({ id, onClose, onEdit, onCheckout }) {
     { label: 'Attended By', value: v.attendedBy?.name || '—' },
     { label: 'Check-in', value: v.checkInTime ? format(new Date(v.checkInTime), 'dd MMM yyyy, hh:mm a') : '—' },
     { label: 'Check-out', value: v.checkOutTime ? format(new Date(v.checkOutTime), 'dd MMM yyyy, hh:mm a') : '—' },
-    { label: 'Follow-up', value: v.followUpRequired ? (v.followUpDate ? format(new Date(v.followUpDate), 'dd MMM yyyy') : 'Required') : 'No' },
+    { label: 'Follow-up', value: !v.followUpRequired ? 'No'
+        : v.followUpCompleted ? `Completed${v.followUpCompletedAt ? ` · ${format(new Date(v.followUpCompletedAt), 'dd MMM yyyy')}` : ''}`
+        : `Pending${v.followUpDate ? ` · ${format(new Date(v.followUpDate), 'dd MMM yyyy')}` : ''}` },
     { label: 'Outcome', value: v.outcome || '—', full: true },
     { label: 'Remarks', value: v.remarks || '—', full: true },
   ] : [];
@@ -404,6 +426,11 @@ function VisitDetailModal({ id, onClose, onEdit, onCheckout }) {
     <Modal open onClose={onClose} title="Visit Details" size="lg"
       footer={v ? <>
         <button className="btn btn-secondary" onClick={onClose}>Close</button>
+        {v.followUpRequired && !v.followUpCompleted && v.status !== 'cancelled' && (
+          <button className="btn btn-secondary" style={{ color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' }} onClick={() => onCompleteFollowUp(v)}>
+            <BellRing size={14} /> Complete Follow-up
+          </button>
+        )}
         {v.status !== 'completed' && v.status !== 'cancelled' && (
           <button className="btn btn-secondary" onClick={() => onCheckout(v)}><LogOut size={14} /> Check Out</button>
         )}
@@ -466,6 +493,30 @@ function CheckoutModal({ visit, onClose, onConfirm, loading }) {
       <div className="form-group">
         <label className="form-label">Outcome (optional)</label>
         <textarea className="form-control" rows={3} value={outcome} onChange={e => setOutcome(e.target.value)} placeholder="What was the result of this visit?" style={{ resize: 'vertical' }} />
+      </div>
+    </Modal>
+  );
+}
+
+// ── Complete Follow-up Modal ────────────────────────────────────────────────────
+function CompleteFollowUpModal({ visit, onClose, onConfirm, loading }) {
+  const [outcome, setOutcome] = useState('');
+  return (
+    <Modal open onClose={onClose} title="Complete Follow-up"
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-success" onClick={() => onConfirm(outcome)} disabled={loading || !outcome.trim()}>
+          {loading ? 'Saving...' : 'Mark Completed'}
+        </button>
+      </>}>
+      <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 0 }}>
+        Record what happened on the follow-up with <strong>{visit.visitorName}</strong>
+        {visit.followUpDate ? ` (due ${format(new Date(visit.followUpDate), 'dd MMM yyyy')})` : ''}. This marks the visit as completed.
+      </p>
+      <div className="form-group">
+        <label className="form-label">Follow-up Outcome / Reason *</label>
+        <textarea className="form-control" rows={3} value={outcome} onChange={e => setOutcome(e.target.value)}
+          placeholder="e.g. Shared bus quote, parent will confirm next week" style={{ resize: 'vertical' }} autoFocus />
       </div>
     </Modal>
   );
