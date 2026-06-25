@@ -19,10 +19,15 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    if (error.response?.status === 401) {
+    const url = error.config?.url || '';
+    // 401 on the login/register calls themselves just means bad credentials —
+    // let the form show the message instead of nuking the session and reloading.
+    const isAuthSubmit = url.includes('/auth/login') || url.includes('/auth/register');
+    if (error.response?.status === 401 && !isAuthSubmit) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      // Avoid a reload loop when we're already on the login page.
+      if (!window.location.pathname.startsWith('/login')) window.location.href = '/login';
     }
     return Promise.reject(error.response?.data || error);
   }
