@@ -33,11 +33,19 @@ const visitSchema = new mongoose.Schema({
   checkInTime: { type: Date, default: Date.now },
   checkOutTime: { type: Date },
 
+  // Current pending follow-up (cleared once completed; can be set again later).
   followUpRequired: { type: Boolean, default: false },
   followUpDate: { type: Date },
-  followUpCompleted: { type: Boolean, default: false },
-  followUpCompletedAt: { type: Date },
-  followUpOutcome: { type: String },           // what happened on the follow-up
+
+  // Chronological log of everything that happened on this visit: check-in,
+  // check-out, follow-up scheduled, follow-up completed, repeat check-in, notes.
+  activities: [{
+    type: { type: String, enum: ['check_in', 'check_out', 'follow_up_set', 'follow_up_completed', 'note'], required: true },
+    note: { type: String },                    // reason / outcome text
+    followUpDate: { type: Date },              // for follow_up_set events
+    by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    at: { type: Date, default: Date.now },
+  }],
 
   outcome: { type: String },                   // result / what happened
   remarks: { type: String },

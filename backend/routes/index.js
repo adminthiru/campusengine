@@ -1973,7 +1973,7 @@ const VISIT_ROLES = ['admin', 'correspondent', 'principal'];
 
 // A visit with a pending follow-up isn't fully done — present it as in_progress.
 const coerceVisitFollowUp = (v) => {
-  if (v && v.followUpRequired && !v.followUpCompleted && v.status === 'completed') v.status = 'in_progress';
+  if (v && v.followUpRequired && v.status === 'completed') v.status = 'in_progress';
   return v;
 };
 
@@ -1989,7 +1989,7 @@ router.get('/visits/stats', protect, checkSubscription, authorize(...VISIT_ROLES
     const [today, active, followUpsDue, monthTotal] = await Promise.all([
       Visit.countDocuments({ school: schoolId, checkInTime: { $gte: startOfToday, $lte: endOfToday } }),
       Visit.countDocuments({ school: schoolId, status: { $in: ['waiting', 'in_progress'] } }),
-      Visit.countDocuments({ school: schoolId, followUpRequired: true, followUpCompleted: { $ne: true }, status: { $ne: 'cancelled' }, followUpDate: { $lte: endOfToday } }),
+      Visit.countDocuments({ school: schoolId, followUpRequired: true, status: { $ne: 'cancelled' }, followUpDate: { $lte: endOfToday } }),
       Visit.countDocuments({ school: schoolId, checkInTime: { $gte: startOfMonth } }),
     ]);
     res.json({ success: true, stats: { today, active, followUpsDue, monthTotal } });
@@ -2003,7 +2003,7 @@ router.get('/visits', protect, checkSubscription, authorize(...VISIT_ROLES), asy
     const query = { school: req.user.school };
     if (status) query.status = status;
     if (purpose) query.purpose = purpose;
-    if (followUp === 'true') { query.followUpRequired = true; query.followUpCompleted = { $ne: true }; query.status = { $ne: 'cancelled' }; }
+    if (followUp === 'true') { query.followUpRequired = true; query.status = { $ne: 'cancelled' }; }
     if (startDate || endDate) {
       query.checkInTime = {};
       if (startDate) query.checkInTime.$gte = new Date(startDate);
@@ -2032,7 +2032,8 @@ router.get('/visits/:id', protect, checkSubscription, authorize(...VISIT_ROLES),
     const visit = await Visit.findOne({ _id: req.params.id, school: req.user.school })
       .populate('attendedBy', 'name designation')
       .populate('relatedStudent', 'name admissionNumber')
-      .populate('createdBy', 'name');
+      .populate('createdBy', 'name')
+      .populate('activities.by', 'name');
     if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
     coerceVisitFollowUp(visit);
     const history = await Visit.find({ school: req.user.school, phone: visit.phone, _id: { $ne: visit._id } })
@@ -2045,7 +2046,12 @@ router.post('/visits', protect, checkSubscription, authorize(...VISIT_ROLES), as
   try {
     const data = { ...req.body, school: req.user.school, createdBy: req.user._id };
     // Can't be "completed" while a follow-up is still pending.
-    if (data.followUpRequired && !data.followUpCompleted && data.status === 'completed') data.status = 'in_progress';
+    if (data.followUpRequired && data.status === 'completed') data.status = 'in_progress';
+    // Seed the activity log with the check-in (and the follow-up if one was set).
+    data.activities = [{ type: 'check_in', note: data.purposeDetail || '', by: req.user._id, at: data.checkInTime || new Date() }];
+    if (data.followUpRequired && data.followUpDate) {
+      data.activities.push({ type: 'follow_up_set', followUpDate: data.followUpDate, by: req.user._id });
+    }
     const visit = await Visit.create(data);
     res.status(201).json({ success: true, visit });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -2053,51 +2059,62 @@ router.post('/visits', protect, checkSubscription, authorize(...VISIT_ROLES), as
 
 router.put('/visits/:id', protect, checkSubscription, authorize(...VISIT_ROLES), async (req, res) => {
   try {
-    const { school, createdBy, _id, ...update } = req.body; // never reassign tenant/owner
+    const { school, createdBy, _id, activities, ...update } = req.body; // never reassign tenant/owner/log
     const visit = await Visit.findOne({ _id: req.params.id, school: req.user.school });
     if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
+
+    const wasPending = visit.followUpRequired;
+    const oldDate = visit.followUpDate ? new Date(visit.followUpDate).getTime() : null;
     Object.assign(visit, update);
-    // Dropping the follow-up requirement clears its completion tracking.
-    if (!visit.followUpRequired) { visit.followUpCompleted = false; visit.followUpCompletedAt = undefined; }
+
+    // Log a follow-up being newly scheduled or rescheduled.
+    if (visit.followUpRequired && visit.followUpDate) {
+      const newDate = new Date(visit.followUpDate).getTime();
+      if (!wasPending || newDate !== oldDate) {
+        visit.activities.push({ type: 'follow_up_set', followUpDate: visit.followUpDate, by: req.user._id });
+      }
+    }
     // A pending follow-up keeps the visit in progress, not completed.
-    if (visit.followUpRequired && !visit.followUpCompleted && visit.status === 'completed') visit.status = 'in_progress';
+    if (visit.followUpRequired && visit.status === 'completed') visit.status = 'in_progress';
     await visit.save();
     res.json({ success: true, visit });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
-// Quick check-out — stamps the checkout time. If a follow-up is still pending,
-// the visit stays in progress instead of being marked complete.
+// Quick check-out — stamps the checkout time and logs the reason. If a follow-up
+// is still pending, the visit stays in progress instead of being marked complete.
 router.post('/visits/:id/checkout', protect, checkSubscription, authorize(...VISIT_ROLES), async (req, res) => {
   try {
     const visit = await Visit.findOne({ _id: req.params.id, school: req.user.school });
     if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
-    if (req.body.outcome != null) visit.outcome = req.body.outcome;
+    const note = (req.body.outcome || '').trim();
+    if (note) visit.outcome = note;
     visit.checkOutTime = new Date();
-    visit.status = (visit.followUpRequired && !visit.followUpCompleted) ? 'in_progress' : 'completed';
+    visit.status = visit.followUpRequired ? 'in_progress' : 'completed';
+    visit.activities.push({ type: 'check_out', note, by: req.user._id });
     await visit.save();
     res.json({ success: true, visit });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
-// Complete a pending follow-up — records the outcome and marks the visit completed.
+// Complete a pending follow-up — records the outcome, clears the pending flag
+// (so it can be scheduled again later), and marks the visit completed.
 router.post('/visits/:id/complete-followup', protect, checkSubscription, authorize(...VISIT_ROLES), async (req, res) => {
   try {
     const visit = await Visit.findOne({ _id: req.params.id, school: req.user.school });
     if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
     if (!visit.followUpRequired) return res.status(400).json({ success: false, message: 'This visit has no follow-up to complete' });
-    visit.followUpCompleted = true;
-    visit.followUpCompletedAt = new Date();
     const note = (req.body.outcome || '').trim();
-    if (note) {
-      visit.followUpOutcome = note;
-      visit.outcome = visit.outcome ? `${visit.outcome}\n[Follow-up] ${note}` : `[Follow-up] ${note}`;
-    }
+    visit.activities.push({ type: 'follow_up_completed', note, followUpDate: visit.followUpDate, by: req.user._id });
+    if (note) visit.outcome = visit.outcome ? `${visit.outcome}\n[Follow-up] ${note}` : `[Follow-up] ${note}`;
+    visit.followUpRequired = false;
+    visit.followUpDate = undefined;
     visit.status = 'completed';
     await visit.save();
     res.json({ success: true, visit });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
+
 
 router.delete('/visits/:id', protect, checkSubscription, authorize('admin', 'correspondent'), async (req, res) => {
   try {

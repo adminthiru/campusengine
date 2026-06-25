@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { Select as AntSelect, DatePicker } from 'antd';
 import dayjs from 'dayjs';
-import { Plus, Trash2, Edit2, DoorOpen, Users, Clock, BellRing, LogOut, Phone, Mail, X } from 'lucide-react';
+import { Plus, Trash2, Edit2, DoorOpen, Users, Clock, BellRing, LogOut, Phone, Mail, X, CheckCircle2, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, Pagination, SearchInput, PageLoader, EmptyState, StatCard, FormRow } from '../../components/ui';
@@ -55,6 +55,7 @@ export default function Visits() {
 
   const [showModal, setShowModal] = useState(false);
   const [editVisit, setEditVisit] = useState(null);
+  const [prefillVisit, setPrefillVisit] = useState(null); // returning visitor → new pre-filled visit
   const [viewId, setViewId] = useState(null);
   const [checkoutTarget, setCheckoutTarget] = useState(null);
   const [followUpTarget, setFollowUpTarget] = useState(null);
@@ -189,7 +190,7 @@ export default function Visits() {
                     <td>
                       <div className="text-14-semibold">{v.visitorName}</div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{v.phone}{v.numberOfVisitors > 1 ? ` · ${v.numberOfVisitors} people` : ''}</div>
-                      {v.followUpRequired && !v.followUpCompleted && v.status !== 'cancelled' && (
+                      {v.followUpRequired && v.status !== 'cancelled' && (
                         <span style={{ fontSize: 11, color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: 3, marginTop: 2 }}>
                           <BellRing size={11} /> Follow-up{v.followUpDate ? ` · ${format(new Date(v.followUpDate), 'dd MMM')}` : ''}
                         </span>
@@ -202,15 +203,15 @@ export default function Visits() {
                     <td><Pill meta={STATUS_META[v.status]} /></td>
                     <td onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        {v.followUpRequired && !v.followUpCompleted && v.status !== 'cancelled' && (
+                        {v.followUpRequired && v.status !== 'cancelled' ? (
+                          // Pending follow-up: the next action is to complete it (no check-out).
                           <button className="btn btn-sm" title="Complete follow-up" onClick={() => setFollowUpTarget(v)}
                             style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '4px 10px', fontWeight: 600, whiteSpace: 'nowrap' }}>
                             <BellRing size={13} /> Complete Follow-up
                           </button>
-                        )}
-                        {v.status !== 'completed' && v.status !== 'cancelled' && (
+                        ) : v.status !== 'completed' && v.status !== 'cancelled' ? (
                           <button className="btn btn-secondary btn-sm btn-icon" title="Check out" onClick={() => setCheckoutTarget(v)}><LogOut size={14} /></button>
-                        )}
+                        ) : null}
                         <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => { setEditVisit(v); setShowModal(true); }}><Edit2 size={14} /></button>
                       </div>
                     </td>
@@ -224,14 +225,17 @@ export default function Visits() {
       )}
 
       {showModal && (
-        <VisitModal visit={editVisit} onClose={() => { setShowModal(false); setEditVisit(null); }} onSaved={() => { refresh(); setShowModal(false); setEditVisit(null); }} />
+        <VisitModal visit={editVisit} prefill={prefillVisit}
+          onClose={() => { setShowModal(false); setEditVisit(null); setPrefillVisit(null); }}
+          onSaved={() => { refresh(); setShowModal(false); setEditVisit(null); setPrefillVisit(null); }} />
       )}
 
       {viewId && (
         <VisitDetailModal id={viewId} onClose={() => setViewId(null)}
           onEdit={(v) => { setViewId(null); setEditVisit(v); setShowModal(true); }}
           onCheckout={(v) => { setViewId(null); setCheckoutTarget(v); }}
-          onCompleteFollowUp={(v) => { setViewId(null); setFollowUpTarget(v); }} />
+          onCompleteFollowUp={(v) => { setViewId(null); setFollowUpTarget(v); }}
+          onCheckInAgain={(v) => { setViewId(null); setEditVisit(null); setPrefillVisit({ visitorName: v.visitorName, phone: v.phone, email: v.email, purpose: v.purpose }); setShowModal(true); }} />
       )}
 
       {checkoutTarget && (
@@ -254,15 +258,17 @@ export default function Visits() {
 }
 
 // ── Add / Edit Modal ──────────────────────────────────────────────────────────
-function VisitModal({ visit, onClose, onSaved }) {
+function VisitModal({ visit, prefill, onClose, onSaved }) {
   const isEdit = !!visit;
+  const isReturning = !isEdit && !!prefill;
+  const base = visit || prefill || {};
   const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm({
     defaultValues: {
-      visitorName: visit?.visitorName || '',
-      phone: visit?.phone || '',
-      email: visit?.email || '',
+      visitorName: base.visitorName || '',
+      phone: base.phone || '',
+      email: base.email || '',
       numberOfVisitors: visit?.numberOfVisitors || 1,
-      purpose: visit?.purpose || 'admission_enquiry',
+      purpose: base.purpose || 'admission_enquiry',
       purposeDetail: visit?.purposeDetail || '',
       relatedStudent: visit?.relatedStudent?._id || visit?.relatedStudent || undefined,
       attendedBy: visit?.attendedBy?._id || visit?.attendedBy || undefined,
@@ -296,7 +302,7 @@ function VisitModal({ visit, onClose, onSaved }) {
   };
 
   return (
-    <Modal open onClose={onClose} title={isEdit ? 'Edit Visit' : 'Add Visitor'} size="lg"
+    <Modal open onClose={onClose} title={isEdit ? 'Edit Visit' : isReturning ? 'Check In Again' : 'Add Visitor'} size="lg"
       footer={<>
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
         <button className="btn btn-primary" onClick={handleSubmit(submit)} disabled={saveMutation.isPending}>
@@ -304,6 +310,11 @@ function VisitModal({ visit, onClose, onSaved }) {
         </button>
       </>}>
       <form>
+        {isReturning && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 13, color: '#1e40af' }}>
+            <Users size={15} /> Returning visitor — details pre-filled. This creates a new check-in.
+          </div>
+        )}
         <FormRow>
           <div className="form-group">
             <label className="form-label">Visitor Name *</label>
@@ -399,76 +410,166 @@ function VisitModal({ visit, onClose, onSaved }) {
   );
 }
 
-// ── Detail Modal (with visitor history) ─────────────────────────────────────────
-function VisitDetailModal({ id, onClose, onEdit, onCheckout, onCompleteFollowUp }) {
+// ── Activity timeline (per-visit log) ───────────────────────────────────────────
+const ACT_META = {
+  check_in:            { label: 'Checked in',          icon: DoorOpen,     color: '#1a56e8', bg: '#eff6ff' },
+  check_out:           { label: 'Checked out',         icon: LogOut,       color: '#16a34a', bg: '#f0fdf4' },
+  follow_up_set:       { label: 'Follow-up scheduled', icon: BellRing,     color: '#d97706', bg: '#fffbeb' },
+  follow_up_completed: { label: 'Follow-up completed', icon: CheckCircle2, color: '#16a34a', bg: '#f0fdf4' },
+  note:                { label: 'Note',                icon: FileText,     color: '#64748b', bg: '#f1f5f9' },
+};
+
+function ActivityTimeline({ activities }) {
+  if (!activities.length) return <EmptyState icon={Clock} message="No activity recorded yet." />;
+  const sorted = [...activities].sort((a, b) => new Date(a.at || 0) - new Date(b.at || 0));
+  return (
+    <div>
+      {sorted.map((a, i) => {
+        const meta = ACT_META[a.type] || ACT_META.note;
+        const Icon = meta.icon;
+        const last = i === sorted.length - 1;
+        return (
+          <div key={i} style={{ display: 'flex', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: meta.bg, color: meta.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon size={16} />
+              </div>
+              {!last && <div style={{ flex: 1, width: 2, background: 'var(--border)', minHeight: 12 }} />}
+            </div>
+            <div style={{ paddingBottom: last ? 0 : 18, flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+                {meta.label}
+                {a.type === 'follow_up_set' && a.followUpDate && (
+                  <span style={{ fontWeight: 500, color: 'var(--text-secondary)' }}> · for {format(new Date(a.followUpDate), 'dd MMM yyyy')}</span>
+                )}
+              </div>
+              {a.note && <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 3, whiteSpace: 'pre-wrap' }}>{a.note}</div>}
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                {a.at ? format(new Date(a.at), 'dd MMM yyyy, hh:mm a') : ''}{a.by?.name ? ` · ${a.by.name}` : ''}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Detail Modal (tabbed: details + activity log) ───────────────────────────────
+function VisitDetailModal({ id, onClose, onEdit, onCheckout, onCompleteFollowUp, onCheckInAgain }) {
   const { data, isLoading } = useQuery({ queryKey: ['visit', id], queryFn: () => api.get(`/visits/${id}`) });
   const v = data?.visit;
   const history = data?.history || [];
+  const [tab, setTab] = useState('details');
 
-  const rows = v ? [
-    { label: 'Phone', value: v.phone, icon: Phone },
-    { label: 'Email', value: v.email || '—', icon: Mail },
-    { label: 'Visitors', value: v.numberOfVisitors },
-    { label: 'Purpose', value: PURPOSE_META[v.purpose]?.label },
-    { label: 'Reason', value: v.purposeDetail || '—', full: true },
-    { label: 'Related Student', value: v.relatedStudent ? `${v.relatedStudent.name}${v.relatedStudent.admissionNumber ? ` (${v.relatedStudent.admissionNumber})` : ''}` : '—' },
-    { label: 'Attended By', value: v.attendedBy?.name || '—' },
-    { label: 'Check-in', value: v.checkInTime ? format(new Date(v.checkInTime), 'dd MMM yyyy, hh:mm a') : '—' },
-    { label: 'Check-out', value: v.checkOutTime ? format(new Date(v.checkOutTime), 'dd MMM yyyy, hh:mm a') : '—' },
-    { label: 'Follow-up', value: !v.followUpRequired ? 'No'
-        : v.followUpCompleted ? `Completed${v.followUpCompletedAt ? ` · ${format(new Date(v.followUpCompletedAt), 'dd MMM yyyy')}` : ''}`
-        : `Pending${v.followUpDate ? ` · ${format(new Date(v.followUpDate), 'dd MMM yyyy')}` : ''}` },
-    { label: 'Outcome', value: v.outcome || '—', full: true },
-    { label: 'Remarks', value: v.remarks || '—', full: true },
+  const pendingFollowUp = v?.followUpRequired && v?.status !== 'cancelled';
+  const initials = (v?.visitorName || '?').trim().split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase();
+
+  const sections = v ? [
+    { title: 'Contact', items: [
+      { label: 'Phone', value: v.phone },
+      { label: 'Email', value: v.email || '—' },
+      { label: 'No. of Visitors', value: v.numberOfVisitors },
+    ] },
+    { title: 'Visit', items: [
+      { label: 'Purpose', value: PURPOSE_META[v.purpose]?.label || '—' },
+      { label: 'Attended By', value: v.attendedBy?.name || '—' },
+      { label: 'Related Student', value: v.relatedStudent ? `${v.relatedStudent.name}${v.relatedStudent.admissionNumber ? ` (${v.relatedStudent.admissionNumber})` : ''}` : '—' },
+      { label: 'Reason', value: v.purposeDetail || '—', full: true },
+    ] },
+    { title: 'Timeline', items: [
+      { label: 'Check-in', value: v.checkInTime ? format(new Date(v.checkInTime), 'dd MMM yyyy, hh:mm a') : '—' },
+      { label: 'Check-out', value: v.checkOutTime ? format(new Date(v.checkOutTime), 'dd MMM yyyy, hh:mm a') : '—' },
+      { label: 'Follow-up', value: v.followUpRequired ? `Pending · ${v.followUpDate ? format(new Date(v.followUpDate), 'dd MMM yyyy') : 'date not set'}` : 'None pending' },
+    ] },
+    { title: 'Notes', items: [
+      { label: 'Outcome', value: v.outcome || '—', full: true },
+      { label: 'Remarks', value: v.remarks || '—', full: true },
+    ] },
   ] : [];
+
+  const labelStyle = { fontSize: 12, color: 'var(--text-secondary)', marginBottom: 3, fontWeight: 500 };
+  const valueStyle = { fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', margin: 0, wordBreak: 'break-word', whiteSpace: 'pre-wrap' };
+  const headStyle = { fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 };
 
   return (
     <Modal open onClose={onClose} title="Visit Details" size="lg"
       footer={v ? <>
         <button className="btn btn-secondary" onClick={onClose}>Close</button>
-        {v.followUpRequired && !v.followUpCompleted && v.status !== 'cancelled' && (
+        <button className="btn btn-secondary" onClick={() => onCheckInAgain(v)}><DoorOpen size={14} /> Check In Again</button>
+        {pendingFollowUp ? (
           <button className="btn btn-secondary" style={{ color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' }} onClick={() => onCompleteFollowUp(v)}>
             <BellRing size={14} /> Complete Follow-up
           </button>
-        )}
-        {v.status !== 'completed' && v.status !== 'cancelled' && (
+        ) : v.status !== 'completed' && v.status !== 'cancelled' ? (
           <button className="btn btn-secondary" onClick={() => onCheckout(v)}><LogOut size={14} /> Check Out</button>
-        )}
+        ) : null}
         <button className="btn btn-primary" onClick={() => onEdit(v)}>Edit</button>
       </> : null}>
       {isLoading || !v ? <PageLoader /> : (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{v.visitorName}</h3>
-            <Pill meta={PURPOSE_META[v.purpose]} />
-            <Pill meta={STATUS_META[v.status]} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}>
-            {rows.map(({ label, value, full }) => (
-              <div key={label} style={full ? { gridColumn: '1 / -1' } : {}}>
-                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 2, fontWeight: 500 }}>{label}</p>
-                <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', margin: 0, wordBreak: 'break-word' }}>{value}</p>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, paddingBottom: 16, borderBottom: '1px solid var(--border)' }}>
+            <div style={{ width: 52, height: 52, borderRadius: '50%', background: PURPOSE_META[v.purpose]?.bg || '#eff6ff', color: PURPOSE_META[v.purpose]?.color || '#1a56e8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 17, flexShrink: 0 }}>
+              {initials}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{v.visitorName}</h3>
+                <Pill meta={STATUS_META[v.status]} />
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 5, fontSize: 13, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Phone size={13} /> {v.phone}</span>
+                <Pill meta={PURPOSE_META[v.purpose]} />
+              </div>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
+            {[['details', 'Details'], ['activity', 'Activity Log']].map(([key, label]) => (
+              <button key={key} type="button" onClick={() => setTab(key)}
+                style={{ background: 'none', border: 'none', borderBottom: `2px solid ${tab === key ? 'var(--primary)' : 'transparent'}`, color: tab === key ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: 600, fontSize: 14, padding: '12px 14px', cursor: 'pointer', marginBottom: -1 }}>
+                {label}{key === 'activity' && v.activities?.length ? ` (${v.activities.length})` : ''}
+              </button>
             ))}
           </div>
 
-          {history.length > 0 && (
-            <div style={{ marginTop: 22 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
-                Previous visits from {v.phone}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {history.map(h => (
-                  <div key={h._id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Pill meta={PURPOSE_META[h.purpose]} />
-                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{h.checkInTime ? format(new Date(h.checkInTime), 'dd MMM yyyy') : ''}</span>
-                    </div>
-                    <Pill meta={STATUS_META[h.status]} />
+          {tab === 'details' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {sections.map(sec => (
+                <div key={sec.title}>
+                  <div style={headStyle}>{sec.title}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 24px' }}>
+                    {sec.items.map(({ label, value, full }) => (
+                      <div key={label} style={full ? { gridColumn: '1 / -1' } : {}}>
+                        <p style={labelStyle}>{label}</p>
+                        <p style={valueStyle}>{value}</p>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
+
+              {history.length > 0 && (
+                <div>
+                  <div style={headStyle}>Previous visits from {v.phone}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {history.map(h => (
+                      <div key={h._id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <Pill meta={PURPOSE_META[h.purpose]} />
+                          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{h.checkInTime ? format(new Date(h.checkInTime), 'dd MMM yyyy') : ''}</span>
+                        </div>
+                        <Pill meta={STATUS_META[h.status]} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
+          ) : (
+            <ActivityTimeline activities={v.activities || []} />
           )}
         </>
       )}
