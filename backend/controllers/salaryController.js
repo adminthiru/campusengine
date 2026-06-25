@@ -9,6 +9,22 @@ const { sendSMS } = require('../utils/sms');
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
+// Persist a salary structure onto the Employee master so every future month
+// inherits it (salary is set once per employee; per-month records derive from it).
+const persistEmployeeSalary = async (schoolId, employeeId, earnings = {}, deductions = {}) => {
+  const set = {};
+  if (earnings.basic           !== undefined) set['salary.basic']           = Number(earnings.basic) || 0;
+  if (earnings.hra             !== undefined) set['salary.hra']             = Number(earnings.hra) || 0;
+  if (earnings.da              !== undefined) set['salary.da']              = Number(earnings.da) || 0;
+  if (earnings.otherAllowances !== undefined) set['salary.otherAllowances'] = Number(earnings.otherAllowances) || 0;
+  if (deductions.pf            !== undefined) set['salary.pfDeduction']     = Number(deductions.pf) || 0;
+  if (deductions.esi           !== undefined) set['salary.esiDeduction']    = Number(deductions.esi) || 0;
+  if (deductions.other         !== undefined) set['salary.otherDeductions'] = Number(deductions.other) || 0;
+  if (Object.keys(set).length) {
+    await Employee.updateOne({ _id: employeeId, school: schoolId }, { $set: set });
+  }
+};
+
 // Upsert (create or update) an advance expense keyed on slipNumber stored in billNumber.
 // If advanceAmount is 0, removes the expense so the record stays in sync.
 const syncAdvanceExpense = async ({ school, employeeId, employeeName, advanceAmount, month, year, userId, slipNumber }) => {
@@ -154,7 +170,7 @@ const getSalaries = async (req, res) => {
     }
 
     const salaries = await Salary.find(query)
-      .populate('employee', 'name employeeId role designation department photo')
+      .populate('employee', 'name employeeId role designation department photo salary')
       .populate('paidBy', 'name')
       .sort({ createdAt: -1 });
 
@@ -200,8 +216,12 @@ const getSalaries = async (req, res) => {
           else if (rec.status === 'half_day' && halfDayEnabled) present += halfDayFactor;
         }
         // Flag a record as stale when its stored working/present days disagree
-        // with the live attendance figures (so a bulk recalc can resync them).
-        s.needsRecalc = s.workingDays !== actualWorking || s.presentDays !== present;
+        // with the live attendance figures, or when the employee now has a salary
+        // master but this record is still blank (set after the record was created).
+        const m = s.employee?.salary || {};
+        const masterGross = (m.basic || 0) + (m.hra || 0) + (m.da || 0) + (m.otherAllowances || 0);
+        const blankButMastered = (s.grossSalary || 0) === 0 && masterGross > 0;
+        s.needsRecalc = s.workingDays !== actualWorking || s.presentDays !== present || blankButMastered;
         s.workingDays = actualWorking;
         s.presentDays = present;
       }
@@ -273,6 +293,9 @@ const updateSalary = async (req, res) => {
     salary.totalDeductions = Object.values(salary.deductions).reduce((s, v) => s + v, 0);
     salary.netSalary = salary.grossSalary - salary.totalDeductions;
     await salary.save();
+
+    // Persist the structure to the employee master so future months inherit it.
+    await persistEmployeeSalary(req.user.school, salary.employee?._id, salary.earnings, salary.deductions);
 
     // Sync advance expense — upserts if loan > 0, removes if 0
     const loanAmount = Number(req.body.deductions?.loan) || 0;
@@ -349,6 +372,9 @@ const createSalaryRecord = async (req, res) => {
     });
 
     await salary.populate('employee', 'name employeeId role department');
+
+    // Persist to the employee master so future months inherit this salary.
+    await persistEmployeeSalary(schoolId, employeeId, { basic, hra, da, otherAllowances }, { pf, esi, other });
 
     if (loan > 0) {
       try {
