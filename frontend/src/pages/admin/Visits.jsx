@@ -622,7 +622,7 @@ function VisitDetailModal({ id, onClose, onEdit, onCheckout, onCompleteFollowUp,
 
 // ── Check-out Modal ─────────────────────────────────────────────────────────────
 function CheckoutModal({ visit, onClose, onConfirm, loading }) {
-  const [outcome, setOutcome] = useState(visit.outcome || '');
+  const [outcome, setOutcome] = useState('');
   return (
     <Modal open onClose={onClose} title="Check Out Visitor"
       footer={<>
