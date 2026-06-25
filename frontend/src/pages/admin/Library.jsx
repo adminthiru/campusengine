@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, BookOpen, RefreshCw, AlertTriangle, CheckCircle, BookMarked, RotateCcw, Search, LayoutGrid, List, Barcode, Edit, Trash2, Eye } from 'lucide-react';
+import { Plus, BookOpen, RefreshCw, AlertTriangle, CheckCircle, BookMarked, RotateCcw, Search, LayoutGrid, List, Barcode, Edit, Trash2, Eye, X, Tag } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { Select as AntSelect, DatePicker } from 'antd';
@@ -18,6 +18,14 @@ const BOOK_CATEGORIES = [
   'Fiction', 'Non-Fiction', 'Science', 'Mathematics', 'History', 'Geography',
   'Literature', 'Reference', 'Textbook', 'Magazine', 'Other',
 ];
+
+// Built-in categories + the school's custom ones (deduped, case-insensitive).
+function useLibraryCategories() {
+  const { data } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
+  const custom = data?.school?.libraryCategories || [];
+  const categories = [...BOOK_CATEGORIES, ...custom.filter(c => !BOOK_CATEGORIES.some(b => b.toLowerCase() === String(c).toLowerCase()))];
+  return { categories, custom };
+}
 
 const fmt = (d) => {
   if (!d) return '—';
@@ -51,6 +59,7 @@ export default function Library() {
   const [tab, setTab] = useState('books');
   const [addBookSignal, setAddBookSignal] = useState(0);
   const [showIssueModal, setShowIssueModal] = useState(false);
+  const [showCategories, setShowCategories] = useState(false);
 
   return (
     <div>
@@ -60,6 +69,11 @@ export default function Library() {
           <p className="page-subtitle">Manage books, issues, returns and renewals</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          {can('library', 'edit') && (
+            <button className="btn btn-secondary" onClick={() => setShowCategories(true)}>
+              <Tag size={16} /> Add Category
+            </button>
+          )}
           {can('library', 'edit') && (
             <button className="btn btn-secondary" onClick={() => setShowIssueModal(true)}>
               <BookMarked size={16} /> Issue Book
@@ -107,7 +121,82 @@ export default function Library() {
           }}
         />
       )}
+
+      {showCategories && <LibraryCategoryModal onClose={() => setShowCategories(false)} />}
     </div>
+  );
+}
+
+// ─── Manage Book Categories (mirrors the Expense category manager) ───────────────
+function LibraryCategoryModal({ onClose }) {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
+  const [list, setList] = useState([]);
+  const [newCat, setNewCat] = useState('');
+  const [saving, setSaving] = useState(false);
+  const initialized = useRef(false);
+
+  useEffect(() => {
+    if (!initialized.current && data?.school) { setList([...(data.school.libraryCategories || [])]); initialized.current = true; }
+  }, [data]);
+
+  const handleAdd = () => {
+    const trimmed = newCat.trim();
+    if (!trimmed) return;
+    if (BOOK_CATEGORIES.some(c => c.toLowerCase() === trimmed.toLowerCase()) || list.some(c => c.toLowerCase() === trimmed.toLowerCase())) {
+      return toast.error('Category already exists');
+    }
+    setList(prev => [...prev, trimmed]);
+    setNewCat('');
+  };
+  const handleRemove = (cat) => setList(prev => prev.filter(c => c !== cat));
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.put('/school/library-categories', { categories: list });
+      qc.invalidateQueries(['school']);
+      toast.success('Categories saved');
+      onClose();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to save');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Manage Book Categories"
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Categories'}</button>
+      </>}>
+      <div className="form-group">
+        <label className="form-label">Default Categories</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {BOOK_CATEGORIES.map(c => (
+            <span key={c} style={{ padding: '4px 12px', borderRadius: 20, background: '#f1f5f9', fontSize: 13, color: 'var(--text-secondary)' }}>{c}</span>
+          ))}
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Custom Categories</label>
+        {list.length === 0 && <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>No custom categories yet.</p>}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+          {list.map(c => (
+            <span key={c} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: '#eff6ff', border: '1px solid #bfdbfe', fontSize: 13, color: '#1d4ed8' }}>
+              {c}
+              <button onClick={() => handleRemove(c)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', color: '#1d4ed8' }}>
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input className="form-control" placeholder="e.g. Biography, Poetry..." value={newCat}
+            onChange={e => setNewCat(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAdd()} />
+          <button className="btn btn-secondary" onClick={handleAdd} disabled={!newCat.trim()}><Plus size={14} /> Add</button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -116,6 +205,7 @@ export default function Library() {
 function BooksTab({ addBookSignal = 0 }) {
   const qc = useQueryClient();
   const { can } = usePermissions();
+  const { categories: allCategories } = useLibraryCategories();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [status, setStatus] = useState('');
@@ -171,8 +261,10 @@ function BooksTab({ addBookSignal = 0 }) {
           value={category || undefined}
           placeholder="All Categories"
           allowClear
+          showSearch
+          optionFilterProp="label"
           onChange={val => setCategory(val ?? '')}
-          options={BOOK_CATEGORIES.map(c => ({ value: c, label: c }))}
+          options={allCategories.map(c => ({ value: c, label: c }))}
         />
         <AntSelect
           style={{ minWidth: 130 }}
@@ -328,6 +420,7 @@ function BooksTab({ addBookSignal = 0 }) {
 
 function BookModal({ book, onClose, onSuccess }) {
   const isEdit = !!book;
+  const { categories: allCategories } = useLibraryCategories();
   const [form, setForm] = useState({
     title:       book?.title       || '',
     author:      book?.author      || '',
@@ -492,8 +585,10 @@ function BookModal({ book, onClose, onSuccess }) {
             style={{ width: '100%' }}
             value={form.category || undefined}
             placeholder="Select category"
+            showSearch
+            optionFilterProp="label"
             onChange={val => set('category', val ?? '')}
-            options={BOOK_CATEGORIES.map(c => ({ value: c, label: c }))}
+            options={allCategories.map(c => ({ value: c, label: c }))}
           />
         </div>
       </FormRow>

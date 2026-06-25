@@ -1627,6 +1627,15 @@ router.put('/school/inventory-categories', protect, authorize('admin', 'correspo
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+router.put('/school/library-categories', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const { categories } = req.body;
+    if (!Array.isArray(categories)) return res.status(400).json({ success: false, message: 'categories must be an array' });
+    const school = await School.findByIdAndUpdate(req.user.school, { libraryCategories: categories }, { returnDocument: 'after' });
+    res.json({ success: true, school });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 router.put('/school/inventory-locations', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
   try {
     const { locations } = req.body;
