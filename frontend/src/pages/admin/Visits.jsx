@@ -26,6 +26,24 @@ const PURPOSES = [
 ];
 const PURPOSE_META = Object.fromEntries(PURPOSES.map(p => [p.value, p]));
 
+// Colour palette offered when creating a custom purpose category.
+const PALETTE = [
+  { color: '#1a56e8', bg: '#eff6ff' }, { color: '#16a34a', bg: '#f0fdf4' },
+  { color: '#9333ea', bg: '#faf5ff' }, { color: '#d97706', bg: '#fffbeb' },
+  { color: '#dc2626', bg: '#fef2f2' }, { color: '#0891b2', bg: '#ecfeff' },
+  { color: '#0d9488', bg: '#f0fdfa' }, { color: '#db2777', bg: '#fdf2f8' },
+  { color: '#64748b', bg: '#f1f5f9' },
+];
+
+// Built-in purposes + the school's custom categories, with a combined lookup map.
+function useVisitPurposes() {
+  const { data } = useQuery({ queryKey: ['visit-purposes'], queryFn: () => api.get('/visit-purposes') });
+  const custom = (data?.purposes || []).map(c => ({ value: c._id, label: c.label, color: c.color, bg: c.bg, custom: true }));
+  const purposes = [...PURPOSES, ...custom];
+  const meta = Object.fromEntries(purposes.map(p => [p.value, p]));
+  return { purposes, custom, meta };
+}
+
 const STATUS_META = {
   waiting:     { label: 'Waiting',     color: '#d97706', bg: '#fffbeb' },
   in_progress: { label: 'In Progress', color: '#1a56e8', bg: '#eff6ff' },
@@ -61,6 +79,9 @@ export default function Visits() {
   const [followUpTarget, setFollowUpTarget] = useState(null);
   const [selected, setSelected] = useState([]);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [showPurposes, setShowPurposes] = useState(false);
+
+  const { purposes, meta: purposeMeta } = useVisitPurposes();
 
   const { data: statsData } = useQuery({ queryKey: ['visit-stats'], queryFn: () => api.get('/visits/stats') });
   const stats = statsData?.stats || {};
@@ -118,6 +139,9 @@ export default function Visits() {
               <Trash2 size={16} /> Delete ({selected.length})
             </button>
           )}
+          <button className="btn btn-secondary" onClick={() => setShowPurposes(true)}>
+            <Plus size={16} /> Add Purpose Category
+          </button>
           <button className="btn btn-primary" onClick={() => { setEditVisit(null); setShowModal(true); }}>
             <Plus size={16} /> Add Visitor
           </button>
@@ -138,7 +162,7 @@ export default function Visits() {
         <AntSelect style={{ minWidth: 150 }} value={statusFilter || undefined} placeholder="All Status" allowClear
           onChange={v => { setStatusFilter(v ?? ''); setPage(1); }} options={STATUS_OPTIONS} />
         <AntSelect style={{ minWidth: 180 }} value={purposeFilter || undefined} placeholder="All Purposes" allowClear showSearch optionFilterProp="label"
-          onChange={v => { setPurposeFilter(v ?? ''); setPage(1); }} options={PURPOSES.map(p => ({ value: p.value, label: p.label }))} />
+          onChange={v => { setPurposeFilter(v ?? ''); setPage(1); }} options={purposes.map(p => ({ value: p.value, label: p.label }))} />
         <DatePicker.RangePicker
           style={{ width: 280 }}
           format="DD MMM YYYY"
@@ -196,7 +220,7 @@ export default function Visits() {
                         </span>
                       )}
                     </td>
-                    <td><Pill meta={PURPOSE_META[v.purpose]} /></td>
+                    <td><Pill meta={purposeMeta[v.purpose]} /></td>
                     <td style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.purposeDetail || '—'}</td>
                     <td style={{ fontSize: 13 }}>{v.attendedBy?.name || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                     <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{v.checkInTime ? format(new Date(v.checkInTime), 'dd MMM, hh:mm a') : '—'}</td>
@@ -253,6 +277,8 @@ export default function Visits() {
       <ConfirmDialog open={bulkDeleteConfirm} onClose={() => setBulkDeleteConfirm(false)}
         onConfirm={() => deleteMutation.mutate()}
         title="Delete Visits" message={`This will permanently delete ${selected.length} visit record(s). This cannot be undone.`} danger />
+
+      {showPurposes && <PurposeCategoryModal onClose={() => setShowPurposes(false)} />}
     </div>
   );
 }
@@ -262,6 +288,7 @@ function VisitModal({ visit, prefill, onClose, onSaved }) {
   const isEdit = !!visit;
   const isReturning = !isEdit && !!prefill;
   const base = visit || prefill || {};
+  const { purposes } = useVisitPurposes();
   const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm({
     defaultValues: {
       visitorName: base.visitorName || '',
@@ -344,7 +371,7 @@ function VisitModal({ visit, prefill, onClose, onSaved }) {
             <label className="form-label">Purpose *</label>
             <Controller name="purpose" control={control} render={({ field }) => (
               <AntSelect {...field} style={{ width: '100%' }} showSearch optionFilterProp="label"
-                options={PURPOSES.map(p => ({ value: p.value, label: p.label }))} />
+                options={purposes.map(p => ({ value: p.value, label: p.label }))} />
             )} />
           </div>
           <div className="form-group">
@@ -461,6 +488,7 @@ function VisitDetailModal({ id, onClose, onEdit, onCheckout, onCompleteFollowUp,
   const v = data?.visit;
   const history = data?.history || [];
   const [tab, setTab] = useState('details');
+  const { meta: purposeMeta } = useVisitPurposes();
 
   const pendingFollowUp = v?.followUpRequired && v?.status !== 'cancelled';
   const initials = (v?.visitorName || '?').trim().split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase();
@@ -472,7 +500,7 @@ function VisitDetailModal({ id, onClose, onEdit, onCheckout, onCompleteFollowUp,
       { label: 'No. of Visitors', value: v.numberOfVisitors },
     ] },
     { title: 'Visit', items: [
-      { label: 'Purpose', value: PURPOSE_META[v.purpose]?.label || '—' },
+      { label: 'Purpose', value: purposeMeta[v.purpose]?.label || '—' },
       { label: 'Attended By', value: v.attendedBy?.name || '—' },
       { label: 'Related Student', value: v.relatedStudent ? `${v.relatedStudent.name}${v.relatedStudent.admissionNumber ? ` (${v.relatedStudent.admissionNumber})` : ''}` : '—' },
       { label: 'Reason', value: v.purposeDetail || '—', full: true },
@@ -510,7 +538,7 @@ function VisitDetailModal({ id, onClose, onEdit, onCheckout, onCompleteFollowUp,
         <>
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, paddingBottom: 16, borderBottom: '1px solid var(--border)' }}>
-            <div style={{ width: 52, height: 52, borderRadius: '50%', background: PURPOSE_META[v.purpose]?.bg || '#eff6ff', color: PURPOSE_META[v.purpose]?.color || '#1a56e8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 17, flexShrink: 0 }}>
+            <div style={{ width: 52, height: 52, borderRadius: '50%', background: purposeMeta[v.purpose]?.bg || '#eff6ff', color: purposeMeta[v.purpose]?.color || '#1a56e8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 17, flexShrink: 0 }}>
               {initials}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -520,7 +548,7 @@ function VisitDetailModal({ id, onClose, onEdit, onCheckout, onCompleteFollowUp,
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 5, fontSize: 13, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Phone size={13} /> {v.phone}</span>
-                <Pill meta={PURPOSE_META[v.purpose]} />
+                <Pill meta={purposeMeta[v.purpose]} />
               </div>
             </div>
           </div>
@@ -558,7 +586,7 @@ function VisitDetailModal({ id, onClose, onEdit, onCheckout, onCompleteFollowUp,
                     {history.map(h => (
                       <div key={h._id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Pill meta={PURPOSE_META[h.purpose]} />
+                          <Pill meta={purposeMeta[h.purpose]} />
                           <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{h.checkInTime ? format(new Date(h.checkInTime), 'dd MMM yyyy') : ''}</span>
                         </div>
                         <Pill meta={STATUS_META[h.status]} />
@@ -618,6 +646,92 @@ function CompleteFollowUpModal({ visit, onClose, onConfirm, loading }) {
         <label className="form-label">Follow-up Outcome / Reason *</label>
         <textarea className="form-control" rows={3} value={outcome} onChange={e => setOutcome(e.target.value)}
           placeholder="e.g. Shared bus quote, parent will confirm next week" style={{ resize: 'vertical' }} autoFocus />
+      </div>
+    </Modal>
+  );
+}
+
+// ── Purpose Categories Modal ────────────────────────────────────────────────────
+function PurposeCategoryModal({ onClose }) {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ['visit-purposes'], queryFn: () => api.get('/visit-purposes') });
+  const custom = data?.purposes || [];
+  const [label, setLabel] = useState('');
+  const [colorIdx, setColorIdx] = useState(0);
+
+  const refresh = () => qc.invalidateQueries(['visit-purposes']);
+  const addMutation = useMutation({
+    mutationFn: (d) => api.post('/visit-purposes', d),
+    onSuccess: () => { refresh(); toast.success('Category added'); setLabel(''); },
+    onError: (err) => toast.error(err.message || 'Failed to add'),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/visit-purposes/${id}`),
+    onSuccess: () => { refresh(); toast.success('Category removed'); },
+    onError: (err) => toast.error(err.message || 'Failed to remove'),
+  });
+
+  const add = () => {
+    if (!label.trim()) return toast.error('Enter a category name');
+    addMutation.mutate({ label: label.trim(), ...PALETTE[colorIdx] });
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Purpose Categories"
+      footer={<button className="btn btn-secondary" onClick={onClose}>Done</button>}>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 0 }}>
+        Add your own visit purposes — they appear in the filter and the Add Visitor form alongside the built-in ones.
+      </p>
+
+      <div className="form-group">
+        <label className="form-label">New Category Name</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input className="form-control" value={label} onChange={e => setLabel(e.target.value)}
+            placeholder="e.g. Alumni Visit" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+          <button className="btn btn-primary" onClick={add} disabled={addMutation.isPending} style={{ whiteSpace: 'nowrap' }}>
+            <Plus size={15} /> Add
+          </button>
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Colour</label>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {PALETTE.map((p, i) => (
+            <button key={i} type="button" onClick={() => setColorIdx(i)} title="Pick colour"
+              style={{ width: 28, height: 28, borderRadius: 8, background: p.bg, border: `2px solid ${colorIdx === i ? p.color : 'transparent'}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ width: 12, height: 12, borderRadius: '50%', background: p.color }} />
+            </button>
+          ))}
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20, background: PALETTE[colorIdx].bg, color: PALETTE[colorIdx].color }}>
+            {label.trim() || 'Preview'}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+          Your Categories
+        </div>
+        {custom.length === 0 ? (
+          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No custom categories yet.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {custom.map(c => (
+              <div key={c._id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, border: '1px solid var(--border)', borderRadius: 8, padding: '7px 12px' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20, background: c.bg, color: c.color }}>{c.label}</span>
+                <button className="btn btn-danger btn-sm btn-icon" title="Remove" onClick={() => deleteMutation.mutate(c._id)} disabled={deleteMutation.isPending}>
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 12 }}>
+          Removing a category won't change past visits already logged under it.
+        </p>
       </div>
     </Modal>
   );

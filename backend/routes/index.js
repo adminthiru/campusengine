@@ -35,6 +35,7 @@ const Leave = require('../models/Leave');
 const Book = require('../models/Book');
 const BookIssue = require('../models/BookIssue');
 const Visit = require('../models/Visit');
+const VisitPurpose = require('../models/VisitPurpose');
 const OutPass = require('../models/OutPass');
 const InventoryItem = require('../models/Inventory');
 const PurchaseRequest = require('../models/PurchaseRequest');
@@ -1976,6 +1977,39 @@ const coerceVisitFollowUp = (v) => {
   if (v && v.followUpRequired && v.status === 'completed') v.status = 'in_progress';
   return v;
 };
+
+// ---- Custom purpose categories (extend the built-in purpose list) ----
+router.get('/visit-purposes', protect, checkSubscription, authorize(...VISIT_ROLES), async (req, res) => {
+  try {
+    const purposes = await VisitPurpose.find({ school: req.user.school }).sort({ createdAt: 1 });
+    res.json({ success: true, purposes });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.post('/visit-purposes', protect, checkSubscription, authorize(...VISIT_ROLES), async (req, res) => {
+  try {
+    const label = (req.body.label || '').trim();
+    if (!label) return res.status(400).json({ success: false, message: 'Category name is required' });
+    const purpose = await VisitPurpose.create({
+      school: req.user.school,
+      label,
+      color: req.body.color || '#64748b',
+      bg: req.body.bg || '#f1f5f9',
+      createdBy: req.user._id,
+    });
+    res.status(201).json({ success: true, purpose });
+  } catch (err) {
+    if (err.code === 11000) return res.status(400).json({ success: false, message: 'A category with this name already exists' });
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.delete('/visit-purposes/:id', protect, checkSubscription, authorize(...VISIT_ROLES), async (req, res) => {
+  try {
+    await VisitPurpose.findOneAndDelete({ _id: req.params.id, school: req.user.school });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
 
 // Summary stats for the dashboard cards
 router.get('/visits/stats', protect, checkSubscription, authorize(...VISIT_ROLES), async (req, res) => {

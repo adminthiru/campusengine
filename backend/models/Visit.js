@@ -11,15 +11,9 @@ const visitSchema = new mongoose.Schema({
   email: { type: String },
   numberOfVisitors: { type: Number, default: 1 },
 
-  purpose: {
-    type: String,
-    enum: [
-      'admission_enquiry', 'fee_enquiry', 'fee_payment', 'uniform',
-      'books_stationery', 'vendor_supplier', 'parent_meeting',
-      'staff_meeting', 'complaint', 'document_collection', 'repair', 'other'
-    ],
-    default: 'other'
-  },
+  // A built-in purpose slug (admission_enquiry, …) OR a custom VisitPurpose _id.
+  // Not an enum so school-defined categories are allowed.
+  purpose: { type: String, default: 'other' },
   purposeDetail: { type: String },             // free-text reason / notes
 
   relatedStudent: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' }, // if it concerns an existing student
