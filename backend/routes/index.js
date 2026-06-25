@@ -35,7 +35,6 @@ const Leave = require('../models/Leave');
 const Book = require('../models/Book');
 const BookIssue = require('../models/BookIssue');
 const Visit = require('../models/Visit');
-const VisitPurpose = require('../models/VisitPurpose');
 const OutPass = require('../models/OutPass');
 const InventoryItem = require('../models/Inventory');
 const PurchaseRequest = require('../models/PurchaseRequest');
@@ -1978,36 +1977,15 @@ const coerceVisitFollowUp = (v) => {
   return v;
 };
 
-// ---- Custom purpose categories (extend the built-in purpose list) ----
-router.get('/visit-purposes', protect, checkSubscription, authorize(...VISIT_ROLES), async (req, res) => {
+// Custom purpose categories — stored as a string array on the school (same
+// pattern as expense categories), batch-saved from the manage modal.
+router.put('/school/visit-purposes', protect, checkSubscription, authorize(...VISIT_ROLES), async (req, res) => {
   try {
-    const purposes = await VisitPurpose.find({ school: req.user.school }).sort({ createdAt: 1 });
-    res.json({ success: true, purposes });
-  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
-});
-
-router.post('/visit-purposes', protect, checkSubscription, authorize(...VISIT_ROLES), async (req, res) => {
-  try {
-    const label = (req.body.label || '').trim();
-    if (!label) return res.status(400).json({ success: false, message: 'Category name is required' });
-    const purpose = await VisitPurpose.create({
-      school: req.user.school,
-      label,
-      color: req.body.color || '#64748b',
-      bg: req.body.bg || '#f1f5f9',
-      createdBy: req.user._id,
-    });
-    res.status(201).json({ success: true, purpose });
-  } catch (err) {
-    if (err.code === 11000) return res.status(400).json({ success: false, message: 'A category with this name already exists' });
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-router.delete('/visit-purposes/:id', protect, checkSubscription, authorize(...VISIT_ROLES), async (req, res) => {
-  try {
-    await VisitPurpose.findOneAndDelete({ _id: req.params.id, school: req.user.school });
-    res.json({ success: true });
+    const categories = Array.isArray(req.body.categories)
+      ? [...new Set(req.body.categories.map(c => String(c).trim()).filter(Boolean))]
+      : [];
+    const school = await School.findByIdAndUpdate(req.user.school, { visitPurposes: categories }, { returnDocument: 'after' });
+    res.json({ success: true, visitPurposes: school.visitPurposes });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 

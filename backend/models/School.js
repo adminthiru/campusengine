@@ -191,6 +191,7 @@ const schoolSchema = new mongoose.Schema({
   },
   expenseCategories: { type: [String], default: [] },
   inventoryCategories: { type: [String], default: [] },
+  visitPurposes: { type: [String], default: [] },
   inventoryLocations: { type: [String], default: [] },
   profileCompleted: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true }
