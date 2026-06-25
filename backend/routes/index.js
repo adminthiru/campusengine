@@ -1680,11 +1680,12 @@ router.get('/library/books', protect, checkSubscription, async (req, res) => {
 // POST /library/books
 router.post('/library/books', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
   try {
-    const { title, author, isbn, category, publisher, year, totalCopies, location, description, status } = req.body;
+    const { title, author, isbn, category, publisher, year, price, totalCopies, location, description, status } = req.body;
     const copies = Number(totalCopies) || 1;
     const book = await Book.create({
       school: req.user.school, title, author, isbn, category, publisher,
       year: year ? Number(year) : undefined,
+      price: (price !== undefined && price !== '' && price !== null) ? Number(price) : undefined,
       totalCopies: copies, availableCopies: copies,
       location, description, status: status || 'available',
     });

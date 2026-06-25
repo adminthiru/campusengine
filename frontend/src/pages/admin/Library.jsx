@@ -428,6 +428,7 @@ function BookModal({ book, onClose, onSuccess }) {
     category:    book?.category    || '',
     publisher:   book?.publisher   || '',
     year:        book?.year        || '',
+    price:       book?.price ?? '',
     totalCopies: book?.totalCopies || 1,
     location:    book?.location    || '',
     description: book?.description || '',
@@ -608,11 +609,15 @@ function BookModal({ book, onClose, onSuccess }) {
           <input className="form-control" type="number" min="1" value={form.totalCopies} onChange={e => set('totalCopies', e.target.value)} />
         </div>
         <div className="form-group">
-          <label className="form-label">Location (Shelf/Rack)</label>
-          <input className="form-control" value={form.location} onChange={e => set('location', e.target.value)} placeholder="e.g. Shelf A-3" />
+          <label className="form-label">Price (₹)</label>
+          <input className="form-control" type="number" min="0" value={form.price} onChange={e => set('price', e.target.value)} placeholder="Unit price (optional)" />
         </div>
       </FormRow>
       <FormRow>
+        <div className="form-group">
+          <label className="form-label">Location (Shelf/Rack)</label>
+          <input className="form-control" value={form.location} onChange={e => set('location', e.target.value)} placeholder="e.g. Shelf A-3" />
+        </div>
         <div className="form-group">
           <label className="form-label">Status</label>
           <AntSelect

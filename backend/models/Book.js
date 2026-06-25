@@ -8,6 +8,7 @@ const bookSchema = new mongoose.Schema({
   category:        { type: String, trim: true },
   publisher:       { type: String, trim: true },
   year:            { type: Number },
+  price:           { type: Number },               // unit price of the book (₹)
   totalCopies:     { type: Number, default: 1 },
   availableCopies: { type: Number, default: 1 },
   location:        { type: String, trim: true },   // shelf / rack
