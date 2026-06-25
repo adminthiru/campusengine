@@ -85,22 +85,27 @@ export default function Salary() {
     mutationFn: () => api.post('/salaries/generate', { month, year }),
     onSuccess: (res) => {
       qc.invalidateQueries(['salaries', month, year]);
-      const count = res.generated?.length ?? 0;
-      if (count > 0) toast.success(`Generated salaries for ${count} employee${count > 1 ? 's' : ''} — ${MONTHS[month - 1]} ${year}`);
+      const count = (res.generated?.length ?? 0) + (res.updated ?? 0);
+      if (count > 0) toast.success(`Salaries ready for ${count} employee${count > 1 ? 's' : ''} — ${MONTHS[month - 1]} ${year}`);
       setAutoGenerating(false);
     },
     onError: () => setAutoGenerating(false),
   });
 
+  // Auto-sync the month once: create missing records and backfill any blank ones
+  // from the employee's salary (master or a prior month), so a set salary carries
+  // forward without re-entry.
   useEffect(() => {
     const key = `${month}-${year}`;
-    if (!isLoading && salaries.length === 0 && !autoGenAttempted.current.has(key)) {
+    if (isLoading || autoGenAttempted.current.has(key)) return;
+    const hasBlankPending = salaries.some(s => (s.grossSalary || 0) === 0 && s.status === 'pending');
+    if (salaries.length === 0 || hasBlankPending) {
       autoGenAttempted.current.add(key);
       setAutoGenerating(true);
       autoGenerateMutation.mutate();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, salaries.length, month, year]);
+  }, [isLoading, salaries, month, year]);
 
   const totalNetPay = salaries.reduce((s, sal) => s + (sal.netSalary || 0), 0);
   const totalPaid = salaries.filter(s => s.status === 'paid').reduce((s, sal) => s + (sal.netSalary || 0), 0);
@@ -143,10 +148,14 @@ export default function Salary() {
     mutationFn: () => api.post('/salaries/generate', { month, year }),
     onSuccess: (res) => {
       qc.invalidateQueries(['salaries', month, year]);
-      const count = res.generated?.length ?? 0;
-      toast.success(count > 0
-        ? `Added ${count} missing employee${count > 1 ? 's' : ''} to ${MONTHS[month - 1]} ${year}`
-        : `All employees already have salary records for ${MONTHS[month - 1]} ${year}`
+      const added = res.generated?.length ?? 0;
+      const upd = res.updated ?? 0;
+      const parts = [];
+      if (added) parts.push(`added ${added}`);
+      if (upd) parts.push(`updated ${upd}`);
+      toast.success(parts.length
+        ? `Synced ${MONTHS[month - 1]} ${year} — ${parts.join(', ')} employee salar${added + upd > 1 ? 'ies' : 'y'}`
+        : `All employees already up to date for ${MONTHS[month - 1]} ${year}`
       );
     },
     onError: (err) => toast.error(err?.message || 'Sync failed'),
