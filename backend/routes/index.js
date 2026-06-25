@@ -2743,6 +2743,9 @@ router.post('/purchase-requests/:id/receive', protect, checkSubscription, author
     if (!pr) return res.status(404).json({ success: false, message: 'Request not found' });
     if (pr.status === 'received') return res.status(400).json({ success: false, message: 'Request already received' });
 
+    // The actual vendor can be corrected at receive time.
+    if (req.body.vendor !== undefined) pr.vendor = (req.body.vendor || '').trim();
+
     // Map submitted unit prices by line id
     const priceById = {};
     (Array.isArray(req.body.items) ? req.body.items : []).forEach(l => { priceById[String(l._id)] = l.actualPrice; });

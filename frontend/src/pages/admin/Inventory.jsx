@@ -1279,10 +1279,12 @@ function ReceiveRequestModal({ request, onClose, onSaved }) {
     const m = {}; lines.forEach(i => { m[i._id] = (i.actualPrice ?? i.estimatedPrice ?? ''); }); return m;
   });
   const setPrice = (id, v) => setPrices(p => ({ ...p, [id]: v }));
+  const [vendor, setVendor] = useState(request.vendor || '');
 
   const mutation = useMutation({
     mutationFn: () => api.post(`/purchase-requests/${request._id}/receive`, {
       items: lines.map(i => ({ _id: i._id, actualPrice: prices[i._id] !== '' ? Number(prices[i._id]) : undefined })),
+      vendor: vendor.trim(),
     }),
     onSuccess: () => { toast.success('Received — units added to inventory & expense booked'); onSaved(); },
     onError: (err) => toast.error(err.message || 'Failed'),
@@ -1316,6 +1318,14 @@ function ReceiveRequestModal({ request, onClose, onSaved }) {
       <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 0, marginBottom: 14 }}>
         Enter the actual <strong>unit price</strong> paid. On receive, each line is created as inventory units under its category, and one expense is booked for the total.
       </p>
+      <div className="form-group" style={{ marginBottom: 14 }}>
+        <label className="form-label">Vendor</label>
+        <input className="form-control" value={vendor} onChange={e => setVendor(e.target.value)}
+          placeholder="Who you purchased from" />
+        <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
+          Pre-filled from the request — update it if you bought from a different vendor.
+        </p>
+      </div>
       <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
           <thead>
