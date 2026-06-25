@@ -2208,12 +2208,21 @@ router.get('/outpasses/:id', protect, checkSubscription, authorize(...OUTPASS_RO
 
 router.post('/outpasses', protect, checkSubscription, authorize(...OUTPASS_ROLES), async (req, res) => {
   try {
-    const n = await OutPass.countDocuments({ school: req.user.school }) + 1;
-    const passNumber = `GP${String(n).padStart(4, '0')}`;
-    const { school, approvedBy, passNumber: _pn, _id, ...body } = req.body;
-    const created = await OutPass.create({ ...body, passNumber, school: req.user.school, approvedBy: req.user._id });
-    const outpass = await populateOutPass(OutPass.findById(created._id));
-    res.status(201).json({ success: true, outpass });
+    const { school, approvedBy, passNumber: _pn, _id, studentIds, student, ...body } = req.body;
+    // One pass per student — a parent can collect several children in one go.
+    const ids = (Array.isArray(studentIds) && studentIds.length) ? studentIds : (student ? [student] : []);
+    if (!ids.length) return res.status(400).json({ success: false, message: 'At least one student is required' });
+
+    let n = await OutPass.countDocuments({ school: req.user.school });
+    const createdIds = [];
+    for (const sid of ids) {
+      n += 1;
+      const passNumber = `GP${String(n).padStart(4, '0')}`;
+      const doc = await OutPass.create({ ...body, student: sid, passNumber, school: req.user.school, approvedBy: req.user._id });
+      createdIds.push(doc._id);
+    }
+    const outpasses = await populateOutPass(OutPass.find({ _id: { $in: createdIds } }));
+    res.status(201).json({ success: true, outpasses, outpass: outpasses[0], count: createdIds.length });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 

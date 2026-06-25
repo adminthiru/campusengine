@@ -248,7 +248,7 @@ function OutPassModal({ pass, onClose, onSaved }) {
   const parents = parentsData?.parents || [];
 
   const [parentId, setParentId] = useState(pass?.parent?._id || pass?.parent || '');
-  const [studentId, setStudentId] = useState(pass?.student?._id || pass?.student || '');
+  const [studentIds, setStudentIds] = useState(pass?.student ? [pass.student._id || pass.student] : []);
   const [pickupType, setPickupType] = useState(pass?.pickupType || 'parent');
   const [form, setForm] = useState({
     pickupName:     pass?.pickupName || '',
@@ -265,14 +265,14 @@ function OutPassModal({ pass, onClose, onSaved }) {
 
   const selectedParent = parents.find(p => p._id === parentId);
   const parentStudents = selectedParent?.students || [];
-  const selectedStudent = parentStudents.find(s => s._id === studentId);
+  const selectedStudents = parentStudents.filter(s => studentIds.includes(s._id));
 
   // When a parent is chosen: load their children, auto-select if single, prefill pickup
   const onParentChange = (pid) => {
     setParentId(pid);
     const p = parents.find(x => x._id === pid);
     const studs = p?.students || [];
-    setStudentId(studs.length === 1 ? studs[0]._id : '');
+    setStudentIds(studs.length === 1 ? [studs[0]._id] : []);
     if (pickupType === 'parent' && p) {
       setForm(f => ({ ...f, pickupName: p.name || '', pickupRelation: p.relation || '', pickupPhone: p.phone || '', pickupIdProof: '' }));
     }
@@ -289,16 +289,20 @@ function OutPassModal({ pass, onClose, onSaved }) {
 
   const saveMutation = useMutation({
     mutationFn: (payload) => isEdit ? api.put(`/outpasses/${pass._id}`, payload) : api.post('/outpasses', payload),
-    onSuccess: () => { toast.success(isEdit ? 'Out pass updated!' : 'Out pass issued!'); onSaved(); },
+    onSuccess: (res) => {
+      const n = res?.count || 1;
+      toast.success(isEdit ? 'Out pass updated!' : `${n} out pass${n > 1 ? 'es' : ''} issued!`);
+      onSaved();
+    },
     onError: (err) => toast.error(err.message || 'Failed'),
   });
 
   const submit = () => {
-    if (!studentId) return toast.error('Please select a student');
+    if (!isEdit && !studentIds.length) return toast.error('Please select at least one student');
     if (!form.pickupName?.trim()) return toast.error('Pickup person name is required');
     if (form.pickupPhone && !/^[0-9]{10}$/.test(form.pickupPhone)) return toast.error('Enter a valid 10-digit phone');
     const payload = {
-      student: studentId,
+      ...(isEdit ? { student: pass.student?._id || pass.student } : { studentIds }),
       parent: pickupType === 'parent' ? (parentId || undefined) : undefined,
       pickupType,
       pickupName: form.pickupName.trim(),
@@ -347,26 +351,31 @@ function OutPassModal({ pass, onClose, onSaved }) {
             />
           </div>
           <div className="form-group">
-            <label className="form-label">Student *</label>
+            <label className="form-label">Student{parentStudents.length > 1 ? 's' : ''} *</label>
             <AntSelect
+              mode="multiple"
               style={{ width: '100%' }} showSearch optionFilterProp="label"
-              placeholder={parentId ? 'Select student' : 'Select a parent first'}
+              placeholder={parentId ? 'Select one or more students' : 'Select a parent first'}
               disabled={!parentId}
-              value={studentId || undefined}
-              onChange={setStudentId}
+              value={studentIds}
+              onChange={setStudentIds}
               options={parentStudents.map(s => ({ value: s._id, label: `${s.name}${s.currentClass ? ` (${classLabel(s.currentClass)})` : ''}` }))}
             />
           </div>
         </FormRow>
       )}
 
-      {!isEdit && selectedStudent && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '8px 12px', marginBottom: 16 }}>
-          <Avatar src={selectedStudent.photo} name={selectedStudent.name} size={32} />
-          <div>
-            <div className="text-14-semibold">{selectedStudent.name}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{classLabel(selectedStudent.currentClass)} · {selectedStudent.admissionNumber}</div>
-          </div>
+      {!isEdit && selectedStudents.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+          {selectedStudents.map(st => (
+            <div key={st._id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '8px 12px' }}>
+              <Avatar src={st.photo} name={st.name} size={32} />
+              <div>
+                <div className="text-14-semibold">{st.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{classLabel(st.currentClass)} · {st.admissionNumber}</div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
