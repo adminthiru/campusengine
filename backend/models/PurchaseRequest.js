@@ -17,6 +17,7 @@ const purchaseRequestSchema = new mongoose.Schema({
   requestNumber: { type: String, required: true },   // auto "PR0001"
   title: { type: String },
   status: { type: String, enum: ['pending', 'ordered', 'received', 'cancelled'], default: 'pending' },
+  type: { type: String, enum: ['asset', 'consumable'], default: 'asset' }, // what's being procured
   category: { type: String },   // shared across the request's items
   location: { type: String },
   vendor: { type: String },

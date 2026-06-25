@@ -22,6 +22,9 @@ const inventoryItemSchema = new mongoose.Schema({
   school: { type: mongoose.Schema.Types.ObjectId, ref: 'School', required: true },
   itemCode: { type: String, required: true }, // auto "INV0001"
   name: { type: String, required: true },
+  // asset = individually-tracked unit (qty 1, lifecycle/status/repair per item);
+  // consumable = stock item that carries a quantity (markers, chalk, paper…).
+  type: { type: String, enum: ['asset', 'consumable'], default: 'asset' },
   category: { type: String },   // configurable per school
   location: { type: String },   // configurable per school (Computer Lab, Science Lab...)
   serialNumber: { type: String },

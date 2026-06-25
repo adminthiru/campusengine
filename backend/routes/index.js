@@ -2445,6 +2445,7 @@ router.post('/inventory/bulk', protect, checkSubscription, authorize(...INVENTOR
     const units = Array.isArray(req.body.units) ? req.body.units.filter(u => u && u.name && u.name.trim()) : [];
     if (units.length === 0) return res.status(400).json({ success: false, message: 'Add at least one unit with a name' });
 
+    const type = shared.type === 'consumable' ? 'consumable' : 'asset';
     let n = await InventoryItem.countDocuments({ school: req.user.school });
     const created = [];
     for (const u of units) {
@@ -2454,10 +2455,12 @@ router.post('/inventory/bulk', protect, checkSubscription, authorize(...INVENTOR
         createdBy: req.user._id,
         itemCode: `INV${String(n).padStart(4, '0')}`,
         name: u.name.trim(),
-        serialNumber: u.serialNumber || undefined,
-        assetTag: u.assetTag || undefined,
+        type,
+        // Assets are one physical unit per row; only consumables carry a quantity.
+        serialNumber: type === 'asset' ? (u.serialNumber || undefined) : undefined,
+        assetTag: type === 'asset' ? (u.assetTag || undefined) : undefined,
         purchasePrice: (u.purchasePrice !== undefined && u.purchasePrice !== '' && u.purchasePrice !== null) ? Number(u.purchasePrice) : undefined,
-        quantity: Number(u.quantity) > 0 ? Number(u.quantity) : 1,
+        quantity: type === 'asset' ? 1 : (Number(u.quantity) > 0 ? Number(u.quantity) : 1),
         category: shared.category || undefined,
         location: shared.location || undefined,
         vendor: shared.vendor || undefined,
@@ -2677,10 +2680,12 @@ router.post('/purchase-requests', protect, checkSubscription, authorize(...INVEN
     const n = await PurchaseRequest.countDocuments({ school: req.user.school }) + 1;
     const sharedCategory = req.body.category || undefined;
     const sharedLocation = req.body.location || undefined;
+    const type = req.body.type === 'consumable' ? 'consumable' : 'asset';
     const request = await PurchaseRequest.create({
       school: req.user.school,
       requestNumber: `PR${String(n).padStart(4, '0')}`,
       title: req.body.title,
+      type,
       category: sharedCategory,
       location: sharedLocation,
       vendor: req.body.vendor,
@@ -2691,7 +2696,8 @@ router.post('/purchase-requests', protect, checkSubscription, authorize(...INVEN
         name: i.name.trim(),
         category: sharedCategory,
         location: sharedLocation,
-        quantity: Number(i.quantity) > 0 ? Number(i.quantity) : 1,
+        // Asset lines are one unit each; only consumables carry a quantity.
+        quantity: type === 'asset' ? 1 : (Number(i.quantity) > 0 ? Number(i.quantity) : 1),
         estimatedPrice: (i.estimatedPrice !== undefined && i.estimatedPrice !== '' && i.estimatedPrice !== null) ? Number(i.estimatedPrice) : undefined,
       })),
       requestedBy: req.user._id,
@@ -2758,7 +2764,8 @@ router.post('/purchase-requests/:id/receive', protect, checkSubscription, author
       const raw = priceById[String(line._id)];
       const unitPrice = Number(raw !== undefined && raw !== '' && raw !== null ? raw : (line.estimatedPrice || 0)) || 0;
       line.actualPrice = unitPrice;
-      const qty = Math.max(1, Number(line.quantity) || 1);
+      const itemType = pr.type === 'consumable' ? 'consumable' : 'asset';
+      const qty = itemType === 'asset' ? 1 : Math.max(1, Number(line.quantity) || 1);
       if (line.category) cats.add(line.category);
       n += 1;
       const doc = await InventoryItem.create({
@@ -2766,6 +2773,7 @@ router.post('/purchase-requests/:id/receive', protect, checkSubscription, author
         createdBy: req.user._id,
         itemCode: `INV${String(n).padStart(4, '0')}`,
         name: line.name,
+        type: itemType,
         category: line.category || undefined,
         location: line.location || undefined,
         vendor: pr.vendor || undefined,

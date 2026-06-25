@@ -535,11 +535,28 @@ export default function Inventory() {
   );
 }
 
+// Asset vs Consumable segmented toggle, reused by Add Items & Purchase Request.
+function TypeToggle({ value, onChange, disabled }) {
+  return (
+    <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+      {[['asset', 'Asset'], ['consumable', 'Consumable']].map(([val, label]) => (
+        <button key={val} type="button" disabled={disabled} onClick={() => onChange(val)}
+          style={{ padding: '7px 18px', fontSize: 13, fontWeight: 600, border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
+            background: value === val ? 'var(--primary)' : '#fff', color: value === val ? '#fff' : 'var(--text-secondary)' }}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ── Add Items Modal (multi-unit) ──────────────────────────────────────────────────
 function AddItemsModal({ categories, locations, initialCategory, onClose, onSaved }) {
   const { data: empData } = useQuery({ queryKey: ['employees-all-inv'], queryFn: () => api.get('/employees?limit=200') });
   const employees = empData?.employees || [];
 
+  const [type, setType] = useState('asset');
+  const isAsset = type === 'asset';
   const [shared, setShared] = useState({ category: initialCategory || undefined, location: undefined, vendor: '', purchaseDate: '', warrantyExpiry: '', assignedTo: undefined, status: 'in_use' });
   const setS = (k, v) => setShared(s => ({ ...s, [k]: v }));
   const blankRow = () => ({ name: '', serialNumber: '', assetTag: '', quantity: 1, purchasePrice: '' });
@@ -556,20 +573,21 @@ function AddItemsModal({ categories, locations, initialCategory, onClose, onSave
   });
 
   const lineCount = rows.filter(r => r.name.trim()).length;
-  const totalUnits = rows.filter(r => r.name.trim()).reduce((s, r) => s + (Number(r.quantity) || 1), 0);
-  const totalPrice = rows.reduce((s, r) => s + (Number(r.purchasePrice) || 0) * (Number(r.quantity) || 1), 0);
+  const totalUnits = isAsset ? lineCount : rows.filter(r => r.name.trim()).reduce((s, r) => s + (Number(r.quantity) || 1), 0);
+  const totalPrice = rows.reduce((s, r) => s + (Number(r.purchasePrice) || 0) * (isAsset ? 1 : (Number(r.quantity) || 1)), 0);
 
   const submit = () => {
     const units = rows.filter(r => r.name.trim()).map(r => ({
       name: r.name.trim(),
-      serialNumber: r.serialNumber || undefined,
-      assetTag: r.assetTag || undefined,
-      quantity: Number(r.quantity) > 0 ? Number(r.quantity) : 1,
+      serialNumber: isAsset ? (r.serialNumber || undefined) : undefined,
+      assetTag: isAsset ? (r.assetTag || undefined) : undefined,
+      quantity: isAsset ? 1 : (Number(r.quantity) > 0 ? Number(r.quantity) : 1),
       purchasePrice: r.purchasePrice !== '' ? Number(r.purchasePrice) : undefined,
     }));
     if (units.length === 0) return toast.error('Add at least one unit with a name');
     mutation.mutate({
       shared: {
+        type,
         category: shared.category || undefined,
         location: shared.location || undefined,
         vendor: shared.vendor || undefined,
@@ -593,8 +611,14 @@ function AddItemsModal({ categories, locations, initialCategory, onClose, onSave
           {mutation.isPending ? 'Saving...' : `Add ${lineCount || 0} Item${lineCount === 1 ? '' : 's'}`}
         </button>
       </>}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+        <label className="form-label" style={{ margin: 0 }}>Inventory Type</label>
+        <TypeToggle value={type} onChange={setType} />
+      </div>
       <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 0, marginBottom: 16 }}>
-        Shared details apply to every unit. Add one row per physical unit (e.g. each computer gets its own name &amp; price).
+        {isAsset
+          ? <>Each row is <strong>one physical asset</strong> tracked individually (its own status, repairs, assignment). No quantity — add a row per unit.</>
+          : <>Consumables are stocked by <strong>quantity</strong> (markers, chalk, paper…). Add a row per item with how many.</>}
       </p>
 
       {/* Shared fields */}
@@ -643,9 +667,14 @@ function AddItemsModal({ categories, locations, initialCategory, onClose, onSave
             <tr style={{ background: '#f8fafc' }}>
               <th style={{ ...cell, width: 30, fontSize: 11, color: 'var(--text-muted)', textAlign: 'left' }}>#</th>
               <th style={{ ...cell, fontSize: 11, color: 'var(--text-muted)', textAlign: 'left' }}>Name *</th>
-              <th style={{ ...cell, fontSize: 11, color: 'var(--text-muted)', textAlign: 'left' }}>Serial No.</th>
-              <th style={{ ...cell, fontSize: 11, color: 'var(--text-muted)', textAlign: 'left' }}>Asset Tag</th>
-              <th style={{ ...cell, width: 80, fontSize: 11, color: 'var(--text-muted)', textAlign: 'left' }}>Qty</th>
+              {isAsset ? (
+                <>
+                  <th style={{ ...cell, fontSize: 11, color: 'var(--text-muted)', textAlign: 'left' }}>Serial No.</th>
+                  <th style={{ ...cell, fontSize: 11, color: 'var(--text-muted)', textAlign: 'left' }}>Asset Tag</th>
+                </>
+              ) : (
+                <th style={{ ...cell, width: 90, fontSize: 11, color: 'var(--text-muted)', textAlign: 'left' }}>Qty</th>
+              )}
               <th style={{ ...cell, width: 110, fontSize: 11, color: 'var(--text-muted)', textAlign: 'left' }}>Unit Price (₹)</th>
               <th style={{ ...cell, width: 36 }}></th>
             </tr>
@@ -654,10 +683,15 @@ function AddItemsModal({ categories, locations, initialCategory, onClose, onSave
             {rows.map((r, i) => (
               <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
                 <td style={{ ...cell, color: 'var(--text-muted)', fontSize: 12 }}>{i + 1}</td>
-                <td style={cell}><input className="form-control" style={cellInput} value={r.name} onChange={e => setRow(i, 'name', e.target.value)} placeholder="Unit name" /></td>
-                <td style={cell}><input className="form-control" style={cellInput} value={r.serialNumber} onChange={e => setRow(i, 'serialNumber', e.target.value)} placeholder="Optional" /></td>
-                <td style={cell}><input className="form-control" style={cellInput} value={r.assetTag} onChange={e => setRow(i, 'assetTag', e.target.value)} placeholder="Optional" /></td>
-                <td style={cell}><input className="form-control" style={cellInput} type="number" min={1} value={r.quantity} onChange={e => setRow(i, 'quantity', e.target.value)} /></td>
+                <td style={cell}><input className="form-control" style={cellInput} value={r.name} onChange={e => setRow(i, 'name', e.target.value)} placeholder={isAsset ? 'Unit name' : 'Item name'} /></td>
+                {isAsset ? (
+                  <>
+                    <td style={cell}><input className="form-control" style={cellInput} value={r.serialNumber} onChange={e => setRow(i, 'serialNumber', e.target.value)} placeholder="Optional" /></td>
+                    <td style={cell}><input className="form-control" style={cellInput} value={r.assetTag} onChange={e => setRow(i, 'assetTag', e.target.value)} placeholder="Optional" /></td>
+                  </>
+                ) : (
+                  <td style={cell}><input className="form-control" style={cellInput} type="number" min={1} value={r.quantity} onChange={e => setRow(i, 'quantity', e.target.value)} /></td>
+                )}
                 <td style={cell}><input className="form-control" style={cellInput} type="number" min={0} value={r.purchasePrice} onChange={e => setRow(i, 'purchasePrice', e.target.value)} placeholder="0" /></td>
                 <td style={cell}>
                   <button className="btn btn-secondary btn-sm btn-icon" onClick={() => removeRow(i)} disabled={rows.length === 1} title="Remove"><X size={13} /></button>
@@ -1154,6 +1188,8 @@ function ManageConfigModal({ school, onClose, onSaved }) {
 function PurchaseRequestModal({ request, categories, locations, onClose, onSaved }) {
   const isEdit = !!request;
   const received = request?.status === 'received'; // already fulfilled — only details editable
+  const [type, setType] = useState(request?.type || 'asset');
+  const isAsset = type === 'asset';
   const [head, setHead] = useState({
     title: request?.title || '', vendor: request?.vendor || '',
     category: request?.category || undefined, location: request?.location || undefined,
@@ -1178,18 +1214,18 @@ function PurchaseRequestModal({ request, categories, locations, onClose, onSaved
 
   const submit = () => {
     const items = rows.filter(r => r.name.trim()).map(r => ({
-      name: r.name.trim(), quantity: Number(r.quantity) || 1,
+      name: r.name.trim(), quantity: isAsset ? 1 : (Number(r.quantity) || 1),
       estimatedPrice: r.estimatedPrice !== '' ? Number(r.estimatedPrice) : undefined,
     }));
     if (items.length === 0) return toast.error('Add at least one item with a name');
     mutation.mutate({
-      title: head.title || undefined, vendor: head.vendor || undefined,
+      title: head.title || undefined, vendor: head.vendor || undefined, type,
       category: head.category || undefined, location: head.location || undefined,
       expectedDate: head.expectedDate || undefined, notes: head.notes || undefined, items,
     });
   };
 
-  const estTotal = rows.reduce((s, r) => s + (Number(r.estimatedPrice) || 0) * (Number(r.quantity) || 1), 0);
+  const estTotal = rows.reduce((s, r) => s + (Number(r.estimatedPrice) || 0) * (isAsset ? 1 : (Number(r.quantity) || 1)), 0);
   const cell = { padding: '4px 6px' };
   const cellInput = { fontSize: 13, padding: '6px 8px' };
 
@@ -1206,6 +1242,13 @@ function PurchaseRequestModal({ request, categories, locations, onClose, onSaved
           This request has been received. Only the title, vendor, date and description can be edited — items and category are locked.
         </div>
       )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+        <label className="form-label" style={{ margin: 0 }}>Procuring</label>
+        <TypeToggle value={type} onChange={setType} disabled={received} />
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {isAsset ? 'Trackable assets — one line per unit' : 'Consumables — stocked by quantity'}
+        </span>
+      </div>
       <FormRow>
         <div className="form-group">
           <label className="form-label">Title</label>
@@ -1246,7 +1289,7 @@ function PurchaseRequestModal({ request, categories, locations, onClose, onSaved
             <tr style={{ background: '#f8fafc' }}>
               <th style={{ ...cell, width: 26, fontSize: 11, color: 'var(--text-muted)', textAlign: 'left' }}>#</th>
               <th style={{ ...cell, fontSize: 11, color: 'var(--text-muted)', textAlign: 'left' }}>Item *</th>
-              <th style={{ ...cell, width: 90, fontSize: 11, color: 'var(--text-muted)', textAlign: 'left' }}>Qty</th>
+              {!isAsset && <th style={{ ...cell, width: 90, fontSize: 11, color: 'var(--text-muted)', textAlign: 'left' }}>Qty</th>}
               <th style={{ ...cell, width: 140, fontSize: 11, color: 'var(--text-muted)', textAlign: 'left' }}>Est. Price (₹)</th>
               <th style={{ ...cell, width: 34 }}></th>
             </tr>
@@ -1256,7 +1299,7 @@ function PurchaseRequestModal({ request, categories, locations, onClose, onSaved
               <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
                 <td style={{ ...cell, color: 'var(--text-muted)', fontSize: 12 }}>{i + 1}</td>
                 <td style={cell}><input className="form-control" style={cellInput} value={r.name} onChange={e => setRow(i, 'name', e.target.value)} placeholder="Item name" disabled={received} /></td>
-                <td style={cell}><input className="form-control" style={cellInput} type="number" min={1} value={r.quantity} onChange={e => setRow(i, 'quantity', e.target.value)} disabled={received} /></td>
+                {!isAsset && <td style={cell}><input className="form-control" style={cellInput} type="number" min={1} value={r.quantity} onChange={e => setRow(i, 'quantity', e.target.value)} disabled={received} /></td>}
                 <td style={cell}><input className="form-control" style={cellInput} type="number" min={0} value={r.estimatedPrice} onChange={e => setRow(i, 'estimatedPrice', e.target.value)} placeholder="0" disabled={received} /></td>
                 <td style={cell}><button className="btn btn-secondary btn-sm btn-icon" onClick={() => removeRow(i)} disabled={received || rows.length === 1} title="Remove"><X size={13} /></button></td>
               </tr>
@@ -1275,6 +1318,7 @@ function PurchaseRequestModal({ request, categories, locations, onClose, onSaved
 // ── Receive Request Modal ───────────────────────────────────────────────────────
 function ReceiveRequestModal({ request, onClose, onSaved }) {
   const lines = request.items || [];
+  const isAsset = request.type !== 'consumable';
   const [prices, setPrices] = useState(() => {
     const m = {}; lines.forEach(i => { m[i._id] = (i.actualPrice ?? i.estimatedPrice ?? ''); }); return m;
   });
@@ -1331,18 +1375,19 @@ function ReceiveRequestModal({ request, onClose, onSaved }) {
           <thead>
             <tr style={{ background: '#f8fafc' }}>
               <th style={{ ...cell, color: 'var(--text-muted)', fontSize: 11, textAlign: 'left' }}>Item</th>
-              <th style={{ ...cell, width: 60, color: 'var(--text-muted)', fontSize: 11, textAlign: 'left' }}>Qty</th>
+              {!isAsset && <th style={{ ...cell, width: 60, color: 'var(--text-muted)', fontSize: 11, textAlign: 'left' }}>Qty</th>}
               <th style={{ ...cell, width: 130, color: 'var(--text-muted)', fontSize: 11, textAlign: 'left' }}>Unit Price (₹)</th>
               <th style={{ ...cell, width: 110, color: 'var(--text-muted)', fontSize: 11, textAlign: 'right' }}>Line Total</th>
             </tr>
           </thead>
           <tbody>
             {lines.map(i => {
-              const lineTotal = (Number(prices[i._id]) || 0) * (Number(i.quantity) || 1);
+              const qty = isAsset ? 1 : (Number(i.quantity) || 1);
+              const lineTotal = (Number(prices[i._id]) || 0) * qty;
               return (
                 <tr key={i._id} style={{ borderTop: '1px solid var(--border)' }}>
                   <td style={cell}>{i.name}</td>
-                  <td style={cell}>{i.quantity || 1}</td>
+                  {!isAsset && <td style={cell}>{i.quantity || 1}</td>}
                   <td style={cell}><input className="form-control" style={{ fontSize: 13, padding: '6px 8px' }} type="number" min={0} value={prices[i._id]} onChange={e => setPrice(i._id, e.target.value)} placeholder="0" /></td>
                   <td style={{ ...cell, textAlign: 'right', fontWeight: 600 }}>{lineTotal > 0 ? `₹${lineTotal.toLocaleString('en-IN')}` : '—'}</td>
                 </tr>
