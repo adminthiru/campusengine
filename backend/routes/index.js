@@ -2093,6 +2093,22 @@ router.put('/visits/:id', protect, checkSubscription, authorize(...VISIT_ROLES),
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+// Check in a returning visitor again — reactivates the SAME visit and logs a new
+// check-in to its activity log (no new record / list row is created).
+router.post('/visits/:id/checkin-again', protect, checkSubscription, authorize(...VISIT_ROLES), async (req, res) => {
+  try {
+    const visit = await Visit.findOne({ _id: req.params.id, school: req.user.school });
+    if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
+    const note = (req.body.reason || '').trim();
+    visit.checkInTime = new Date();
+    visit.checkOutTime = undefined;
+    visit.status = 'in_progress';
+    visit.activities.push({ type: 'check_in', note, by: req.user._id });
+    await visit.save();
+    res.json({ success: true, visit });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // Quick check-out — stamps the checkout time and logs the reason. If a follow-up
 // is still pending, the visit stays in progress instead of being marked complete.
 router.post('/visits/:id/checkout', protect, checkSubscription, authorize(...VISIT_ROLES), async (req, res) => {

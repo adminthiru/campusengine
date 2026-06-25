@@ -76,7 +76,7 @@ export default function Visits() {
 
   const [showModal, setShowModal] = useState(false);
   const [editVisit, setEditVisit] = useState(null);
-  const [prefillVisit, setPrefillVisit] = useState(null); // returning visitor → new pre-filled visit
+  const [checkInAgainTarget, setCheckInAgainTarget] = useState(null); // returning visitor → re-check-in same visit
   const [viewId, setViewId] = useState(null);
   const [checkoutTarget, setCheckoutTarget] = useState(null);
   const [followUpTarget, setFollowUpTarget] = useState(null);
@@ -123,6 +123,12 @@ export default function Visits() {
   const followUpMutation = useMutation({
     mutationFn: ({ id, outcome }) => api.post(`/visits/${id}/complete-followup`, { outcome }),
     onSuccess: () => { refresh(); toast.success('Follow-up completed'); setFollowUpTarget(null); },
+    onError: (err) => toast.error(err.message || 'Failed'),
+  });
+
+  const checkInAgainMutation = useMutation({
+    mutationFn: ({ id, reason }) => api.post(`/visits/${id}/checkin-again`, { reason }),
+    onSuccess: () => { refresh(); toast.success('Checked in again'); setCheckInAgainTarget(null); },
     onError: (err) => toast.error(err.message || 'Failed'),
   });
 
@@ -252,9 +258,9 @@ export default function Visits() {
       )}
 
       {showModal && (
-        <VisitModal visit={editVisit} prefill={prefillVisit}
-          onClose={() => { setShowModal(false); setEditVisit(null); setPrefillVisit(null); }}
-          onSaved={() => { refresh(); setShowModal(false); setEditVisit(null); setPrefillVisit(null); }} />
+        <VisitModal visit={editVisit}
+          onClose={() => { setShowModal(false); setEditVisit(null); }}
+          onSaved={() => { refresh(); setShowModal(false); setEditVisit(null); }} />
       )}
 
       {viewId && (
@@ -262,7 +268,7 @@ export default function Visits() {
           onEdit={(v) => { setViewId(null); setEditVisit(v); setShowModal(true); }}
           onCheckout={(v) => { setViewId(null); setCheckoutTarget(v); }}
           onCompleteFollowUp={(v) => { setViewId(null); setFollowUpTarget(v); }}
-          onCheckInAgain={(v) => { setViewId(null); setEditVisit(null); setPrefillVisit({ visitorName: v.visitorName, phone: v.phone, email: v.email, purpose: v.purpose }); setShowModal(true); }} />
+          onCheckInAgain={(v) => { setViewId(null); setCheckInAgainTarget(v); }} />
       )}
 
       {checkoutTarget && (
@@ -275,6 +281,12 @@ export default function Visits() {
         <CompleteFollowUpModal visit={followUpTarget} loading={followUpMutation.isPending}
           onClose={() => setFollowUpTarget(null)}
           onConfirm={(outcome) => followUpMutation.mutate({ id: followUpTarget._id, outcome })} />
+      )}
+
+      {checkInAgainTarget && (
+        <CheckInAgainModal visit={checkInAgainTarget} loading={checkInAgainMutation.isPending}
+          onClose={() => setCheckInAgainTarget(null)}
+          onConfirm={(reason) => checkInAgainMutation.mutate({ id: checkInAgainTarget._id, reason })} />
       )}
 
       <ConfirmDialog open={bulkDeleteConfirm} onClose={() => setBulkDeleteConfirm(false)}
@@ -294,18 +306,16 @@ export default function Visits() {
 }
 
 // ── Add / Edit Modal ──────────────────────────────────────────────────────────
-function VisitModal({ visit, prefill, onClose, onSaved }) {
+function VisitModal({ visit, onClose, onSaved }) {
   const isEdit = !!visit;
-  const isReturning = !isEdit && !!prefill;
-  const base = visit || prefill || {};
   const { purposes } = useVisitPurposes();
   const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm({
     defaultValues: {
-      visitorName: base.visitorName || '',
-      phone: base.phone || '',
-      email: base.email || '',
+      visitorName: visit?.visitorName || '',
+      phone: visit?.phone || '',
+      email: visit?.email || '',
       numberOfVisitors: visit?.numberOfVisitors || 1,
-      purpose: base.purpose || 'admission_enquiry',
+      purpose: visit?.purpose || 'admission_enquiry',
       purposeDetail: visit?.purposeDetail || '',
       relatedStudent: visit?.relatedStudent?._id || visit?.relatedStudent || undefined,
       attendedBy: visit?.attendedBy?._id || visit?.attendedBy || undefined,
@@ -339,7 +349,7 @@ function VisitModal({ visit, prefill, onClose, onSaved }) {
   };
 
   return (
-    <Modal open onClose={onClose} title={isEdit ? 'Edit Visit' : isReturning ? 'Check In Again' : 'Add Visitor'} size="lg"
+    <Modal open onClose={onClose} title={isEdit ? 'Edit Visit' : 'Add Visitor'} size="lg"
       footer={<>
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
         <button className="btn btn-primary" onClick={handleSubmit(submit)} disabled={saveMutation.isPending}>
@@ -347,11 +357,6 @@ function VisitModal({ visit, prefill, onClose, onSaved }) {
         </button>
       </>}>
       <form>
-        {isReturning && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 13, color: '#1e40af' }}>
-            <Users size={15} /> Returning visitor — details pre-filled. This creates a new check-in.
-          </div>
-        )}
         <FormRow>
           <div className="form-group">
             <label className="form-label">Visitor Name *</label>
@@ -656,6 +661,29 @@ function CompleteFollowUpModal({ visit, onClose, onConfirm, loading }) {
         <label className="form-label">Follow-up Outcome / Reason *</label>
         <textarea className="form-control" rows={3} value={outcome} onChange={e => setOutcome(e.target.value)}
           placeholder="e.g. Shared bus quote, parent will confirm next week" style={{ resize: 'vertical' }} autoFocus />
+      </div>
+    </Modal>
+  );
+}
+
+// ── Check In Again Modal ────────────────────────────────────────────────────────
+function CheckInAgainModal({ visit, onClose, onConfirm, loading }) {
+  const [reason, setReason] = useState('');
+  return (
+    <Modal open onClose={onClose} title="Check In Again"
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={() => onConfirm(reason)} disabled={loading || !reason.trim()}>
+          {loading ? 'Saving...' : 'Check In'}
+        </button>
+      </>}>
+      <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 0 }}>
+        Log a new check-in for <strong>{visit.visitorName}</strong> on the same record — it's added to the activity log.
+      </p>
+      <div className="form-group">
+        <label className="form-label">Reason for this visit *</label>
+        <textarea className="form-control" rows={3} value={reason} onChange={e => setReason(e.target.value)}
+          placeholder="e.g. came back to submit documents" style={{ resize: 'vertical' }} autoFocus />
       </div>
     </Modal>
   );
