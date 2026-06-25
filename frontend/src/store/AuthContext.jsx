@@ -87,7 +87,7 @@ export const AuthProvider = ({ children }) => {
               {Array.from({ length: 4 }).map((_, i) => <div key={i} className="card" style={{ flex: 1, padding: 18 }}>{sk(90, 12)}{sk(60, 26, 8, { marginTop: 12 })}</div>)}
             </div>
             <div className="card" style={{ padding: 18 }}>
-              {Array.from({ length: 6 }).map((_, i) => <div key={i} style={{ display: 'flex', gap: 20, padding: '12px 0' }}>{[150, 120, 90, 70].map((w, j) => sk(w, 14))}</div>)}
+              {Array.from({ length: 6 }).map((_, i) => <div key={i} style={{ display: 'flex', gap: 20, padding: '12px 0' }}>{[150, 120, 90, 70].map((w, j) => <span key={j} className="skeleton" style={{ display: 'block', width: w, height: 14, borderRadius: 8 }} />)}</div>)}
             </div>
           </div>
         </div>
