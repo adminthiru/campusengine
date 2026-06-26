@@ -75,15 +75,33 @@ router.put('/auth/change-password', protect, authCtrl.changePassword);
 router.put('/auth/profile', protect, authCtrl.updateProfile);
 router.put('/auth/notifications/:notifId/read', protect, authCtrl.markNotification);
 
-// ── Push notification device tokens (FCM) ──
-router.post('/notifications/register-token', protect, async (req, res) => {
+// ── In-app notifications list (mobile + web) ──
+router.get('/notifications', protect, async (req, res) => {
   try {
-    const token = (req.body.token || '').trim();
+    const u = await User.findById(req.user._id).select('notifications');
+    const notifications = (u?.notifications || []).slice().reverse(); // newest first
+    res.json({ success: true, notifications, unread: notifications.filter(n => !n.read).length });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+router.post('/notifications/mark-all-read', protect, async (req, res) => {
+  try {
+    await User.updateOne({ _id: req.user._id }, { $set: { 'notifications.$[].read': true } });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ── Push notification device tokens (FCM) ──
+// Web uses register-token; the mobile app uses fcm-token — both do the same thing.
+const saveFcmToken = async (req, res) => {
+  try {
+    const token = (req.body.token || req.body.fcmToken || '').trim();
     if (!token) return res.status(400).json({ success: false, message: 'token is required' });
     await User.updateOne({ _id: req.user._id }, { $addToSet: { fcmTokens: token } });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
-});
+};
+router.post('/notifications/register-token', protect, saveFcmToken);
+router.post('/notifications/fcm-token', protect, saveFcmToken);
 router.post('/notifications/unregister-token', protect, async (req, res) => {
   try {
     const token = (req.body.token || '').trim();

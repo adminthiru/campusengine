@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:skl_teacher/app/widgets/app_bottom_nav.dart';
+import 'package:skl_teacher/core/services/push_service.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/theme_provider.dart';
 import 'package:skl_teacher/features/auth/presentation/providers/auth_provider.dart';
@@ -78,6 +79,9 @@ class _AppShellState extends State<AppShell> {
       final role = auth.role;
       final perms = context.read<SchoolPermissionsProvider>();
       if (!perms.loaded) perms.fetch();
+
+      // Register this device for push notifications now that we're authenticated.
+      PushService.setup();
 
       if (role == 'student') {
         final sp = context.read<StudentProfileProvider>();

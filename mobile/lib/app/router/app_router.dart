@@ -115,6 +115,13 @@ class AppRouter {
             GoRoute(
                 path: '/notifications',
                 builder: (_, __) => const NotificationsScreen()),
+            // Role-specific aliases (the app shell routes parents/students here).
+            GoRoute(
+                path: '/parent/notifications',
+                builder: (_, __) => const NotificationsScreen()),
+            GoRoute(
+                path: '/student/notifications',
+                builder: (_, __) => const NotificationsScreen()),
             GoRoute(
                 path: '/settings', builder: (_, __) => const SettingsScreen()),
             GoRoute(path: '/leave', builder: (_, __) => const LeaveScreen()),

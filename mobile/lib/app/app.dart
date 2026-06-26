@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/theme_provider.dart';
+import '../core/services/push_service.dart';
 import '../features/dashboard/presentation/providers/check_in_provider.dart';
 import '../features/dashboard/presentation/providers/dashboard_provider.dart';
 import '../features/auth/presentation/providers/auth_provider.dart';
@@ -66,6 +67,7 @@ class _AppRouterContainerState extends State<_AppRouterContainer> {
       // ── App Info ─────────────────────────────────────────────────
       title: 'SKL Teacher',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: scaffoldMessengerKey,
 
       // ── Theme — Inter applied globally via ThemeData.textTheme ───
       theme: AppTheme.light,
