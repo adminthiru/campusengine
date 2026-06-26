@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Select as AntSelect } from 'antd';
+import { Select as AntSelect, DatePicker } from 'antd';
+import dayjs from 'dayjs';
 import {
   Plus, Edit2, Trash2, Building2, BedDouble, Users, DoorOpen, LayoutGrid,
   UserCog, ArrowLeftRight, LogOut, X, AlertTriangle, CheckCircle, Wrench, ChevronRight,
@@ -587,7 +588,12 @@ function AllocateModal({ hostels, hostelOpts, onClose, onSaved }) {
       <RoomBedPicker hostel={f.hostel} room={f.room} bed={f.bedNumber} onRoom={v => setF(p => ({ ...p, room: v, bedNumber: '' }))} onBed={v => set('bedNumber', v)} />
       {genderWarn && <div style={{ display: 'flex', gap: 8, alignItems: 'center', background: '#fef2f2', color: '#dc2626', borderRadius: 8, padding: '8px 12px', fontSize: 13, marginBottom: 12 }}><AlertTriangle size={15} /> {genderWarn}</div>}
       <FormRow>
-        <div className="form-group"><label className="form-label">Allocation Date</label><DateInput value={f.allocationDate} onChange={v => set('allocationDate', v)} /></div>
+        <div className="form-group"><label className="form-label">Allocation Date</label>
+          <DatePicker style={{ width: '100%' }} format="DD MMM YYYY" placeholder="Select date"
+            value={f.allocationDate ? dayjs(f.allocationDate) : null}
+            onChange={(d) => set('allocationDate', d ? d.format('YYYY-MM-DD') : '')}
+            getPopupContainer={() => document.body} />
+        </div>
         <div className="form-group"><label className="form-label">Remarks</label><input className="form-control" value={f.remarks} onChange={e => set('remarks', e.target.value)} /></div>
       </FormRow>
     </Modal>
