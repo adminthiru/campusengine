@@ -24,7 +24,6 @@ const MODULES = [
   { key: 'inventory',  label: 'Inventory',  path: '/inventory',  prefixes: ['/inventory', '/purchase-requests'] },
   { key: 'transport',  label: 'Transport',  path: '/transport',  prefixes: ['/transport'] },
   { key: 'hostel',     label: 'Hostel',     path: '/hostel',     prefixes: ['/hostel'] },
-  { key: 'sms',        label: 'SMS',        path: '/sms',        prefixes: ['/sms'] },
 ];
 
 const ACTIONS = ['view', 'add', 'edit', 'delete'];

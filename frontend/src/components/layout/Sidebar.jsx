@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, Users, UserCheck, BookOpen, Clock,
   DollarSign, CreditCard, FileText, Truck,
-  MessageSquare, Settings,
+  Settings,
   GraduationCap, ClipboardList, Banknote, School, BookMarked, UsersRound, Calendar, Library, DoorOpen, LogOut, Package, Lock, BedDouble
 } from 'lucide-react';
 import { MODULES, moduleKeyForPath } from '../../config/modules';
@@ -36,7 +36,6 @@ const navConfig = {
     { label: 'Library', icon: Library, path: '/library' },
     { label: 'Hostel', icon: BedDouble, path: '/hostel' },
     { label: 'Transport', icon: Truck, path: '/transport' },
-    { label: 'SMS Services', icon: MessageSquare, path: '/sms' },
     { label: 'Settings', icon: Settings, path: '/settings' },
   ],
   correspondent: [
@@ -65,7 +64,6 @@ const navConfig = {
     { label: 'Library', icon: Library, path: '/library' },
     { label: 'Hostel', icon: BedDouble, path: '/hostel' },
     { label: 'Transport', icon: Truck, path: '/transport' },
-    { label: 'SMS Services', icon: MessageSquare, path: '/sms' },
     { label: 'Settings', icon: Settings, path: '/settings' },
   ],
   principal: [

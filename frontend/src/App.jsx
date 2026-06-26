@@ -19,7 +19,6 @@ import Expenses from './pages/admin/Expenses';
 import Homework from './pages/admin/Homework';
 import Transport from './pages/admin/Transport';
 import Settings from './pages/admin/Settings';
-import SMS from './pages/admin/SMS';
 import Parents from './pages/admin/Parents';
 import { TeacherDashboard, MySalary, MyTasks, StudentDashboard, ParentDashboard } from './pages/portals/index';
 import Library from './pages/admin/Library';
@@ -115,7 +114,6 @@ export default function App() {
       <Route path="/inventory" element={<ProtectedRoute roles={['admin','correspondent','principal']} module="inventory"><Inventory /></ProtectedRoute>} />
       <Route path="/hostel" element={<ProtectedRoute roles={['admin','correspondent','principal']} module="hostel"><Hostel /></ProtectedRoute>} />
       <Route path="/transport" element={<ProtectedRoute roles={ADMIN} module="transport"><Transport /></ProtectedRoute>} />
-      <Route path="/sms" element={<ProtectedRoute roles={['admin','correspondent','principal']} module="sms"><SMS /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute roles={ALL}><Settings /></ProtectedRoute>} />
       <Route path="/settings/:tab" element={<ProtectedRoute roles={ALL}><Settings /></ProtectedRoute>} />
 
