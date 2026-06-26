@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
+import 'package:skl_teacher/features/auth/presentation/providers/school_permissions_provider.dart';
 
 /// Opens a server file (answer-paper PDF) in an external app/browser. Tries the
 /// external handler first and falls back to the platform default; surfaces a
@@ -57,9 +59,13 @@ class ExamResultCard extends StatelessWidget {
     }
     final pct = (result['percentage'] as num?) ??
         (totalMax > 0 ? (total / totalMax * 100).round() : 0);
-    final grade = (result['grade'] as String?)?.trim();
-    final gradeLabel =
-        (grade != null && grade.isNotEmpty) ? grade : _grade(pct.round());
+    // Prefer the school's configured grade (matches the admin exam module),
+    // then the grade stored on the result, then a percentage-based fallback.
+    final configured = context.watch<SchoolPermissionsProvider>().gradeFor(pct);
+    final stored = (result['grade'] as String?)?.trim();
+    final gradeLabel = configured.isNotEmpty
+        ? configured
+        : (stored != null && stored.isNotEmpty ? stored : _grade(pct.round()));
 
     // Subjects that have an uploaded answer paper.
     final papers = marks
