@@ -8,6 +8,7 @@ import '../../../../core/models/student.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/skeleton.dart';
 import '../providers/exams_provider.dart';
 
 class ExamsScreen extends StatelessWidget {
@@ -245,32 +246,43 @@ class _ExamListViewState extends State<_ExamListView> {
           const SizedBox(height: 8),
           Expanded(
             child: p.isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary))
-                : filtered.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.quiz_outlined,
-                                size: 52,
-                                color: isDark
-                                    ? AppColors.textMuted
-                                    : AppColors.textSecondary),
-                            const SizedBox(height: 12),
-                            Text(
-                              p.exams.isEmpty
-                                  ? 'No exams yet'
-                                  : 'No exams match the filter',
-                              style: AppTypography.s14Regular(
-                                  color: isDark
-                                      ? AppColors.textMuted
-                                      : AppColors.textSecondary),
+                ? const SkeletonList()
+                : RefreshIndicator(
+                    onRefresh: () => p.fetchExams(),
+                    color: AppColors.primary,
+                    child: filtered.isEmpty
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          SizedBox(
+                              height:
+                                  MediaQuery.of(context).size.height * 0.3),
+                          Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.quiz_outlined,
+                                    size: 52,
+                                    color: isDark
+                                        ? AppColors.textMuted
+                                        : AppColors.textSecondary),
+                                const SizedBox(height: 12),
+                                Text(
+                                  p.exams.isEmpty
+                                      ? 'No exams yet'
+                                      : 'No exams match the filter',
+                                  style: AppTypography.s14Regular(
+                                      color: isDark
+                                          ? AppColors.textMuted
+                                          : AppColors.textSecondary),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       )
                     : ListView.separated(
+                        physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
                         itemCount: filtered.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 12),
@@ -282,6 +294,7 @@ class _ExamListViewState extends State<_ExamListView> {
                               _confirmDelete(context, p, filtered[i]),
                         ),
                       ),
+                  ),
           ),
         ],
       ),
@@ -582,11 +595,16 @@ class _ExamDetailView extends StatelessWidget {
                             : AppColors.textSecondary)),
                 const SizedBox(height: 10),
                 if (p.isLoading)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 20),
-                    child: Center(
-                        child: CircularProgressIndicator(
-                            color: AppColors.primary)),
+                  const SkeletonShimmer(
+                    child: Column(
+                      children: [
+                        SkeletonBox(
+                            width: double.infinity, height: 72, radius: 12),
+                        SizedBox(height: 10),
+                        SkeletonBox(
+                            width: double.infinity, height: 72, radius: 12),
+                      ],
+                    ),
                   )
                 else if (myEntries.isEmpty)
                   _EmptyNote(
@@ -725,8 +743,7 @@ class _ResultsView extends StatelessWidget {
           ),
           Expanded(
             child: p.isResultsLoading
-                ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary))
+                ? const SkeletonList(showLeading: false)
                 : p.results.isEmpty
                     ? Center(
                         child: Column(
@@ -1170,11 +1187,10 @@ class _CreateEditExamSheetState extends State<_CreateEditExamSheet> {
                   const SizedBox(height: 8),
 
                   if (p.isMetaLoading)
-                    const Center(
-                        child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: CircularProgressIndicator(
-                                color: AppColors.primary)))
+                    const SkeletonShimmer(
+                      child: SkeletonBox(
+                          width: double.infinity, height: 80, radius: 10),
+                    )
                   else if (_schedule.isEmpty)
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -1646,8 +1662,7 @@ class _MarksEntryView extends StatelessWidget {
           ),
           Expanded(
             child: p.isLoadingStudents
-                ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary))
+                ? const SkeletonList()
                 : p.error != null
                     ? Center(
                         child: Padding(

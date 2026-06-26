@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 import 'package:skl_teacher/features/auth/presentation/providers/school_permissions_provider.dart';
 import 'package:skl_teacher/features/student/presentation/providers/student_profile_provider.dart';
 
@@ -95,8 +96,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final student = sp.profile;
 
     if (_loading || sp.loading) {
-      return const Center(
-          child: CircularProgressIndicator(color: AppColors.primary));
+      return const _DashboardSkeleton();
     }
 
     final present = (_attSummary?['present'] as num?)?.toInt() ?? 0;
@@ -107,6 +107,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return RefreshIndicator(
       onRefresh: () async => _load(student?.id, student?.classId),
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
           // ── Welcome Card ─────────────────────────────────────────────────
@@ -258,6 +259,59 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     if (h < 12) return 'Morning';
     if (h < 17) return 'Afternoon';
     return 'Evening';
+  }
+}
+
+class _DashboardSkeleton extends StatelessWidget {
+  const _DashboardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return SkeletonShimmer(
+      child: ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Welcome card
+          const SkeletonBox(height: 110, radius: 20),
+          const SizedBox(height: 20),
+          // Section title
+          const SkeletonBox(width: 120, height: 14),
+          const SizedBox(height: 10),
+          // Stats row
+          Row(
+            children: const [
+              Expanded(child: SkeletonBox(height: 86, radius: 14)),
+              SizedBox(width: 10),
+              Expanded(child: SkeletonBox(height: 86, radius: 14)),
+              SizedBox(width: 10),
+              Expanded(child: SkeletonBox(height: 86, radius: 14)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Quick access title
+          const SkeletonBox(width: 120, height: 14),
+          const SizedBox(height: 10),
+          // Quick actions grid (2 rows of 3)
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 3,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 1.1,
+            children: const [
+              SkeletonBox(radius: 14),
+              SkeletonBox(radius: 14),
+              SkeletonBox(radius: 14),
+              SkeletonBox(radius: 14),
+              SkeletonBox(radius: 14),
+              SkeletonBox(radius: 14),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 
 class StudentLeaveScreen extends StatefulWidget {
   const StudentLeaveScreen({super.key});
@@ -307,8 +308,7 @@ class _HistoryTabState extends State<_HistoryTab> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     if (_loading) {
-      return const Center(
-          child: CircularProgressIndicator(color: AppColors.primary));
+      return const SkeletonList(showLeading: false, itemHeight: 100);
     }
     if (_leaves.isEmpty) {
       return Center(
@@ -322,6 +322,7 @@ class _HistoryTabState extends State<_HistoryTab> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         itemCount: _leaves.length,
         itemBuilder: (_, i) {

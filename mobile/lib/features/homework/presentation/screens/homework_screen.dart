@@ -6,6 +6,7 @@ import '../../../../core/models/homework.dart';
 import '../../../../core/models/student.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/skeleton.dart';
 import '../providers/homework_provider.dart';
 
 class HomeworkScreen extends StatelessWidget {
@@ -83,8 +84,8 @@ class _HomeworkListState extends State<_HomeworkList> {
     return Color(int.parse(buffer.toString(), radix: 16));
   }
 
-  void _applyFilters() {
-    context.read<HomeworkProvider>().fetchHomework(
+  Future<void> _applyFilters() {
+    return context.read<HomeworkProvider>().fetchHomework(
           classId: _activeClass,
           date: _dateFilter,
           status: _statusFilter,
@@ -231,7 +232,7 @@ class _HomeworkListState extends State<_HomeworkList> {
           // ── List ─────────────────────────────────────────────────────────
           Expanded(
             child: provider.isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const SkeletonList(showLeading: false)
                 : provider.error != null
                     ? Center(
                         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -243,16 +244,32 @@ class _HomeworkListState extends State<_HomeworkList> {
                         ]),
                       )
                     : allHw.isEmpty
-                        ? _EmptyHomework(isDark: isDark)
-                        : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
-                            itemCount: allHw.length,
-                            separatorBuilder: (c, i) => const SizedBox(height: 10),
-                            itemBuilder: (c, i) => _HomeworkCard(
-                              hw: allHw[i],
-                              color: _hexToColor(allHw[i].subject?.color),
-                              isDark: isDark,
-                              onTap: () => widget.onViewDetail(allHw[i].id),
+                        ? RefreshIndicator(
+                            onRefresh: _applyFilters,
+                            child: ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              children: [
+                                SizedBox(
+                                  height:
+                                      MediaQuery.of(context).size.height * 0.6,
+                                  child: _EmptyHomework(isDark: isDark),
+                                ),
+                              ],
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _applyFilters,
+                            child: ListView.separated(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
+                              itemCount: allHw.length,
+                              separatorBuilder: (c, i) => const SizedBox(height: 10),
+                              itemBuilder: (c, i) => _HomeworkCard(
+                                hw: allHw[i],
+                                color: _hexToColor(allHw[i].subject?.color),
+                                isDark: isDark,
+                                onTap: () => widget.onViewDetail(allHw[i].id),
+                              ),
                             ),
                           ),
           ),
@@ -958,7 +975,7 @@ class _HomeworkDetailState extends State<_HomeworkDetail> {
     final p = context.watch<HomeworkProvider>();
 
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: SkeletonList());
     }
 
     if (_hw == null) {
@@ -993,7 +1010,10 @@ class _HomeworkDetailState extends State<_HomeworkDetail> {
         children: [
           _header(context, p, isDark),
           Expanded(
-            child: ListView(
+            child: RefreshIndicator(
+              onRefresh: _loadData,
+              child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               children: [
                 // ── Hero card ──────────────────────────────────────────────
@@ -1205,6 +1225,7 @@ class _HomeworkDetailState extends State<_HomeworkDetail> {
                     ),
                   ),
               ],
+              ),
             ),
           ),
         ],

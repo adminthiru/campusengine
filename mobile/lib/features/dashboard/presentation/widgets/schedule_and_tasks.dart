@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/features/dashboard/presentation/providers/dashboard_provider.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 import 'package:intl/intl.dart';
 
 /// Today's class schedule for the teacher (real timetable data only).
@@ -79,9 +80,17 @@ class ScheduleAndTasks extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (provider.isLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 28),
-              child: Center(child: CircularProgressIndicator()),
+            const SizedBox(
+              height: 116,
+              child: SkeletonShimmer(
+                child: Row(
+                  children: [
+                    SkeletonBox(width: 170, height: 116, radius: 16),
+                    SizedBox(width: 12),
+                    SkeletonBox(width: 170, height: 116, radius: 16),
+                  ],
+                ),
+              ),
             )
           else if (todaysPeriods.isEmpty)
             Container(

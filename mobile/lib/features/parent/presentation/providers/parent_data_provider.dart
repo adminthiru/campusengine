@@ -43,6 +43,13 @@ class ChildInfo {
     if (className == null) return 'No class';
     return classSection != null ? '$className $classSection' : className!;
   }
+
+  // Safe avatar initial — `name` can be empty (j['name'] ?? ''), so guard
+  // before indexing to avoid a RangeError in widget builds.
+  String get initial {
+    final n = name.trim();
+    return n.isEmpty ? '?' : n[0].toUpperCase();
+  }
 }
 
 class ParentDataProvider extends ChangeNotifier {

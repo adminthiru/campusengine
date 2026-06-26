@@ -25,6 +25,43 @@ Future<void> openServerFile(BuildContext context, String rawUrl) async {
   }
 }
 
+// ── Web-safe JSON accessors ──────────────────────────────────────────────────
+// On Flutter web a missing nested value can surface as JS `undefined`, which the
+// `?.` / `as String?` operators don't always catch (it throws
+// "Cannot read properties of undefined (reading 'Symbol(dartx.isEmpty)')").
+// These helpers use explicit `is` type checks, which are safe against undefined.
+
+String _str(dynamic v, {String fallback = ''}) => v is String ? v : fallback;
+
+num _num(dynamic v) => v is num ? v : 0;
+
+String _subjectName(dynamic m) {
+  final subj = m is Map ? m['subject'] : null;
+  if (subj is Map && subj['name'] is String) return subj['name'] as String;
+  return 'Subject';
+}
+
+num _subjectMarks(dynamic m) {
+  if (m is! Map) return 0;
+  if (m['totalMarks'] is num) return m['totalMarks'] as num;
+  return _num(m['theoryMarks']) + _num(m['practicalMarks']);
+}
+
+Map? _answerPaper(dynamic m) {
+  final ap = m is Map ? m['answerPaper'] : null;
+  return ap is Map ? ap : null;
+}
+
+String? _paperUrl(dynamic m) {
+  final u = _answerPaper(m)?['url'];
+  return (u is String && u.isNotEmpty) ? u : null;
+}
+
+String? _paperName(dynamic m) {
+  final n = _answerPaper(m)?['fileName'];
+  return (n is String && n.trim().isNotEmpty) ? n : null;
+}
+
 /// Renders a single published exam result: overall total/percentage/grade, a
 /// per-subject marks breakdown, and a highlighted "Answer Papers" section with
 /// a button to open each subject's PDF. Shared by the student Results tab and
@@ -43,35 +80,34 @@ class ExamResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final examName = (result['exam']?['name'] as String?) ?? 'Exam';
-    final marks = (result['marks'] as List?) ?? const [];
+    final examName = _str(result['exam'] is Map ? result['exam']['name'] : null,
+        fallback: 'Exam');
+    final marks = result['marks'] is List ? result['marks'] as List : const [];
 
     // Prefer the backend-computed aggregates; fall back to summing the rows.
-    num total = (result['totalMarksObtained'] as num?) ?? 0;
-    num totalMax = (result['totalMaxMarks'] as num?) ?? 0;
+    num total = _num(result['totalMarksObtained']);
+    num totalMax = _num(result['totalMaxMarks']);
     if (totalMax == 0) {
       total = 0;
       for (final m in marks) {
-        if (m['isAbsent'] == true) continue;
+        if (m is Map && m['isAbsent'] == true) continue;
         total += _markValue(m);
-        totalMax += (m['maxMarks'] as num?) ?? 0;
+        totalMax += (m is Map && m['maxMarks'] is num) ? m['maxMarks'] as num : 0;
       }
     }
-    final pct = (result['percentage'] as num?) ??
-        (totalMax > 0 ? (total / totalMax * 100).round() : 0);
+    final pct = result['percentage'] is num
+        ? result['percentage'] as num
+        : (totalMax > 0 ? (total / totalMax * 100).round() : 0);
     // Prefer the school's configured grade (matches the admin exam module),
     // then the grade stored on the result, then a percentage-based fallback.
     final configured = context.watch<SchoolPermissionsProvider>().gradeFor(pct);
-    final stored = (result['grade'] as String?)?.trim();
+    final stored = _str(result['grade']).trim();
     final gradeLabel = configured.isNotEmpty
         ? configured
-        : (stored != null && stored.isNotEmpty ? stored : _grade(pct.round()));
+        : (stored.isNotEmpty ? stored : _grade(pct.round()));
 
     // Subjects that have an uploaded answer paper.
-    final papers = marks
-        .where((m) =>
-            (m['answerPaper']?['url'] as String?)?.isNotEmpty ?? false)
-        .toList();
+    final papers = marks.where((m) => _paperUrl(m) != null).toList();
 
     return Container(
       margin: margin,
@@ -126,9 +162,9 @@ class ExamResultCard extends StatelessWidget {
               style: AppTypography.s11SemiBold(color: AppColors.textMuted)),
           const SizedBox(height: 8),
           ...papers.map((m) => _PaperTile(
-                subject: (m['subject']?['name'] as String?) ?? 'Subject',
-                url: m['answerPaper']['url'] as String,
-                fileName: m['answerPaper']['fileName'] as String?,
+                subject: _subjectName(m),
+                url: _paperUrl(m)!,
+                fileName: _paperName(m),
                 isDark: isDark,
               )),
         ],
@@ -136,9 +172,7 @@ class ExamResultCard extends StatelessWidget {
     );
   }
 
-  num _markValue(dynamic m) =>
-      (m['totalMarks'] as num?) ??
-      (((m['theoryMarks'] as num?) ?? 0) + ((m['practicalMarks'] as num?) ?? 0));
+  num _markValue(dynamic m) => _subjectMarks(m);
 
   String _fmt(num n) => n == n.roundToDouble() ? n.toInt().toString() : '$n';
 
@@ -165,13 +199,13 @@ class _SubjectRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subj = (mark['subject']?['name'] as String?) ?? 'Subject';
-    final isAbsent = mark['isAbsent'] == true;
-    final got = ((mark['totalMarks'] as num?) ??
-            (((mark['theoryMarks'] as num?) ?? 0) +
-                ((mark['practicalMarks'] as num?) ?? 0)))
+    final subj = _subjectName(mark);
+    final isAbsent = (mark is Map ? mark['isAbsent'] : null) == true;
+    final got = _subjectMarks(mark).toInt();
+    final max = ((mark is Map && mark['maxMarks'] is num)
+            ? mark['maxMarks'] as num
+            : 100)
         .toInt();
-    final max = ((mark['maxMarks'] as num?) ?? 100).toInt();
     final sPct = max > 0 ? (got / max * 100).round() : 0;
 
     return Padding(

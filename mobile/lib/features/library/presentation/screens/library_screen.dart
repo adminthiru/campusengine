@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -63,11 +64,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          ? const SkeletonList()
           : RefreshIndicator(
               onRefresh: _load,
               child: _issues.isEmpty
                   ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       children: [
                         SizedBox(height: MediaQuery.of(context).size.height * 0.3),
                         Center(
@@ -90,6 +92,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       ],
                     )
                   : ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.all(16).copyWith(bottom: 80),
                       itemCount: _issues.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 12),

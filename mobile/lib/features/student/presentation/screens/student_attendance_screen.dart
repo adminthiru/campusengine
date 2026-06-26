@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 import 'package:skl_teacher/features/student/presentation/providers/student_profile_provider.dart';
 
 class StudentAttendanceScreen extends StatefulWidget {
@@ -93,6 +94,7 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
           children: [
             // ── Month Navigator ──────────────────────────────────────────
@@ -169,11 +171,21 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
                   ),
                   const SizedBox(height: 8),
                   if (_loading)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: Center(
-                          child: CircularProgressIndicator(
-                              color: AppColors.primary)),
+                    SkeletonShimmer(
+                      child: GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 7,
+                          mainAxisSpacing: 6,
+                          crossAxisSpacing: 6,
+                          childAspectRatio: 1,
+                        ),
+                        itemCount: 35,
+                        itemBuilder: (_, __) =>
+                            const SkeletonBox(radius: 8, height: 40),
+                      ),
                     )
                   else
                     GridView.builder(

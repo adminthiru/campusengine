@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/skeleton.dart';
 import '../providers/teacher_provider.dart';
 
 class TeacherSubjectStudentsScreen extends StatefulWidget {
@@ -57,11 +58,15 @@ class _TeacherSubjectStudentsScreenState
         elevation: 0,
       ),
       body: provider.isLoadingStudents
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary))
+          ? const SkeletonList()
           : provider.error != null
               ? Center(child: Text(provider.error!))
-              : _buildStudentsList(context, provider, isDark),
+              : RefreshIndicator(
+                  onRefresh: () =>
+                      provider.fetchStudentsForClass(widget.classId),
+                  color: AppColors.primary,
+                  child: _buildStudentsList(context, provider, isDark),
+                ),
     );
   }
 
@@ -70,16 +75,24 @@ class _TeacherSubjectStudentsScreenState
     final students = provider.students;
 
     if (students.isEmpty) {
-      return Center(
-        child: Text(
-          'No students in this class.',
-          style: AppTypography.s16Regular(
-              color: isDark ? AppColors.textMuted : AppColors.textSecondary),
-        ),
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+          Center(
+            child: Text(
+              'No students in this class.',
+              style: AppTypography.s16Regular(
+                  color:
+                      isDark ? AppColors.textMuted : AppColors.textSecondary),
+            ),
+          ),
+        ],
       );
     }
 
     return ListView.separated(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       itemCount: students.length,
       separatorBuilder: (_, __) => const Divider(height: 1),

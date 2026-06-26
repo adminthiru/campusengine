@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/models/student.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/skeleton.dart';
 import '../../../exams/presentation/providers/exams_provider.dart';
 
 // ── Grade helpers ─────────────────────────────────────────────────────────────
@@ -142,7 +143,7 @@ class _TeacherSubjectExamsScreenState
         elevation: 0,
       ),
       body: p.isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          ? const SkeletonList()
           : Column(
               children: [
                 // ── Exam picker ────────────────────────────────────────────
@@ -193,10 +194,7 @@ class _TeacherSubjectExamsScreenState
                     ),
                   )
                 else if (p.isLoadingStudents)
-                  const Expanded(
-                      child: Center(
-                          child: CircularProgressIndicator(
-                              color: AppColors.primary)))
+                  const Expanded(child: SkeletonList())
                 else if (p.error != null)
                   Expanded(
                     child: Center(
@@ -280,7 +278,15 @@ class _TeacherSubjectExamsScreenState
 
   Widget _buildStudentList(
       BuildContext context, ExamsProvider p, bool isDark) {
-    return ListView.builder(
+    return RefreshIndicator(
+      onRefresh: () => p.fetchStudentsAndResults(
+        widget.classId,
+        _selectedExam!.id,
+        widget.subjectId,
+      ),
+      color: AppColors.primary,
+      child: ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
       itemCount: p.students.length,
       itemBuilder: (_, i) {
@@ -389,6 +395,7 @@ class _TeacherSubjectExamsScreenState
           ),
         );
       },
+    ),
     );
   }
 }

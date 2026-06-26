@@ -7,6 +7,7 @@ import 'package:skl_teacher/features/dashboard/presentation/widgets/class_teache
 import 'package:skl_teacher/features/dashboard/presentation/widgets/subject_teacher_view.dart';
 import 'package:skl_teacher/features/profile/presentation/providers/profile_provider.dart';
 import 'package:skl_teacher/features/dashboard/presentation/providers/dashboard_provider.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -30,7 +31,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       await profileProv.fetchProfile();
     }
     if (profileProv.profile != null && mounted) {
-      context
+      await context
           .read<DashboardProvider>()
           .fetchDashboardData(profileProv.profile!);
     }
@@ -44,7 +45,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (profileProvider.isLoading ||
         (profileProvider.profile == null &&
             profileProvider.errorMessage == null)) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: _DashboardSkeleton());
     }
 
     final profile = profileProvider.profile;
@@ -78,7 +79,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return DefaultTabController(
       length: tabs.length,
       child: Scaffold(
-        body: NestedScrollView(
+        body: RefreshIndicator(
+          onRefresh: _loadData,
+          child: NestedScrollView(
           headerSliverBuilder: (context, innerBoxIsScrolled) {
             return [
               const SliverToBoxAdapter(
@@ -107,6 +110,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ];
           },
           body: TabBarView(children: views),
+          ),
         ),
       ),
     );
@@ -136,5 +140,44 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
     return false;
+  }
+}
+
+/// Shimmer placeholder loosely matching the dashboard layout (header banner,
+/// check-in card, then a couple of section cards).
+class _DashboardSkeleton extends StatelessWidget {
+  const _DashboardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return SkeletonShimmer(
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              SizedBox(height: 16),
+              SkeletonBox(width: 120, height: 14),
+              SizedBox(height: 10),
+              SkeletonBox(width: 180, height: 24),
+              SizedBox(height: 20),
+              SkeletonBox(width: double.infinity, height: 96, radius: 18),
+              SizedBox(height: 24),
+              SkeletonBox(width: 160, height: 17),
+              SizedBox(height: 12),
+              SkeletonBox(width: double.infinity, height: 110, radius: 16),
+              SizedBox(height: 24),
+              SkeletonBox(width: 160, height: 17),
+              SizedBox(height: 12),
+              SkeletonBox(width: double.infinity, height: 76, radius: 14),
+              SizedBox(height: 10),
+              SkeletonBox(width: double.infinity, height: 76, radius: 14),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

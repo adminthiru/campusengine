@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/features/dashboard/presentation/providers/dashboard_provider.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 
 class AttendanceOverview extends StatelessWidget {
   const AttendanceOverview({super.key});
@@ -51,10 +52,25 @@ class AttendanceOverview extends StatelessWidget {
           if (provider.isLoading)
             _card(
               isDark,
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: CircularProgressIndicator(),
+              const SkeletonShimmer(
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Center(child: SkeletonBox(width: 60, height: 36)),
+                        ),
+                        Expanded(
+                          child: Center(child: SkeletonBox(width: 60, height: 36)),
+                        ),
+                        Expanded(
+                          child: Center(child: SkeletonBox(width: 60, height: 36)),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+                    SkeletonBox(width: double.infinity, height: 8, radius: 6),
+                  ],
                 ),
               ),
             )

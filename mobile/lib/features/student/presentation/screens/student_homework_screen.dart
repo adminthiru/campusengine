@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 import 'package:skl_teacher/features/student/presentation/providers/student_profile_provider.dart';
 
 class StudentHomeworkScreen extends StatefulWidget {
@@ -84,8 +85,7 @@ class _StudentHomeworkScreenState extends State<StudentHomeworkScreen>
           ),
           Expanded(
             child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary))
+                ? const SkeletonList(showLeading: false, itemHeight: 120)
                 : TabBarView(
                     controller: _tab,
                     children: [
@@ -130,6 +130,7 @@ class _HomeworkList extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         itemCount: items.length,
         itemBuilder: (_, i) => _HwCard(hw: items[i], isDark: isDark),

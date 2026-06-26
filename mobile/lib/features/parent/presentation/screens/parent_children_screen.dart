@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 import 'package:skl_teacher/features/auth/presentation/providers/school_permissions_provider.dart';
 import 'package:skl_teacher/features/exams/presentation/widgets/exam_result_card.dart';
 import 'package:skl_teacher/features/parent/presentation/providers/parent_data_provider.dart';
@@ -30,7 +31,7 @@ class _ParentChildrenScreenState extends State<ParentChildrenScreen> {
     final pp = context.watch<ParentDataProvider>();
     final perms = context.watch<SchoolPermissionsProvider>();
 
-    if (pp.loading) return const Center(child: CircularProgressIndicator());
+    if (pp.loading) return const SkeletonList();
     if (pp.children.isEmpty) {
       return Center(
         child: Text('No children linked to this account',
@@ -209,7 +210,7 @@ class _InfoTab extends StatelessWidget {
               radius: 32,
               backgroundColor: AppColors.primary.withValues(alpha: 0.1),
               child: Text(
-                child.name.substring(0, 1).toUpperCase(),
+                child.initial,
                 style: GoogleFonts.inter(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
@@ -348,12 +349,15 @@ class _AttendanceTabState extends State<_AttendanceTab> {
         ),
         const SizedBox(height: 12),
         if (_loading)
-          const Center(child: CircularProgressIndicator())
+          const Expanded(child: SkeletonList())
         else
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: GridView.builder(
+              child: RefreshIndicator(
+                onRefresh: _load,
+                child: GridView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 7,
                   mainAxisSpacing: 6,
@@ -396,6 +400,7 @@ class _AttendanceTabState extends State<_AttendanceTab> {
                     ),
                   );
                 },
+                ),
               ),
             ),
           ),
@@ -469,14 +474,17 @@ class _HomeworkTabState extends State<_HomeworkTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const SkeletonList(showLeading: false);
     if (_items.isEmpty) {
       return Center(
           child: Text('No homework',
               style: GoogleFonts.inter(color: AppColors.textMuted)));
     }
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return ListView.builder(
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       itemCount: _items.length,
       itemBuilder: (_, i) {
@@ -509,6 +517,7 @@ class _HomeworkTabState extends State<_HomeworkTab> {
           ),
         );
       },
+      ),
     );
   }
 
@@ -587,14 +596,17 @@ class _ExamsTabState extends State<_ExamsTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const SkeletonList(showLeading: false);
     if (_exams.isEmpty) {
       return Center(
           child: Text('No exams',
               style: GoogleFonts.inter(color: AppColors.textMuted)));
     }
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return ListView.builder(
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       itemCount: _exams.length,
       itemBuilder: (_, i) {
@@ -661,6 +673,7 @@ class _ExamsTabState extends State<_ExamsTab> {
           ),
         );
       },
+      ),
     );
   }
 
@@ -708,7 +721,7 @@ class _FeesTabState extends State<_FeesTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const SkeletonList(showLeading: false);
     if (_fees.isEmpty) {
       return Center(
           child: Text('No fee records',
@@ -722,7 +735,10 @@ class _FeesTabState extends State<_FeesTab> {
     }
     final pending = totalDue - totalPaid;
 
-    return SingleChildScrollView(
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
@@ -790,6 +806,7 @@ class _FeesTabState extends State<_FeesTab> {
             );
           }),
         ],
+      ),
       ),
     );
   }

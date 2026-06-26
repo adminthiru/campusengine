@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/skeleton.dart';
 import '../providers/teacher_provider.dart';
 
 class TeacherSubjectsScreen extends StatefulWidget {
@@ -40,11 +41,14 @@ class _TeacherSubjectsScreenState extends State<TeacherSubjectsScreen> {
         elevation: 0,
       ),
       body: provider.isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary))
+          ? const SkeletonList()
           : provider.error != null
               ? Center(child: Text(provider.error!))
-              : _buildList(context, provider, isDark),
+              : RefreshIndicator(
+                  onRefresh: () => provider.fetchProfile(),
+                  color: AppColors.primary,
+                  child: _buildList(context, provider, isDark),
+                ),
     );
   }
 
@@ -53,16 +57,24 @@ class _TeacherSubjectsScreenState extends State<TeacherSubjectsScreen> {
     final assignments = provider.profile?.subjectTeacher ?? [];
 
     if (assignments.isEmpty) {
-      return Center(
-        child: Text(
-          'No subject classes assigned.',
-          style: AppTypography.s16Regular(
-              color: isDark ? AppColors.textMuted : AppColors.textSecondary),
-        ),
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+          Center(
+            child: Text(
+              'No subject classes assigned.',
+              style: AppTypography.s16Regular(
+                  color:
+                      isDark ? AppColors.textMuted : AppColors.textSecondary),
+            ),
+          ),
+        ],
       );
     }
 
     return ListView.separated(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       itemCount: assignments.length,
       separatorBuilder: (_, __) => const SizedBox(height: 12),

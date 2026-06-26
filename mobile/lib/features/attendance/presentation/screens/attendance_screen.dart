@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:skl_teacher/core/models/student.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
 import 'package:skl_teacher/features/attendance/presentation/providers/attendance_provider.dart';
 import 'package:skl_teacher/features/profile/presentation/providers/profile_provider.dart';
@@ -312,7 +313,10 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
     final pct = total > 0 ? (presentCount / total * 100).round() : 0;
 
     return Expanded(
-      child: ListView(
+      child: RefreshIndicator(
+        onRefresh: () => provider.fetchStudents(),
+        child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 80),
         children: [
           // ── Hero card ───────────────────────────────────────────────────
@@ -498,6 +502,7 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
             );
           }),
         ],
+      ),
       ),
     );
   }
@@ -971,8 +976,7 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
       BuildContext context, AttendanceProvider provider, bool isDark) {
     if (provider.isLoadingStudents) {
       return const Expanded(
-        child:
-            Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        child: SkeletonList(itemHeight: 60),
       );
     }
     if (provider.students.isEmpty) {
@@ -1071,9 +1075,13 @@ class _AttendanceScreenContentState extends State<_AttendanceScreenContent> {
               ),
             ),
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.only(top: 4, bottom: 80),
-              children: listItems,
+            child: RefreshIndicator(
+              onRefresh: () => provider.fetchStudents(),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.only(top: 4, bottom: 80),
+                children: listItems,
+              ),
             ),
           ),
         ],

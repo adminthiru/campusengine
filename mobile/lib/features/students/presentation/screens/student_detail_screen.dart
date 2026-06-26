@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 
 // Tab constants
 const _tabs = [
@@ -77,8 +78,42 @@ class _StudentDetailScreenState extends State<StudentDetailScreen>
       return Scaffold(
         backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
         appBar: _buildAppBar(isDark, widget.studentName ?? 'Student'),
-        body: const Center(
-            child: CircularProgressIndicator(color: AppColors.primary)),
+        body: SkeletonShimmer(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // Profile header placeholder
+            Container(
+              color: isDark ? AppColors.cardDark : Colors.white,
+              padding: const EdgeInsets.all(16),
+              child: Row(children: const [
+                SkeletonBox(width: 60, height: 60, radius: 30),
+                SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SkeletonBox(width: 160, height: 16),
+                        SizedBox(height: 8),
+                        SkeletonBox(width: 120, height: 12),
+                      ]),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 16),
+            // Section card placeholders
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                SkeletonBox(width: 140, height: 12),
+                SizedBox(height: 10),
+                SkeletonBox(width: double.infinity, height: 120, radius: 14),
+                SizedBox(height: 16),
+                SkeletonBox(width: 140, height: 12),
+                SizedBox(height: 10),
+                SkeletonBox(width: double.infinity, height: 120, radius: 14),
+              ]),
+            ),
+          ]),
+        ),
       );
     }
 
@@ -196,8 +231,8 @@ class _StudentDetailScreenState extends State<StudentDetailScreen>
         // ── Tab Content ──────────────────────────────────────────────────────
         Expanded(
           child: TabBarView(controller: _tc, children: [
-            _OverviewTab(student: s, isDark: isDark),
-            _MoreInfoTab(student: s, isDark: isDark),
+            _OverviewTab(student: s, isDark: isDark, onRefresh: _load),
+            _MoreInfoTab(student: s, isDark: isDark, onRefresh: _load),
             _AttendanceTab(studentId: widget.studentId, isDark: isDark),
             _HomeworkTab(studentId: widget.studentId, isDark: isDark),
             _ExamsTab(studentId: widget.studentId, isDark: isDark),
@@ -227,7 +262,9 @@ class _StudentDetailScreenState extends State<StudentDetailScreen>
 class _OverviewTab extends StatelessWidget {
   final dynamic student;
   final bool isDark;
-  const _OverviewTab({required this.student, required this.isDark});
+  final Future<void> Function() onRefresh;
+  const _OverviewTab(
+      {required this.student, required this.isDark, required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
@@ -242,7 +279,11 @@ class _OverviewTab extends StatelessWidget {
     final guardians = s['guardians'] as List? ?? [];
     final primaryG = guardians.isNotEmpty ? guardians[0] : null;
 
-    return SingleChildScrollView(
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      color: AppColors.primary,
+      child: SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // Academic Details
@@ -352,6 +393,7 @@ class _OverviewTab extends StatelessWidget {
           const SizedBox(height: 16),
         ],
       ]),
+    ),
     );
   }
 }
@@ -361,7 +403,9 @@ class _OverviewTab extends StatelessWidget {
 class _MoreInfoTab extends StatelessWidget {
   final dynamic student;
   final bool isDark;
-  const _MoreInfoTab({required this.student, required this.isDark});
+  final Future<void> Function() onRefresh;
+  const _MoreInfoTab(
+      {required this.student, required this.isDark, required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
@@ -380,7 +424,11 @@ class _MoreInfoTab extends StatelessWidget {
         .where((e) => e.value != null && e.value.toString().isNotEmpty)
         .toList();
 
-    return SingleChildScrollView(
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      color: AppColors.primary,
+      child: SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // All Guardians
@@ -518,6 +566,7 @@ class _MoreInfoTab extends StatelessWidget {
           ]),
         ],
       ]),
+    ),
     );
   }
 }
@@ -696,7 +745,14 @@ class _AttendanceTabState extends State<_AttendanceTab> {
     final mTotal = _records.length;
     final mPct = mTotal > 0 ? ((present / mTotal) * 100).round() : 0;
 
-    return SingleChildScrollView(
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadSummary();
+        await _loadRecords();
+      },
+      color: AppColors.primary,
+      child: SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // Overall summary pills
@@ -803,8 +859,12 @@ class _AttendanceTabState extends State<_AttendanceTab> {
             ),
             if (_loading)
               const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(color: AppColors.primary))
+                padding: EdgeInsets.all(16),
+                child: SkeletonShimmer(
+                  child: SkeletonBox(
+                      width: double.infinity, height: 200, radius: 8),
+                ),
+              )
             else
               GridView.builder(
                 shrinkWrap: true,
@@ -885,6 +945,7 @@ class _AttendanceTabState extends State<_AttendanceTab> {
                     ]))
                 .toList()),
       ]),
+    ),
     );
   }
 }
@@ -929,11 +990,22 @@ class _HomeworkTabState extends State<_HomeworkTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(
-          child: CircularProgressIndicator(color: AppColors.primary));
+      return const SkeletonList(showLeading: false);
     }
-    if (_hw.isEmpty) return _EmptyState('No homework records found');
-    return ListView.builder(
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: AppColors.primary,
+      child: _hw.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.3),
+                _EmptyState('No homework records found'),
+              ],
+            )
+          : ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       itemCount: _hw.length,
       itemBuilder: (_, i) {
@@ -993,6 +1065,7 @@ class _HomeworkTabState extends State<_HomeworkTab> {
           ]),
         );
       },
+    ),
     );
   }
 }
@@ -1037,11 +1110,22 @@ class _ExamsTabState extends State<_ExamsTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(
-          child: CircularProgressIndicator(color: AppColors.primary));
+      return const SkeletonList(showLeading: false);
     }
-    if (_results.isEmpty) return _EmptyState('No exam results found');
-    return ListView.builder(
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: AppColors.primary,
+      child: _results.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.3),
+                _EmptyState('No exam results found'),
+              ],
+            )
+          : ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       itemCount: _results.length,
       itemBuilder: (_, i) {
@@ -1095,6 +1179,7 @@ class _ExamsTabState extends State<_ExamsTab> {
           ]),
         );
       },
+    ),
     );
   }
 }
@@ -1140,11 +1225,14 @@ class _FeesTabState extends State<_FeesTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(
-          child: CircularProgressIndicator(color: AppColors.primary));
+      return const SkeletonList(showLeading: false);
     }
 
-    return SingleChildScrollView(
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: AppColors.primary,
+      child: SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (_feeSummary != null) ...[
@@ -1217,6 +1305,7 @@ class _FeesTabState extends State<_FeesTab> {
             );
           }),
       ]),
+    ),
     );
   }
 }

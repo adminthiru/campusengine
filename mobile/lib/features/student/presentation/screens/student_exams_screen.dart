@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 import 'package:skl_teacher/features/exams/presentation/widgets/exam_result_card.dart';
 import 'package:skl_teacher/features/student/presentation/providers/student_profile_provider.dart';
 
@@ -130,8 +131,7 @@ class _ExamScheduleTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return const Center(
-          child: CircularProgressIndicator(color: AppColors.primary));
+      return const SkeletonList(showLeading: false, itemHeight: 110);
     }
     if (exams.isEmpty) {
       return Center(
@@ -148,6 +148,7 @@ class _ExamScheduleTab extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         itemCount: exams.length,
         itemBuilder: (_, i) {
@@ -262,8 +263,7 @@ class _ExamResultsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return const Center(
-          child: CircularProgressIndicator(color: AppColors.primary));
+      return const SkeletonList(showLeading: false, itemHeight: 140);
     }
     if (results.isEmpty) {
       return Center(
@@ -281,6 +281,7 @@ class _ExamResultsTab extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         itemCount: results.length,
         itemBuilder: (_, i) => ExamResultCard(

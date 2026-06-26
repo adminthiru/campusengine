@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/models/homework.dart';
 import 'package:skl_teacher/features/dashboard/presentation/providers/dashboard_provider.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 
 /// Active homework summary on the dashboard (real data only).
 class HomeworkAndExams extends StatelessWidget {
@@ -72,9 +73,11 @@ class HomeworkAndExams extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (provider.isLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 28),
-              child: Center(child: CircularProgressIndicator()),
+            const SkeletonList(
+              count: 3,
+              itemHeight: 70,
+              showLeading: false,
+              padding: EdgeInsets.zero,
             )
           else if (items.isEmpty)
             _EmptyState(isDark: isDark)

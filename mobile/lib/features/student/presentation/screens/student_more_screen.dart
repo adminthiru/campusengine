@@ -20,11 +20,14 @@ class StudentMoreScreen extends StatelessWidget {
     final student = sp.profile;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return RefreshIndicator(
+      onRefresh: () => sp.fetchProfile(),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           // Profile card
           Container(
             padding: const EdgeInsets.all(16),
@@ -108,7 +111,8 @@ class StudentMoreScreen extends StatelessWidget {
               () {
             _showLogoutBottomSheet(context, auth);
           }, isDark, color: AppColors.accentRed),
-        ],
+          ],
+        ),
       ),
     );
   }

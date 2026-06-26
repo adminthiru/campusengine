@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 import 'package:skl_teacher/features/student/presentation/providers/student_profile_provider.dart';
 
 class StudentTimetableScreen extends StatefulWidget {
@@ -129,8 +130,7 @@ class _StudentTimetableScreenState extends State<StudentTimetableScreen> {
           // ── Periods ─────────────────────────────────────────────────────
           Expanded(
             child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary))
+                ? const SkeletonList(showLeading: false, itemHeight: 84)
                 : periods.isEmpty
                     ? Center(
                         child: Column(
@@ -147,6 +147,7 @@ class _StudentTimetableScreenState extends State<StudentTimetableScreen> {
                     : RefreshIndicator(
                         onRefresh: _load,
                         child: ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
                           padding: const EdgeInsets.all(16),
                           itemCount: periods.length,
                           itemBuilder: (_, i) =>

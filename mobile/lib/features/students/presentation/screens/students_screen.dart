@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 import 'package:skl_teacher/features/profile/presentation/providers/profile_provider.dart';
 import 'package:skl_teacher/features/students/presentation/screens/student_detail_screen.dart';
 
@@ -145,8 +146,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
           // ── List ─────────────────────────────────────────────────────────
           Expanded(
             child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary))
+                ? const SkeletonList()
                 : _filtered.isEmpty
                     ? Center(
                         child: Column(
@@ -168,6 +168,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
                     : RefreshIndicator(
                         onRefresh: _load,
                         child: ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
                           padding: const EdgeInsets.all(16),
                           itemCount: _filtered.length,
                           itemBuilder: (_, i) => GestureDetector(

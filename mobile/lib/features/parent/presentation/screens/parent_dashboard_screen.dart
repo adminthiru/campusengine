@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 import 'package:skl_teacher/features/auth/presentation/providers/auth_provider.dart';
 import 'package:skl_teacher/features/parent/presentation/providers/parent_data_provider.dart';
 
@@ -81,14 +82,30 @@ class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
     return Scaffold(
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
       body: pp.loading || _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary))
+          ? const SkeletonShimmer(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SkeletonBox(height: 110, radius: 20),
+                    SkeletonBox(height: 14, width: 120, margin: EdgeInsets.only(top: 24, bottom: 12)),
+                    SkeletonCard(),
+                    SizedBox(height: 12),
+                    SkeletonCard(),
+                    SizedBox(height: 12),
+                    SkeletonCard(),
+                  ],
+                ),
+              ),
+            )
           : RefreshIndicator(
               onRefresh: () async {
                 await pp.fetchChildren();
                 await _loadStats(pp.children);
               },
               child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 children: [
                   // ── Welcome ──────────────────────────────────────────────
@@ -299,7 +316,7 @@ class _ChildCard extends StatelessWidget {
             CircleAvatar(
               radius: 22,
               backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-              child: Text(child.name[0].toUpperCase(),
+              child: Text(child.initial,
                   style: AppTypography.s16Bold(color: AppColors.primary)),
             ),
             const SizedBox(width: 12),

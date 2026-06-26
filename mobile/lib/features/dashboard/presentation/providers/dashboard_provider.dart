@@ -40,16 +40,18 @@ class DashboardProvider extends ChangeNotifier {
           'classId': classId,
         });
 
-        final attData = attRes.data['attendance'] as List?;
-        if (attData != null && attData.isNotEmpty) {
+        final attData = attRes.data is Map ? attRes.data['attendance'] : null;
+        if (attData is List && attData.isNotEmpty) {
           final latestRecord =
               attData.first; // Most recent due to sort({date: -1})
-          final records = latestRecord['records'] as List?;
-          _todayTotal = records?.length ?? 0;
+          final records = (latestRecord is Map && latestRecord['records'] is List)
+              ? latestRecord['records'] as List
+              : const [];
+          _todayTotal = records.length;
           _todayPresent =
-              records?.where((r) => r['status'] == 'present').length ?? 0;
+              records.where((r) => r is Map && r['status'] == 'present').length;
           _todayAbsent =
-              records?.where((r) => r['status'] == 'absent').length ?? 0;
+              records.where((r) => r is Map && r['status'] == 'absent').length;
         }
       }
 
@@ -61,8 +63,8 @@ class DashboardProvider extends ChangeNotifier {
         'status': 'active', // only active homework
       });
 
-      final hwData = hwRes.data['homework'] as List?;
-      if (hwData != null) {
+      final hwData = hwRes.data is Map ? hwRes.data['homework'] : null;
+      if (hwData is List) {
         final allHomework = hwData.map((e) => Homework.fromJson(e)).toList();
 
         // Filter homework for this teacher:
@@ -83,8 +85,8 @@ class DashboardProvider extends ChangeNotifier {
         'teacherId': profile.employee.id,
       });
 
-      final ttData = ttRes.data['timetables'] as List?;
-      if (ttData != null) {
+      final ttData = ttRes.data is Map ? ttRes.data['timetables'] : null;
+      if (ttData is List) {
         _timetables = ttData;
       }
     } catch (e) {

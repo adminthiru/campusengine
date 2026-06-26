@@ -22,7 +22,10 @@ class ParentProfileScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
-      body: SingleChildScrollView(
+      body: RefreshIndicator(
+        onRefresh: () => pp.fetchChildren(),
+        child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           // ── Profile Card ────────────────────────────────────────────────
@@ -110,7 +113,7 @@ class ParentProfileScreen extends StatelessWidget {
                         radius: 18,
                         backgroundColor:
                             AppColors.primary.withValues(alpha: 0.1),
-                        child: Text(c.name[0].toUpperCase(),
+                        child: Text(c.initial,
                             style: AppTypography.s14Bold(
                                 color: AppColors.primary)),
                       ),
@@ -181,6 +184,7 @@ class ParentProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 32),
         ]),
+      ),
       ),
     );
   }

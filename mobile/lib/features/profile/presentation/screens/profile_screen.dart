@@ -5,6 +5,7 @@ import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_dimensions.dart';
 import 'package:skl_teacher/features/auth/presentation/providers/auth_provider.dart';
 import 'package:skl_teacher/core/models/teacher_profile.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 import 'package:skl_teacher/features/profile/presentation/providers/profile_provider.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -47,10 +48,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildShimmerLoading() {
-    return const Center(
-      child: CircularProgressIndicator(
-        color: AppColors.primary,
-        strokeWidth: 3,
+    return SkeletonShimmer(
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(AppDimensions.base),
+        children: const [
+          // Avatar + name placeholder
+          SizedBox(height: 12),
+          Center(child: SkeletonBox(width: 92, height: 92, radius: 46)),
+          SizedBox(height: 16),
+          Center(child: SkeletonBox(width: 160, height: 18)),
+          SizedBox(height: 8),
+          Center(child: SkeletonBox(width: 120, height: 13)),
+          SizedBox(height: 28),
+          // Info card placeholders
+          SkeletonBox(width: double.infinity, height: 150, radius: 16),
+          SizedBox(height: 16),
+          SkeletonBox(width: double.infinity, height: 200, radius: 16),
+          SizedBox(height: 16),
+          SkeletonBox(width: double.infinity, height: 130, radius: 16),
+        ],
       ),
     );
   }

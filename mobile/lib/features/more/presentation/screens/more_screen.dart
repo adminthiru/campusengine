@@ -59,7 +59,11 @@ class MoreScreen extends StatelessWidget {
             .trim()
         : null;
 
-    return SingleChildScrollView(
+    return RefreshIndicator(
+      onRefresh: () => profileProv.fetchProfile(),
+      color: AppColors.primary,
+      child: SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -208,6 +212,7 @@ class MoreScreen extends StatelessWidget {
           const SizedBox(height: 24),
         ],
       ),
+    ),
     );
   }
 

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 import 'package:skl_teacher/features/student/presentation/providers/student_profile_provider.dart';
 
 class StudentFeesScreen extends StatefulWidget {
@@ -55,11 +56,11 @@ class _StudentFeesScreenState extends State<StudentFeesScreen> {
     return Scaffold(
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary))
+          ? const _FeesSkeleton()
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 children: [
                   // ── Summary Card ────────────────────────────────────────
@@ -138,6 +139,34 @@ class _StudentFeesScreenState extends State<StudentFeesScreen> {
     if (v >= 100000) return '₹${(v / 100000).toStringAsFixed(1)}L';
     if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
     return '$v';
+  }
+}
+
+class _FeesSkeleton extends StatelessWidget {
+  const _FeesSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return SkeletonShimmer(
+      child: ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: const [
+          // Summary card
+          SkeletonBox(height: 160, radius: 20),
+          SizedBox(height: 20),
+          // "Fee Breakdown" title
+          SkeletonBox(width: 130, height: 14),
+          SizedBox(height: 10),
+          // Fee cards
+          SkeletonBox(height: 96, radius: 14),
+          SizedBox(height: 12),
+          SkeletonBox(height: 96, radius: 14),
+          SizedBox(height: 12),
+          SkeletonBox(height: 96, radius: 14),
+        ],
+      ),
+    );
   }
 }
 

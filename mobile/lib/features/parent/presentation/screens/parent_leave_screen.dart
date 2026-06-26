@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
+import 'package:skl_teacher/core/widgets/skeleton.dart';
 import 'package:skl_teacher/features/parent/presentation/providers/parent_data_provider.dart';
 
 class ParentLeaveScreen extends StatefulWidget {
@@ -182,7 +183,7 @@ class _ApplyTabState extends State<_ApplyTab> {
                           radius: 18,
                           backgroundColor:
                               AppColors.primary.withValues(alpha: 0.1),
-                          child: Text(c.name[0].toUpperCase(),
+                          child: Text(c.initial,
                               style: AppTypography.s14Bold(
                                   color: AppColors.primary)),
                         ),
@@ -374,8 +375,7 @@ class _HistoryTabState extends State<_HistoryTab> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     if (_loading) {
-      return const Center(
-          child: CircularProgressIndicator(color: AppColors.primary));
+      return const SkeletonList();
     }
     if (_leaves.isEmpty) {
       return Center(
@@ -389,6 +389,7 @@ class _HistoryTabState extends State<_HistoryTab> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         itemCount: _leaves.length,
         itemBuilder: (_, i) {

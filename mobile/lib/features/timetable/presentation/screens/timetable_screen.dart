@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/skeleton.dart';
 import '../../../profile/presentation/providers/profile_provider.dart';
 import '../providers/timetable_provider.dart';
 
@@ -1002,8 +1003,7 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
 
     if (provider.isLoading) {
       return const Scaffold(
-        body:
-            Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        body: SafeArea(child: SkeletonList(itemHeight: 110)),
       );
     }
 
@@ -1090,6 +1090,7 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                         teacherId, provider.selectedDate);
                   },
                   child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.only(top: 8, bottom: 80),
                     itemCount: items.length,
                     itemBuilder: (ctx, i) =>

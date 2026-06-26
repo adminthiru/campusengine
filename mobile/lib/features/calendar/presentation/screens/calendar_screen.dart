@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/skeleton.dart';
 import '../providers/calendar_provider.dart';
 
 // ── Entry point ───────────────────────────────────────────────────────────────
@@ -244,7 +245,11 @@ class _MonthGrid extends StatelessWidget {
     final daysInMonth = DateTime(year, month + 1, 0).day;
     final firstWday   = DateTime(year, month, 1).weekday % 7; // 0=Sun
 
-    return SingleChildScrollView(
+    return RefreshIndicator(
+      onRefresh: () => p.fetchMonth(year, month, force: true),
+      color: AppColors.primary,
+      child: SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       child: Container(
         decoration: BoxDecoration(
@@ -314,9 +319,24 @@ class _MonthGrid extends StatelessWidget {
             // ── Day cells ─────────────────────────────────────────────────
             if (p.isMonthLoading)
               const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(
-                    child: CircularProgressIndicator(color: AppColors.primary)),
+                padding: EdgeInsets.all(12),
+                child: SkeletonShimmer(
+                  child: Column(
+                    children: [
+                      SkeletonBox(
+                          width: double.infinity, height: 60, radius: 6),
+                      SizedBox(height: 6),
+                      SkeletonBox(
+                          width: double.infinity, height: 60, radius: 6),
+                      SizedBox(height: 6),
+                      SkeletonBox(
+                          width: double.infinity, height: 60, radius: 6),
+                      SizedBox(height: 6),
+                      SkeletonBox(
+                          width: double.infinity, height: 60, radius: 6),
+                    ],
+                  ),
+                ),
               )
             else if (p.monthError != null)
               Padding(
@@ -331,6 +351,7 @@ class _MonthGrid extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 
@@ -557,33 +578,44 @@ class _ListView extends StatelessWidget {
 
         Expanded(
           child: p.isYearLoading
-              ? const Center(
-                  child: CircularProgressIndicator(color: AppColors.primary))
+              ? const SkeletonList(showLeading: false)
               : p.yearError != null
                   ? Center(
                       child: Text(p.yearError!,
                           style: AppTypography.s14Regular(
                               color: AppColors.error)))
-                  : p.groupedByMonth.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.calendar_today_outlined,
-                                  size: 52,
-                                  color: isDark
-                                      ? AppColors.textMuted
-                                      : AppColors.textSecondary),
-                              const SizedBox(height: 12),
-                              Text('No events for $year',
-                                  style: AppTypography.s14Regular(
+                  : RefreshIndicator(
+                      onRefresh: () => p.fetchYear(year, force: true),
+                      color: AppColors.primary,
+                      child: p.groupedByMonth.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            SizedBox(
+                                height: MediaQuery.of(context).size.height *
+                                    0.3),
+                            Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.calendar_today_outlined,
+                                      size: 52,
                                       color: isDark
                                           ? AppColors.textMuted
-                                          : AppColors.textSecondary)),
-                            ],
-                          ),
+                                          : AppColors.textSecondary),
+                                  const SizedBox(height: 12),
+                                  Text('No events for $year',
+                                      style: AppTypography.s14Regular(
+                                          color: isDark
+                                              ? AppColors.textMuted
+                                              : AppColors.textSecondary)),
+                                ],
+                              ),
+                            ),
+                          ],
                         )
                       : ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
                           padding:
                               const EdgeInsets.fromLTRB(16, 12, 16, 32),
                           children: kMonthNames
@@ -634,6 +666,7 @@ class _ListView extends StatelessWidget {
                             );
                           }).toList(),
                         ),
+                    ),
         ),
       ],
     );
