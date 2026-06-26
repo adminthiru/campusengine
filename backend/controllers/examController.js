@@ -311,7 +311,30 @@ const getResults = async (req, res) => {
       .populate('class', 'name section')
       .populate('exam', 'name type')
       .populate('marks.subject', 'name code');
-    res.json({ success: true, results });
+
+    // Derive grades from the school's grade config (same source the exam module
+    // uses) so the grade shown to students/parents always matches the admin's
+    // view — even if marks were entered before grades were configured.
+    const school = await School.findById(req.user.school).select('gradeConfig');
+    const grades = school?.gradeConfig?.grades || [];
+    const gradeFor = (pct) => {
+      if (!grades.length || pct == null) return '';
+      return grades.find(g => pct >= g.minScore && pct <= g.maxScore)?.label || '';
+    };
+
+    const out = results.map(r => {
+      const obj = r.toObject();
+      if (grades.length) obj.grade = gradeFor(obj.percentage);
+      obj.marks = (obj.marks || []).map(m => {
+        if (m.isAbsent) return { ...m, grade: 'AB' };
+        if (!grades.length) return m;
+        const pct = m.maxMarks ? (m.totalMarks / m.maxMarks) * 100 : null;
+        return { ...m, grade: gradeFor(pct) };
+      });
+      return obj;
+    });
+
+    res.json({ success: true, results: out });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

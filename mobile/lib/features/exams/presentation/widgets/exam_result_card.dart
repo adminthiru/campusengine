@@ -122,6 +122,7 @@ class ExamResultCard extends StatelessWidget {
           ...papers.map((m) => _PaperTile(
                 subject: (m['subject']?['name'] as String?) ?? 'Subject',
                 url: m['answerPaper']['url'] as String,
+                fileName: m['answerPaper']['fileName'] as String?,
                 isDark: isDark,
               )),
         ],
@@ -208,12 +209,17 @@ class _SubjectRow extends StatelessWidget {
 class _PaperTile extends StatelessWidget {
   final String subject;
   final String url;
+  final String? fileName;
   final bool isDark;
   const _PaperTile(
-      {required this.subject, required this.url, required this.isDark});
+      {required this.subject,
+      required this.url,
+      this.fileName,
+      required this.isDark});
 
   @override
   Widget build(BuildContext context) {
+    final hasName = fileName != null && fileName!.trim().isNotEmpty;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
@@ -233,11 +239,24 @@ class _PaperTile extends StatelessWidget {
               const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 20),
               const SizedBox(width: 10),
               Expanded(
-                child: Text('$subject — Answer Paper',
-                    style: AppTypography.s13SemiBold(color: AppColors.primary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('$subject — Answer Paper',
+                        style:
+                            AppTypography.s13SemiBold(color: AppColors.primary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    if (hasName)
+                      Text(fileName!,
+                          style: AppTypography.s11Regular(
+                              color: AppColors.textMuted),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               const Icon(Icons.open_in_new, color: AppColors.primary, size: 18),
             ]),
           ),
