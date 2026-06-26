@@ -49,6 +49,10 @@ class AppRouter {
 
   static GoRouter? _instance;
 
+  // Tab switches inside the shell should feel instant — no slide/"new page"
+  // transition. Wrap every shell route's child in a NoTransitionPage.
+  static Page<void> _flat(Widget child) => NoTransitionPage(child: child);
+
   static GoRouter createRouter(AuthProvider authProvider) {
     _instance ??= GoRouter(
       navigatorKey: _rootNavigatorKey,
@@ -90,80 +94,91 @@ class AppRouter {
             // Teacher routes (unchanged)
             GoRoute(
                 path: '/dashboard',
-                builder: (_, __) => const DashboardScreen()),
+                pageBuilder: (_, __) => _flat(const DashboardScreen())),
             GoRoute(
                 path: '/attendance',
-                builder: (_, __) => const AttendanceScreen()),
+                pageBuilder: (_, __) => _flat(const AttendanceScreen())),
             GoRoute(
-                path: '/homework', builder: (_, __) => const HomeworkScreen()),
+                path: '/homework',
+                pageBuilder: (_, __) => _flat(const HomeworkScreen())),
             GoRoute(
                 path: '/timetable',
-                builder: (_, __) => const TimetableScreen()),
+                pageBuilder: (_, __) => _flat(const TimetableScreen())),
             GoRoute(
               path: '/students',
-              builder: (_, state) {
+              pageBuilder: (_, state) {
                 final extra = state.extra as Map<String, String>?;
-                return StudentsScreen(
+                return _flat(StudentsScreen(
                   classId: extra?['classId'],
                   className: extra?['className'],
-                );
+                ));
               },
             ),
             GoRoute(
-                path: '/profile', builder: (_, __) => const ProfileScreen()),
-            GoRoute(path: '/more', builder: (_, __) => const MoreScreen()),
+                path: '/profile',
+                pageBuilder: (_, __) => _flat(const ProfileScreen())),
+            GoRoute(
+                path: '/more', pageBuilder: (_, __) => _flat(const MoreScreen())),
             GoRoute(
                 path: '/notifications',
-                builder: (_, __) => const NotificationsScreen()),
+                pageBuilder: (_, __) => _flat(const NotificationsScreen())),
             // Role-specific aliases (the app shell routes parents/students here).
             GoRoute(
                 path: '/parent/notifications',
-                builder: (_, __) => const NotificationsScreen()),
+                pageBuilder: (_, __) => _flat(const NotificationsScreen())),
             GoRoute(
                 path: '/student/notifications',
-                builder: (_, __) => const NotificationsScreen()),
+                pageBuilder: (_, __) => _flat(const NotificationsScreen())),
             GoRoute(
-                path: '/settings', builder: (_, __) => const SettingsScreen()),
-            GoRoute(path: '/leave', builder: (_, __) => const LeaveScreen()),
-            GoRoute(path: '/library', builder: (_, __) => const LibraryScreen()),
-            GoRoute(path: '/exams', builder: (_, __) => const ExamsScreen()),
+                path: '/settings',
+                pageBuilder: (_, __) => _flat(const SettingsScreen())),
             GoRoute(
-                path: '/calendar', builder: (_, __) => const CalendarScreen()),
+                path: '/leave',
+                pageBuilder: (_, __) => _flat(const LeaveScreen())),
+            GoRoute(
+                path: '/library',
+                pageBuilder: (_, __) => _flat(const LibraryScreen())),
+            GoRoute(
+                path: '/exams',
+                pageBuilder: (_, __) => _flat(const ExamsScreen())),
+            GoRoute(
+                path: '/calendar',
+                pageBuilder: (_, __) => _flat(const CalendarScreen())),
 
             // Teacher module dynamic routes
             GoRoute(
               path: '/teacher/subjects',
-              builder: (_, __) => ChangeNotifierProvider(
+              pageBuilder: (_, __) => _flat(ChangeNotifierProvider(
                 create: (_) => TeacherProvider(),
                 child: const TeacherSubjectsScreen(),
-              ),
+              )),
             ),
             GoRoute(
               path: '/teacher/students',
-              builder: (context, state) {
+              pageBuilder: (context, state) {
                 final classId = state.uri.queryParameters['classId'] ?? '';
                 final className = state.uri.queryParameters['className'] ?? '';
                 final subjectName =
                     state.uri.queryParameters['subjectName'] ?? '';
-                return ChangeNotifierProvider(
+                return _flat(ChangeNotifierProvider(
                   create: (_) => TeacherProvider(),
                   child: TeacherSubjectStudentsScreen(
                     classId: classId,
                     className: className,
                     subjectName: subjectName,
                   ),
-                );
+                ));
               },
             ),
             GoRoute(
               path: '/teacher/exams',
-              builder: (context, state) {
+              pageBuilder: (context, state) {
                 final classId = state.uri.queryParameters['classId'] ?? '';
                 final className = state.uri.queryParameters['className'] ?? '';
                 final subjectId = state.uri.queryParameters['subjectId'] ?? '';
                 final subjectName =
                     state.uri.queryParameters['subjectName'] ?? '';
-                return ChangeNotifierProvider(
+                return _flat(ChangeNotifierProvider(
                   create: (_) => ExamsProvider(),
                   child: TeacherSubjectExamsScreen(
                     classId: classId,
@@ -171,49 +186,49 @@ class AppRouter {
                     subjectId: subjectId,
                     subjectName: subjectName,
                   ),
-                );
+                ));
               },
             ),
 
             // Student routes
             GoRoute(
                 path: '/student/dashboard',
-                builder: (_, __) => const StudentDashboardScreen()),
+                pageBuilder: (_, __) => _flat(const StudentDashboardScreen())),
             GoRoute(
                 path: '/student/homework',
-                builder: (_, __) => const StudentHomeworkScreen()),
+                pageBuilder: (_, __) => _flat(const StudentHomeworkScreen())),
             GoRoute(
                 path: '/student/exams',
-                builder: (_, __) => const StudentExamsScreen()),
+                pageBuilder: (_, __) => _flat(const StudentExamsScreen())),
             GoRoute(
                 path: '/student/attendance',
-                builder: (_, __) => const StudentAttendanceScreen()),
+                pageBuilder: (_, __) => _flat(const StudentAttendanceScreen())),
             GoRoute(
                 path: '/student/more',
-                builder: (_, __) => const StudentMoreScreen()),
+                pageBuilder: (_, __) => _flat(const StudentMoreScreen())),
             GoRoute(
                 path: '/student/leave',
-                builder: (_, __) => const StudentLeaveScreen()),
+                pageBuilder: (_, __) => _flat(const StudentLeaveScreen())),
             GoRoute(
                 path: '/student/fees',
-                builder: (_, __) => const StudentFeesScreen()),
+                pageBuilder: (_, __) => _flat(const StudentFeesScreen())),
             GoRoute(
                 path: '/student/timetable',
-                builder: (_, __) => const StudentTimetableScreen()),
+                pageBuilder: (_, __) => _flat(const StudentTimetableScreen())),
 
             // Parent routes
             GoRoute(
                 path: '/parent/dashboard',
-                builder: (_, __) => const ParentDashboardScreen()),
+                pageBuilder: (_, __) => _flat(const ParentDashboardScreen())),
             GoRoute(
                 path: '/parent/children',
-                builder: (_, __) => const ParentChildrenScreen()),
+                pageBuilder: (_, __) => _flat(const ParentChildrenScreen())),
             GoRoute(
                 path: '/parent/leave',
-                builder: (_, __) => const ParentLeaveScreen()),
+                pageBuilder: (_, __) => _flat(const ParentLeaveScreen())),
             GoRoute(
                 path: '/parent/profile',
-                builder: (_, __) => const ParentProfileScreen()),
+                pageBuilder: (_, __) => _flat(const ParentProfileScreen())),
           ],
         ),
       ],
