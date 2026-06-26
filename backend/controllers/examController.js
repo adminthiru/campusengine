@@ -18,7 +18,38 @@ const getExamById = async (req, res) => {
       .populate('schedule.subject', 'name code maxMarks')
       .populate('schedule.invigilator', 'name');
     if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
-    res.json({ success: true, exam });
+
+    // Results completeness — gates the "Publish Results" button. Every active
+    // student in each class must have, for each of that class's subjects, a marks
+    // entry that is either marked Absent or has marks. Only computed while unpublished.
+    const out = exam.toObject();
+    let required = 0, pending = 0;
+    if (!exam.isResultPublished) {
+      const classIds = (exam.classes || []).map(c => c._id || c);
+      for (const cid of classIds) {
+        const subjects = await Subject.find({ school: req.user.school, classes: cid }).select('_id');
+        if (!subjects.length) continue;
+        const students = await Student.find({ school: req.user.school, currentClass: cid, status: 'active' }).select('_id');
+        if (!students.length) continue;
+        const results = await ExamResult.find({ school: req.user.school, exam: exam._id, class: cid }).select('student marks');
+        const byStudent = {};
+        results.forEach(r => { byStudent[String(r.student)] = r.marks || []; });
+        for (const stu of students) {
+          const marks = byStudent[String(stu._id)] || [];
+          for (const subj of subjects) {
+            required++;
+            const m = marks.find(mm => String(mm.subject?._id || mm.subject) === String(subj._id));
+            const filled = m && (m.isAbsent === true || m.theoryMarks != null || m.practicalMarks != null || m.totalMarks != null);
+            if (!filled) pending++;
+          }
+        }
+      }
+    }
+    out.resultsRequired = required;
+    out.resultsPending = pending;
+    out.resultsComplete = pending === 0; // nothing missing → publishable
+
+    res.json({ success: true, exam: out });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -250,12 +281,18 @@ const publishResults = async (req, res) => {
       }
     }
 
-    // In-app notifications
-    const studentIds = results.map(r => r.student?._id).filter(Boolean);
-    if (studentIds.length) {
-      notifyParentUsers(req.user.school, studentIds, 'notifyOnExamResults', `Exam Results Published: ${exam.name}`, `Results for ${exam.name} are published. Log in to view your child's performance.`, 'success');
-      notifyStudentUsers(req.user.school, studentIds, 'notifyOnExamResults', `Exam Results Published: ${exam.name}`, `Results for ${exam.name} are published. Log in to view your marks.`, 'success');
-    }
+    // Notify teachers + students + parents of the exam's classes (in-app + push).
+    notifyClasses({
+      schoolId: req.user.school,
+      classIds: exam.classes,
+      audiences: ['student', 'parent', 'teacher'],
+      title: `Results Published: ${exam.name}`,
+      body: `${exam.name} results are published. Check the Exam section for the marks.`,
+      type: 'success',
+      parentPermKey: 'notifyOnExamResults',
+      studentPermKey: 'notifyOnExamResults',
+      data: { kind: 'exam_results', examId: String(exam._id) },
+    });
 
     res.json({ success: true, message: 'Results published' });
   } catch (err) {

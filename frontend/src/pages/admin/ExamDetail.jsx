@@ -242,6 +242,7 @@ export default function ExamDetail() {
     mutationFn: (payload) => api.post('/exams/marks', payload),
     onSuccess: () => {
       qc.invalidateQueries(['results', id, activeClassId]);
+      qc.invalidateQueries(['exam', id]); // re-evaluate the Publish gate
       toast.success('Marks saved!');
     },
     onError: (err) => toast.error(err.message || 'Failed to save marks')
@@ -382,8 +383,21 @@ export default function ExamDetail() {
           <button className="btn btn-secondary btn-sm btn-icon" title="Edit exam" onClick={openEditModal}>
             <Edit2 size={14} />
           </button>
+          {!exam.isResultPublished && !exam.resultsComplete && exam.resultsPending > 0 && (
+            <span style={{ fontSize: 12, color: '#d97706', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {exam.resultsPending} mark{exam.resultsPending === 1 ? '' : 's'} pending
+            </span>
+          )}
           {!exam.isResultPublished ? (
-            <button className="btn btn-publish" onClick={() => publishMutation.mutate()} disabled={publishMutation.isPending}>
+            <button
+              className="btn btn-publish"
+              onClick={() => publishMutation.mutate()}
+              disabled={publishMutation.isPending || !exam.resultsComplete}
+              style={(!exam.resultsComplete && !publishMutation.isPending) ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+              title={exam.resultsComplete
+                ? 'Publish results to students, parents & teachers'
+                : `Enter marks or mark Absent for all students first${exam.resultsPending ? ` — ${exam.resultsPending} entr${exam.resultsPending === 1 ? 'y' : 'ies'} pending` : ''}`}
+            >
               <Send size={14} /> {publishMutation.isPending ? 'Publishing...' : 'Publish Results'}
             </button>
           ) : (
