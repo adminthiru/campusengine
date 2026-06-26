@@ -11,6 +11,18 @@ class ApiClient {
     defaultValue: 'https://campusengine.onrender.com/api',
   );
 
+  /// Server host without the trailing `/api`, used to build static file URLs
+  /// (e.g. uploaded answer-paper PDFs served from `/uploads/...`).
+  static String get _fileBase =>
+      _baseUrl.endsWith('/api') ? _baseUrl.substring(0, _baseUrl.length - 4) : _baseUrl;
+
+  /// Builds an absolute URL for a server file path like `/uploads/foo.pdf`.
+  /// Returns absolute URLs unchanged.
+  static String fileUrl(String path) {
+    if (path.isEmpty || path.startsWith('http')) return path;
+    return '$_fileBase${path.startsWith('/') ? '' : '/'}$path';
+  }
+
   static final Dio _dio = Dio(BaseOptions(
     baseUrl: _baseUrl,
     connectTimeout: const Duration(seconds: 60),

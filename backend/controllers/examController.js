@@ -303,6 +303,8 @@ const getResults = async (req, res) => {
     if (examId) query.exam = examId;
     if (classId) query.class = classId;
     if (studentId) query.student = studentId;
+    // Students & parents may only see results the admin has published.
+    if (req.user.role === 'student' || req.user.role === 'parent') query.isPublished = true;
 
     const results = await ExamResult.find(query)
       .populate('student', 'name admissionNumber rollNumber photo')

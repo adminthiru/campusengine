@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
+import 'package:skl_teacher/features/exams/presentation/widgets/exam_result_card.dart';
 import 'package:skl_teacher/features/student/presentation/providers/student_profile_provider.dart';
 
 class StudentExamsScreen extends StatefulWidget {
@@ -282,112 +283,11 @@ class _ExamResultsTab extends StatelessWidget {
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: results.length,
-        itemBuilder: (_, i) {
-          final r = results[i];
-          final examName = r['exam']?['name'] as String? ?? 'Exam';
-          final marks = r['marks'] as List<dynamic>? ?? [];
-          num totalMarks = 0, totalMax = 0;
-          for (final m in marks) {
-            totalMarks += (m['marksObtained'] as num? ?? 0);
-            totalMax += (m['maxMarks'] as num? ?? 100);
-          }
-          final pct = totalMax > 0 ? (totalMarks / totalMax * 100).round() : 0;
-          final grade = r['grade'] as String? ?? _grade(pct);
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 14),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.cardDark : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                  color: isDark ? AppColors.borderDark : AppColors.borderLight),
-              boxShadow: isDark ? [] : AppColors.shadowSm,
-            ),
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Expanded(
-                    child: Text(examName,
-                        style: AppTypography.s15SemiBold(
-                            color: isDark
-                                ? Colors.white
-                                : AppColors.textPrimary))),
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: _gradeColor(pct).withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Text(grade,
-                        style: AppTypography.s16Bold(color: _gradeColor(pct))),
-                  ),
-                ),
-              ]),
-              const SizedBox(height: 10),
-              Row(children: [
-                Text('Total: ',
-                    style:
-                        AppTypography.s13Regular(color: AppColors.textMuted)),
-                Text('$totalMarks / $totalMax',
-                    style: AppTypography.s13SemiBold(
-                        color: isDark ? Colors.white : AppColors.textPrimary)),
-                const SizedBox(width: 12),
-                Text('$pct%',
-                    style: AppTypography.s13SemiBold(color: _gradeColor(pct))),
-              ]),
-              if (marks.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                const Divider(height: 1),
-                const SizedBox(height: 10),
-                ...marks.map((m) {
-                  final subj = m['subject']?['name'] as String? ?? 'Subject';
-                  final got = (m['marksObtained'] as num? ?? 0).toInt();
-                  final max = (m['maxMarks'] as num? ?? 100).toInt();
-                  final sPct = max > 0 ? (got / max * 100).round() : 0;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Row(children: [
-                      Expanded(
-                          child: Text(subj,
-                              style: AppTypography.s13Regular(
-                                  color: isDark
-                                      ? Colors.white70
-                                      : AppColors.textSecondary))),
-                      Text('$got/$max',
-                          style: AppTypography.s13SemiBold(
-                              color: isDark
-                                  ? Colors.white
-                                  : AppColors.textPrimary)),
-                      const SizedBox(width: 8),
-                      Text('$sPct%',
-                          style: AppTypography.s12Regular(
-                              color: _gradeColor(sPct))),
-                    ]),
-                  );
-                }),
-              ],
-            ]),
-          );
-        },
+        itemBuilder: (_, i) => ExamResultCard(
+          result: Map<String, dynamic>.from(results[i] as Map),
+          isDark: isDark,
+        ),
       ),
     );
-  }
-
-  String _grade(int pct) {
-    if (pct >= 90) return 'A+';
-    if (pct >= 80) return 'A';
-    if (pct >= 70) return 'B';
-    if (pct >= 60) return 'C';
-    if (pct >= 50) return 'D';
-    return 'F';
-  }
-
-  Color _gradeColor(num pct) {
-    if (pct >= 75) return AppColors.accentGreen;
-    if (pct >= 50) return AppColors.warning;
-    return AppColors.accentRed;
   }
 }

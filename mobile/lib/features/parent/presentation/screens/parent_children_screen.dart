@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/features/auth/presentation/providers/school_permissions_provider.dart';
+import 'package:skl_teacher/features/exams/presentation/widgets/exam_result_card.dart';
 import 'package:skl_teacher/features/parent/presentation/providers/parent_data_provider.dart';
 
 class ParentChildrenScreen extends StatefulWidget {
@@ -167,7 +168,9 @@ class _ChildDetailViewState extends State<_ChildDetailView>
                 case 'Homework':
                   return _HomeworkTab(classId: widget.child.classId ?? '');
                 case 'Exams':
-                  return _ExamsTab(classId: widget.child.classId ?? '');
+                  return _ExamsTab(
+                      classId: widget.child.classId ?? '',
+                      studentId: widget.child.id);
                 case 'Fees':
                   return _FeesTab(studentId: widget.child.id);
                 default:
@@ -523,7 +526,8 @@ class _HomeworkTabState extends State<_HomeworkTab> {
 
 class _ExamsTab extends StatefulWidget {
   final String classId;
-  const _ExamsTab({required this.classId});
+  final String studentId;
+  const _ExamsTab({required this.classId, required this.studentId});
   @override
   State<_ExamsTab> createState() => _ExamsTabState();
 }
@@ -531,6 +535,7 @@ class _ExamsTab extends StatefulWidget {
 class _ExamsTabState extends State<_ExamsTab> {
   List<dynamic> _exams = [];
   bool _loading = true;
+  String? _openingExamId; // exam whose result is being fetched on tap
 
   @override
   void initState() {
@@ -555,6 +560,31 @@ class _ExamsTabState extends State<_ExamsTab> {
     }
   }
 
+  // Fetch this child's published result for the exam and show it in a sheet.
+  Future<void> _openResult(String examId) async {
+    if (_openingExamId != null) return;
+    setState(() => _openingExamId = examId);
+    try {
+      final res = await ApiClient.get('/exams/results',
+          params: {'examId': examId, 'studentId': widget.studentId});
+      final results = res.data['results'] as List<dynamic>? ?? [];
+      if (!mounted) return;
+      if (results.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Marks are not available for this student yet.')));
+        return;
+      }
+      await showExamResultSheet(context,
+          result: Map<String, dynamic>.from(results.first as Map));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
+    } finally {
+      if (mounted) setState(() => _openingExamId = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
@@ -569,51 +599,71 @@ class _ExamsTabState extends State<_ExamsTab> {
       itemCount: _exams.length,
       itemBuilder: (_, i) {
         final e = _exams[i];
+        final examId = e['_id']?.toString() ?? '';
         final isPublished = e['isResultPublished'] as bool? ?? false;
+        final opening = _openingExamId == examId;
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: isDark ? AppColors.cardDark : Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
                 color: isDark ? AppColors.borderDark : AppColors.borderLight),
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(e['name'] ?? 'Exam',
-                        style: GoogleFonts.inter(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
-                    Text(_fmtDate(e['date']),
-                        style: GoogleFonts.inter(
-                            fontSize: 12, color: AppColors.textMuted)),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color:
-                      (isPublished ? AppColors.accentGreen : AppColors.warning)
-                          .withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  isPublished ? 'Results Out' : 'Scheduled',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color:
-                        isPublished ? AppColors.accentGreen : AppColors.warning,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: isPublished ? () => _openResult(examId) : null,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(e['name'] ?? 'Exam',
+                            style: GoogleFonts.inter(
+                                fontSize: 14, fontWeight: FontWeight.w600)),
+                        Text(_fmtDate(e['examDate'] ?? e['date']),
+                            style: GoogleFonts.inter(
+                                fontSize: 12, color: AppColors.textMuted)),
+                      ],
+                    ),
                   ),
-                ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: (isPublished
+                              ? AppColors.accentGreen
+                              : AppColors.warning)
+                          .withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      isPublished ? 'Results Out' : 'Scheduled',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isPublished
+                            ? AppColors.accentGreen
+                            : AppColors.warning,
+                      ),
+                    ),
+                  ),
+                  if (isPublished) ...[
+                    const SizedBox(width: 6),
+                    opening
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : Icon(Icons.chevron_right,
+                            size: 20, color: AppColors.textMuted),
+                  ],
+                ],
               ),
-            ],
+            ),
           ),
         );
       },

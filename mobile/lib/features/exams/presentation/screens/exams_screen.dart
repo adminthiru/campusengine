@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/models/student.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../providers/exams_provider.dart';
@@ -2034,8 +2035,11 @@ class _StudentMarkCardState extends State<_StudentMarkCard> {
                     color: AppColors.primary,
                     tooltip: 'View PDF',
                     onPressed: () async {
-                      final url = Uri.parse(widget.entry.answerPaperUrl!);
-                      if (await canLaunchUrl(url)) await launchUrl(url);
+                      final url =
+                          Uri.parse(ApiClient.fileUrl(widget.entry.answerPaperUrl!));
+                      if (await canLaunchUrl(url)) {
+                        await launchUrl(url, mode: LaunchMode.externalApplication);
+                      }
                     },
                   ),
                 ],
