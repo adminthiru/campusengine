@@ -1,6 +1,8 @@
 const User = require('../models/User');
 const Student = require('../models/Student');
 const School = require('../models/School');
+const Class = require('../models/Class');
+const Employee = require('../models/Employee');
 const { getMessaging } = require('../config/firebase');
 
 // ── Low level: persist an in-app notification on each user ───────────────────────
@@ -53,6 +55,61 @@ async function pushToUsers(users, { title, body, data = {} }) {
   }
 }
 
+// ── Mid level: persist in-app + push to a deduped set of user docs ───────────────
+async function notifyUsers(users, { title, body, type = 'info', data = {} }) {
+  if (!users.length) return { users: 0, sent: 0 };
+  await persistInApp(users, { title, body, type });
+  const pushRes = await pushToUsers(users, { title, body, data });
+  return { users: users.length, ...pushRes };
+}
+
+// ── High level: notify everyone tied to a set of classes (in-app + push) ─────────
+// Reusable for Exams now, and Homework/Fees/etc later. audiences picks which
+// groups receive it; pass empty/undefined classIds to target the whole school.
+async function notifyClasses({ schoolId, classIds, audiences = ['student', 'parent', 'teacher'], title, body, type = 'info', data = {}, parentPermKey, studentPermKey }) {
+  try {
+    // No classes given → treat as "all classes" in the school.
+    let ids = (Array.isArray(classIds) ? classIds : (classIds ? [classIds] : [])).filter(Boolean);
+    if (!ids.length) ids = await Class.find({ school: schoolId }).distinct('_id');
+    if (!ids.length) return { users: 0, sent: 0 };
+
+    const school = await School.findById(schoolId).select('parentPermissions studentPermissions');
+    const userMap = new Map(); // dedupe by _id
+    const add = (arr) => arr.forEach(u => userMap.set(String(u._id), u));
+
+    if (audiences.includes('student') || audiences.includes('parent')) {
+      const students = await Student.find({ school: schoolId, currentClass: { $in: ids }, status: { $ne: 'dropped' } })
+        .select('_id primaryGuardian');
+      if (audiences.includes('student') && !(studentPermKey && school?.studentPermissions?.[studentPermKey] === false)) {
+        add(await User.find({ school: schoolId, role: 'student', studentId: { $in: students.map(s => s._id) } }));
+      }
+      if (audiences.includes('parent') && !(parentPermKey && school?.parentPermissions?.[parentPermKey] === false)) {
+        const parentIds = [...new Set(students.map(s => s.primaryGuardian?.toString()).filter(Boolean))];
+        if (parentIds.length) add(await User.find({ school: schoolId, role: 'parent', parentId: { $in: parentIds } }));
+      }
+    }
+
+    if (audiences.includes('teacher')) {
+      const classes = await Class.find({ school: schoolId, _id: { $in: ids } }).select('classTeacher subjectTeachers.teacher');
+      const empIds = new Set();
+      classes.forEach(c => {
+        if (c.classTeacher) empIds.add(String(c.classTeacher));
+        (c.subjectTeachers || []).forEach(st => st.teacher && empIds.add(String(st.teacher)));
+      });
+      if (empIds.size) {
+        const employees = await Employee.find({ _id: { $in: [...empIds] }, school: schoolId }).select('user');
+        const userIds = employees.map(e => e.user).filter(Boolean);
+        if (userIds.length) add(await User.find({ _id: { $in: userIds }, school: schoolId }));
+      }
+    }
+
+    return await notifyUsers([...userMap.values()], { title, body, type, data });
+  } catch (err) {
+    console.error('[notifyClasses]', err.message);
+    return { users: 0, sent: 0, error: err.message };
+  }
+}
+
 // ── High level: notify the parent(s) of the given students (in-app + push) ───────
 // The single entry point reused by Attendance now and Exams/Fees/Homework/etc later.
 async function notifyStudentParents({ schoolId, studentIds, permKey, title, body, type = 'info', data = {} }) {
@@ -78,4 +135,4 @@ async function notifyStudentParents({ schoolId, studentIds, permKey, title, body
   }
 }
 
-module.exports = { persistInApp, pushToUsers, notifyStudentParents };
+module.exports = { persistInApp, pushToUsers, notifyUsers, notifyClasses, notifyStudentParents };

@@ -6,6 +6,7 @@ const School = require('../models/School');
 const { generateResultCard, generateHallTicket } = require('../utils/pdf');
 const { sendSMS } = require('../utils/sms');
 const { notifyParentUsers, notifyStudentUsers } = require('../utils/notify');
+const { notifyClasses } = require('../services/notificationService');
 const { academicYearForDate } = require('../utils/academicYear');
 
 // Get single exam by ID
@@ -74,15 +75,24 @@ const createExam = async (req, res) => {
       academicYear = academicYearForDate(req.body.examDate || new Date(), sm, em);
     }
     const exam = await Exam.create({ ...req.body, academicYear, school: req.user.school, createdBy: req.user._id });
-    // Notify parents of students in the exam's classes
-    if (exam.classes?.length) {
-      const classStudents = await Student.find({ currentClass: { $in: exam.classes }, school: req.user.school, status: 'active' }).select('_id');
-      const dateLabel = exam.examDate ? new Date(exam.examDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'TBD';
-      const examSchedMsg = `${exam.name} has been scheduled${exam.examDate ? ` on ${dateLabel}` : ''}. Please prepare accordingly.`;
-      const studentIdList = classStudents.map(s => s._id);
-      notifyParentUsers(req.user.school, studentIdList, 'notifyOnExamScheduled', `Exam Scheduled: ${exam.name}`, examSchedMsg.replace('accordingly', 'your child'), 'info');
-      notifyStudentUsers(req.user.school, studentIdList, 'notifyOnExamScheduled', `Exam Scheduled: ${exam.name}`, examSchedMsg, 'info');
-    }
+
+    // Notify teachers + students + parents of the exam's classes (in-app + push).
+    // Empty classes → the whole school ("all classes"). Fire-and-forget.
+    const dateLabel = exam.examDate
+      ? new Date(exam.examDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+      : 'a date to be announced';
+    notifyClasses({
+      schoolId: req.user.school,
+      classIds: exam.classes,
+      audiences: ['student', 'parent', 'teacher'],
+      title: `Exam Scheduled: ${exam.name}`,
+      body: `${exam.name} is scheduled on ${dateLabel}.`,
+      type: 'info',
+      parentPermKey: 'notifyOnExamScheduled',
+      studentPermKey: 'notifyOnExamScheduled',
+      data: { kind: 'exam', examId: String(exam._id), date: exam.examDate ? new Date(exam.examDate).toISOString() : '' },
+    });
+
     res.status(201).json({ success: true, exam });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
