@@ -4,9 +4,29 @@ import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
 
-/// Renders a single published exam result: overall total/percentage/grade plus
-/// a per-subject breakdown, with a button to open each subject's answer-paper
-/// PDF. Shared by the student Results tab and the parent Exams tab.
+/// Opens a server file (answer-paper PDF) in an external app/browser. Tries the
+/// external handler first and falls back to the platform default; surfaces a
+/// snackbar if nothing can open it (instead of silently doing nothing).
+Future<void> openServerFile(BuildContext context, String rawUrl) async {
+  final uri = Uri.parse(ApiClient.fileUrl(rawUrl));
+  try {
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (ok) return;
+  } catch (_) {/* fall through to platform default */}
+  try {
+    final ok = await launchUrl(uri, mode: LaunchMode.platformDefault);
+    if (ok) return;
+  } catch (_) {/* show error below */}
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the PDF.')));
+  }
+}
+
+/// Renders a single published exam result: overall total/percentage/grade, a
+/// per-subject marks breakdown, and a highlighted "Answer Papers" section with
+/// a button to open each subject's PDF. Shared by the student Results tab and
+/// the parent Exams tab.
 class ExamResultCard extends StatelessWidget {
   final Map<String, dynamic> result;
   final bool isDark;
@@ -40,6 +60,12 @@ class ExamResultCard extends StatelessWidget {
     final grade = (result['grade'] as String?)?.trim();
     final gradeLabel =
         (grade != null && grade.isNotEmpty) ? grade : _grade(pct.round());
+
+    // Subjects that have an uploaded answer paper.
+    final papers = marks
+        .where((m) =>
+            (m['answerPaper']?['url'] as String?)?.isNotEmpty ?? false)
+        .toList();
 
     return Container(
       margin: margin,
@@ -88,6 +114,17 @@ class ExamResultCard extends StatelessWidget {
           const SizedBox(height: 6),
           ...marks.map((m) => _SubjectRow(mark: m, isDark: isDark)),
         ],
+        if (papers.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text('ANSWER PAPERS',
+              style: AppTypography.s11SemiBold(color: AppColors.textMuted)),
+          const SizedBox(height: 8),
+          ...papers.map((m) => _PaperTile(
+                subject: (m['subject']?['name'] as String?) ?? 'Subject',
+                url: m['answerPaper']['url'] as String,
+                isDark: isDark,
+              )),
+        ],
       ]),
     );
   }
@@ -129,7 +166,6 @@ class _SubjectRow extends StatelessWidget {
         .toInt();
     final max = ((mark['maxMarks'] as num?) ?? 100).toInt();
     final sPct = max > 0 ? (got / max * 100).round() : 0;
-    final paperUrl = (mark['answerPaper']?['url'] as String?);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -139,28 +175,6 @@ class _SubjectRow extends StatelessWidget {
               style: AppTypography.s13Regular(
                   color: isDark ? Colors.white70 : AppColors.textSecondary)),
         ),
-        if (paperUrl != null && paperUrl.isNotEmpty) ...[
-          InkWell(
-            onTap: () async {
-              final uri = Uri.parse(ApiClient.fileUrl(paperUrl));
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-              }
-            },
-            borderRadius: BorderRadius.circular(6),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.picture_as_pdf,
-                    size: 15, color: AppColors.primary),
-                const SizedBox(width: 3),
-                Text('Paper',
-                    style: AppTypography.s11SemiBold(color: AppColors.primary)),
-              ]),
-            ),
-          ),
-          const SizedBox(width: 10),
-        ],
         if (isAbsent)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -187,6 +201,49 @@ class _SubjectRow extends StatelessWidget {
     if (pct >= 75) return AppColors.accentGreen;
     if (pct >= 50) return AppColors.warning;
     return AppColors.accentRed;
+  }
+}
+
+/// A prominent, tappable tile for opening one subject's answer-paper PDF.
+class _PaperTile extends StatelessWidget {
+  final String subject;
+  final String url;
+  final bool isDark;
+  const _PaperTile(
+      {required this.subject, required this.url, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: AppColors.primary.withValues(alpha: isDark ? 0.16 : 0.08),
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => openServerFile(context, url),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.35)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('$subject — Answer Paper',
+                    style: AppTypography.s13SemiBold(color: AppColors.primary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ),
+              const Icon(Icons.open_in_new, color: AppColors.primary, size: 18),
+            ]),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -223,9 +280,11 @@ Future<void> showExamResultSheet(
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          SingleChildScrollView(
-            child: ExamResultCard(
-                result: result, isDark: isDark, margin: EdgeInsets.zero),
+          Flexible(
+            child: SingleChildScrollView(
+              child: ExamResultCard(
+                  result: result, isDark: isDark, margin: EdgeInsets.zero),
+            ),
           ),
         ],
       ),

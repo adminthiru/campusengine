@@ -535,7 +535,7 @@ class _ExamsTab extends StatefulWidget {
 class _ExamsTabState extends State<_ExamsTab> {
   List<dynamic> _exams = [];
   bool _loading = true;
-  String? _openingExamId; // exam whose result is being fetched on tap
+  bool _opening = false; // reentrancy guard while a result is being fetched
 
   @override
   void initState() {
@@ -562,8 +562,8 @@ class _ExamsTabState extends State<_ExamsTab> {
 
   // Fetch this child's published result for the exam and show it in a sheet.
   Future<void> _openResult(String examId) async {
-    if (_openingExamId != null) return;
-    setState(() => _openingExamId = examId);
+    if (_opening) return;
+    _opening = true;
     try {
       final res = await ApiClient.get('/exams/results',
           params: {'examId': examId, 'studentId': widget.studentId});
@@ -581,7 +581,7 @@ class _ExamsTabState extends State<_ExamsTab> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
     } finally {
-      if (mounted) setState(() => _openingExamId = null);
+      _opening = false;
     }
   }
 
@@ -601,7 +601,6 @@ class _ExamsTabState extends State<_ExamsTab> {
         final e = _exams[i];
         final examId = e['_id']?.toString() ?? '';
         final isPublished = e['isResultPublished'] as bool? ?? false;
-        final opening = _openingExamId == examId;
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
@@ -653,13 +652,8 @@ class _ExamsTabState extends State<_ExamsTab> {
                   ),
                   if (isPublished) ...[
                     const SizedBox(width: 6),
-                    opening
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : Icon(Icons.chevron_right,
-                            size: 20, color: AppColors.textMuted),
+                    Icon(Icons.chevron_right,
+                        size: 20, color: AppColors.textMuted),
                   ],
                 ],
               ),
