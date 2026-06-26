@@ -19,35 +19,30 @@ const getExamById = async (req, res) => {
       .populate('schedule.invigilator', 'name');
     if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
 
-    // Results completeness — gates the "Publish Results" button. Every active
-    // student in each class must have, for each of that class's subjects, a marks
-    // entry that is either marked Absent or has marks. Only computed while unpublished.
+    // Results completeness — gates the "Publish Results" button. Student-level:
+    // every active student in the exam's classes must have been assessed, i.e. has
+    // at least one mark entered or is marked Absent. Only computed while unpublished.
     const out = exam.toObject();
     let required = 0, pending = 0;
     if (!exam.isResultPublished) {
       const classIds = (exam.classes || []).map(c => c._id || c);
       for (const cid of classIds) {
-        const subjects = await Subject.find({ school: req.user.school, classes: cid }).select('_id');
-        if (!subjects.length) continue;
         const students = await Student.find({ school: req.user.school, currentClass: cid, status: 'active' }).select('_id');
         if (!students.length) continue;
         const results = await ExamResult.find({ school: req.user.school, exam: exam._id, class: cid }).select('student marks');
         const byStudent = {};
         results.forEach(r => { byStudent[String(r.student)] = r.marks || []; });
         for (const stu of students) {
+          required++;
           const marks = byStudent[String(stu._id)] || [];
-          for (const subj of subjects) {
-            required++;
-            const m = marks.find(mm => String(mm.subject?._id || mm.subject) === String(subj._id));
-            const filled = m && (m.isAbsent === true || m.theoryMarks != null || m.practicalMarks != null || m.totalMarks != null);
-            if (!filled) pending++;
-          }
+          const assessed = marks.some(m => m.isAbsent === true || m.theoryMarks != null || m.practicalMarks != null || m.totalMarks != null);
+          if (!assessed) pending++;
         }
       }
     }
-    out.resultsRequired = required;
-    out.resultsPending = pending;
-    out.resultsComplete = pending === 0; // nothing missing → publishable
+    out.resultsRequired = required;       // total students across the exam's classes
+    out.resultsPending = pending;         // students with no marks/absent yet
+    out.resultsComplete = pending === 0;  // all students assessed → publishable
 
     res.json({ success: true, exam: out });
   } catch (err) {

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "387397605372",
+    "project_id": "campusengine-d1168",
+    "storage_bucket": "campusengine-d1168.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:387397605372:android:3de9a5d82bdbda20e80479",
+        "android_client_info": {
+          "package_name": "com.sklproject.skl_teacher"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDQvdzIYlhMf3-PO3kdt2vcoe1_kAMZ4KY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
