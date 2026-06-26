@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Upload, Save, Send, CheckCircle, Edit2, EyeOff, FileDown, Search, CalendarDays, Ticket } from 'lucide-react';
+import { ArrowLeft, Upload, Save, Send, CheckCircle, Edit2, EyeOff, FileDown, Search, CalendarDays, Ticket, X } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
 import { Select as AntSelect, DatePicker } from 'antd';
 import dayjs from 'dayjs';
@@ -217,7 +217,8 @@ export default function ExamDetail() {
     enabled: !!activeClassId
   });
 
-  // Populate marksState from DB whenever results load/reload — useEffect replaces deprecated onSuccess
+  // Seed marksState from DB, but DON'T overwrite cells the user is editing —
+  // otherwise a refetch (e.g. after uploading an answer paper) wipes typed marks.
   useEffect(() => {
     if (!resultsData?.results) return;
     setMarksState(prev => {
@@ -226,7 +227,9 @@ export default function ExamDetail() {
         const studentId = r.student?._id || r.student;
         for (const m of r.marks || []) {
           const subjectId = m.subject?._id || m.subject;
-          next[`${studentId}_${subjectId}`] = {
+          const key = `${studentId}_${subjectId}`;
+          if (key in next) continue; // preserve unsaved edits
+          next[key] = {
             theoryMarks: m.theoryMarks ?? '',
             practicalMarks: m.practicalMarks ?? '',
             isAbsent: m.isAbsent || false,
@@ -668,24 +671,26 @@ export default function ExamDetail() {
                             <span style={{ color: 'var(--text-muted)' }}>—</span>
                           )}
 
-                          {/* Edit mode with paper: View + Replace + Delete */}
+                          {/* Edit mode with paper: filename chip + remove (✕) */}
                           {canEdit && hasAnswerPaper && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 6,
+                              padding: '3px 8px 3px 10px', borderRadius: 20,
+                              border: '1px solid var(--border)', background: '#f8fafc',
+                              fontSize: 12, maxWidth: 180
+                            }}>
                               <a href={hasAnswerPaper} target="_blank" rel="noopener noreferrer"
-                                className="btn btn-secondary btn-sm"
-                                style={{ textDecoration: 'none', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                View
+                                title={subjectMark?.answerPaper?.fileName || 'Answer paper'}
+                                style={{ color: 'var(--primary)', textDecoration: 'none', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                                {subjectMark?.answerPaper?.fileName || 'answer.pdf'}
                               </a>
-                              <button className="btn btn-secondary btn-sm" style={{ fontSize: 12 }}
-                                onClick={() => fileInputRefs.current[student._id]?.click()}>
-                                Replace
-                              </button>
-                              <button className="btn btn-danger btn-sm" style={{ fontSize: 12 }}
+                              <button type="button" title="Remove answer paper"
                                 disabled={deleteAnswerPaperMutation.isPending}
-                                onClick={() => deleteAnswerPaperMutation.mutate({ resultId: result._id, subjectId: activeSubjectId })}>
-                                Delete
+                                onClick={() => deleteAnswerPaperMutation.mutate({ resultId: result._id, subjectId: activeSubjectId })}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', display: 'inline-flex', alignItems: 'center', padding: 0, flexShrink: 0 }}>
+                                <X size={13} />
                               </button>
-                            </div>
+                            </span>
                           )}
 
                           {/* Edit mode without paper: Upload */}
