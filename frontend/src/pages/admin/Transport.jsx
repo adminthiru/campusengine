@@ -198,6 +198,7 @@ function VehicleDetailModal({ vehicle: v, onClose, onEdit }) {
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [pick, setPick] = useState([]);
+  const [pickClass, setPickClass] = useState('');
 
   const { data: stuData, isLoading: stuLoading } = useQuery({
     queryKey: ['transport-students', v._id],
@@ -207,20 +208,28 @@ function VehicleDetailModal({ vehicle: v, onClose, onEdit }) {
   const students = stuData?.students || [];
   const liveCount = stuData ? students.length : (v.studentCount || 0);
 
-  // Students available to assign (active, not already on this route).
+  // Students available to assign (active, not already on this route, optionally
+  // narrowed to a chosen class).
   const { data: allStuData } = useQuery({
     queryKey: ['students-active-transport'],
     queryFn: () => api.get('/students?status=active&limit=1000'),
     enabled: tab === 'students' && adding,
   });
+  const { data: classData } = useQuery({
+    queryKey: ['classes'],
+    queryFn: () => api.get('/classes'),
+    enabled: tab === 'students' && adding,
+  });
+  const classes = classData?.classes || [];
   const assignedIds = new Set(students.map(s => s._id));
   const clsOf = (c) => c ? `${c.name}${c.section ? ' ' + c.section : ''}` : '';
-  const available = (allStuData?.students || []).filter(s => !assignedIds.has(s._id));
+  const available = (allStuData?.students || []).filter(s =>
+    !assignedIds.has(s._id) && (!pickClass || (s.currentClass?._id || s.currentClass) === pickClass));
 
   const refreshStudents = () => { qc.invalidateQueries(['transport-students', v._id]); qc.invalidateQueries(['transport']); };
   const assignMut = useMutation({
     mutationFn: () => api.post(`/transport/${v._id}/students`, { studentIds: pick }),
-    onSuccess: () => { toast.success(`${pick.length} student${pick.length > 1 ? 's' : ''} assigned`); setPick([]); setAdding(false); refreshStudents(); },
+    onSuccess: () => { toast.success(`${pick.length} student${pick.length > 1 ? 's' : ''} assigned`); setPick([]); setPickClass(''); setAdding(false); refreshStudents(); },
     onError: (err) => toast.error(err.message || 'Failed to assign'),
   });
   const removeMut = useMutation({
@@ -325,13 +334,18 @@ function VehicleDetailModal({ vehicle: v, onClose, onEdit }) {
           </div>
           {adding && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <AntSelect style={{ width: 180 }} showSearch optionFilterProp="label" allowClear
+                placeholder="Filter by class" value={pickClass || undefined}
+                onChange={v => { setPickClass(v ?? ''); setPick([]); }}
+                options={classes.map(c => ({ value: c._id, label: clsOf(c) }))} />
               <AntSelect mode="multiple" style={{ flex: 1 }} showSearch optionFilterProp="label"
-                placeholder="Search students by name or class" value={pick} onChange={setPick}
+                placeholder={pickClass ? 'Select students from this class' : 'Choose a class, or search all students'}
+                value={pick} onChange={setPick}
                 options={available.map(s => ({ value: s._id, label: `${s.name}${clsOf(s.currentClass) ? ' · ' + clsOf(s.currentClass) : ''}` }))} />
               <button className="btn btn-primary btn-sm" onClick={() => assignMut.mutate()} disabled={!pick.length || assignMut.isPending}>
                 {assignMut.isPending ? 'Assigning…' : `Assign${pick.length ? ` (${pick.length})` : ''}`}
               </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => { setAdding(false); setPick([]); }}>Cancel</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setAdding(false); setPick([]); setPickClass(''); }}>Cancel</button>
             </div>
           )}
 
