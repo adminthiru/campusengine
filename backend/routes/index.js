@@ -996,6 +996,28 @@ router.get('/transport/:id/students', protect, async (req, res) => {
     res.json({ success: true, students });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
+// Assign students to this vehicle/route — sets each student's transportRoute
+// (the authoritative link), which is what the Students module reads/edits too.
+router.post('/transport/:id/students', protect, authorize('admin', 'correspondent'), async (req, res) => {
+  try {
+    const route = await Transport.findOne({ _id: req.params.id, school: req.user.school });
+    if (!route) return res.status(404).json({ success: false, message: 'Vehicle not found' });
+    const ids = Array.isArray(req.body.studentIds) ? req.body.studentIds : [];
+    if (!ids.length) return res.status(400).json({ success: false, message: 'Select at least one student' });
+    await Student.updateMany({ _id: { $in: ids }, school: req.user.school }, { transportRoute: route._id });
+    res.json({ success: true, assigned: ids.length });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+// Remove a student from this vehicle/route — clears their transportRoute.
+router.delete('/transport/:id/students/:studentId', protect, authorize('admin', 'correspondent'), async (req, res) => {
+  try {
+    await Student.updateOne(
+      { _id: req.params.studentId, school: req.user.school, transportRoute: req.params.id },
+      { $unset: { transportRoute: '' } }
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
 router.post('/transport', protect, authorize('admin', 'correspondent'), async (req, res) => {
   try {
     let { routeNumber } = req.body;

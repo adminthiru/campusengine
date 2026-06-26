@@ -195,12 +195,39 @@ export default function Transport() {
 function VehicleDetailModal({ vehicle: v, onClose, onEdit }) {
   const [tab, setTab] = useState('details');
 
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [pick, setPick] = useState([]);
+
   const { data: stuData, isLoading: stuLoading } = useQuery({
     queryKey: ['transport-students', v._id],
     queryFn: () => api.get(`/transport/${v._id}/students`),
     enabled: tab === 'students',
   });
   const students = stuData?.students || [];
+  const liveCount = stuData ? students.length : (v.studentCount || 0);
+
+  // Students available to assign (active, not already on this route).
+  const { data: allStuData } = useQuery({
+    queryKey: ['students-active-transport'],
+    queryFn: () => api.get('/students?status=active&limit=1000'),
+    enabled: tab === 'students' && adding,
+  });
+  const assignedIds = new Set(students.map(s => s._id));
+  const clsOf = (c) => c ? `${c.name}${c.section ? ' ' + c.section : ''}` : '';
+  const available = (allStuData?.students || []).filter(s => !assignedIds.has(s._id));
+
+  const refreshStudents = () => { qc.invalidateQueries(['transport-students', v._id]); qc.invalidateQueries(['transport']); };
+  const assignMut = useMutation({
+    mutationFn: () => api.post(`/transport/${v._id}/students`, { studentIds: pick }),
+    onSuccess: () => { toast.success(`${pick.length} student${pick.length > 1 ? 's' : ''} assigned`); setPick([]); setAdding(false); refreshStudents(); },
+    onError: (err) => toast.error(err.message || 'Failed to assign'),
+  });
+  const removeMut = useMutation({
+    mutationFn: (sid) => api.delete(`/transport/${v._id}/students/${sid}`),
+    onSuccess: () => { toast.success('Student removed'); refreshStudents(); },
+    onError: (err) => toast.error(err.message || 'Failed to remove'),
+  });
 
   const t = typeInfo(v.vehicleType);
 
@@ -211,7 +238,7 @@ function VehicleDetailModal({ vehicle: v, onClose, onEdit }) {
     </div>
   ) : null;
 
-  const filledPct = v.capacity > 0 ? Math.min(100, Math.round(((v.studentCount || 0) / v.capacity) * 100)) : 0;
+  const filledPct = v.capacity > 0 ? Math.min(100, Math.round((liveCount / v.capacity) * 100)) : 0;
 
   return (
     <Modal open onClose={onClose} title="Vehicle Details" size="lg"
@@ -238,7 +265,7 @@ function VehicleDetailModal({ vehicle: v, onClose, onEdit }) {
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)' }}>Students</div>
-          <div style={{ fontSize: 28, fontWeight: 800, color: 'white' }}>{v.studentCount || 0}</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: 'white' }}>{liveCount}</div>
           {v.capacity > 0 && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>of {v.capacity} seats</div>}
         </div>
       </div>
@@ -260,7 +287,7 @@ function VehicleDetailModal({ vehicle: v, onClose, onEdit }) {
 
       {/* Tabs */}
       <div className="tabs" style={{ marginBottom: 16 }}>
-        {[{ key: 'details', label: 'Details' }, { key: 'students', label: `Students (${v.studentCount || 0})` }].map(t => (
+        {[{ key: 'details', label: 'Details' }, { key: 'students', label: `Students (${liveCount})` }].map(t => (
           <button key={t.key} className={`tab${tab === t.key ? ' active' : ''}`} onClick={() => setTab(t.key)}>{t.label}</button>
         ))}
       </div>
@@ -286,14 +313,36 @@ function VehicleDetailModal({ vehicle: v, onClose, onEdit }) {
       )}
 
       {tab === 'students' && (
-        stuLoading ? (
-          <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 14 }}>Loading students…</div>
-        ) : students.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 32 }}>
-            <Users size={36} style={{ color: 'var(--text-muted)', marginBottom: 8 }} />
-            <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>No students assigned to this vehicle yet.</div>
+        <div>
+          {/* Assign students — sets each student's transport in the Students module too */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              {liveCount} assigned{v.capacity ? ` · ${v.capacity} seats` : ''}
+            </div>
+            {!adding && (
+              <button className="btn btn-secondary btn-sm" onClick={() => setAdding(true)}><Plus size={14} /> Add Students</button>
+            )}
           </div>
-        ) : (
+          {adding && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <AntSelect mode="multiple" style={{ flex: 1 }} showSearch optionFilterProp="label"
+                placeholder="Search students by name or class" value={pick} onChange={setPick}
+                options={available.map(s => ({ value: s._id, label: `${s.name}${clsOf(s.currentClass) ? ' · ' + clsOf(s.currentClass) : ''}` }))} />
+              <button className="btn btn-primary btn-sm" onClick={() => assignMut.mutate()} disabled={!pick.length || assignMut.isPending}>
+                {assignMut.isPending ? 'Assigning…' : `Assign${pick.length ? ` (${pick.length})` : ''}`}
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setAdding(false); setPick([]); }}>Cancel</button>
+            </div>
+          )}
+
+          {stuLoading ? (
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 14 }}>Loading students…</div>
+          ) : students.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 32 }}>
+              <Users size={36} style={{ color: 'var(--text-muted)', marginBottom: 8 }} />
+              <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>No students assigned to this vehicle yet.</div>
+            </div>
+          ) : (
           <div className="table-container" style={{ margin: '0 -8px', borderRadius: 16, overflow: 'hidden' }}>
             <table>
               <thead>
@@ -303,6 +352,7 @@ function VehicleDetailModal({ vehicle: v, onClose, onEdit }) {
                   <th>Admission No.</th>
                   <th>Class</th>
                   <th>Phone</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -317,12 +367,19 @@ function VehicleDetailModal({ vehicle: v, onClose, onEdit }) {
                     <td className="text-14-regular" style={{ color: 'var(--text-secondary)' }}>
                       {s.phone ? <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Phone size={12} />{s.phone}</span> : '—'}
                     </td>
+                    <td style={{ width: 44 }}>
+                      <button className="btn btn-sm btn-icon" title="Remove from vehicle" onClick={() => removeMut.mutate(s._id)} disabled={removeMut.isPending}
+                        style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )
+          )}
+        </div>
       )}
     </Modal>
   );
