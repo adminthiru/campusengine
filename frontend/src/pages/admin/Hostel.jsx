@@ -551,7 +551,7 @@ function AllocateModal({ hostels, hostelOpts, onClose, onSaved }) {
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   const { data: stuData } = useQuery({ queryKey: ['students-active'], queryFn: () => api.get('/students?status=active&limit=1000') });
   const students = stuData?.students || [];
-  const stuOpts = students.map(s => ({ value: s._id, label: `${s.name} · ${s.admissionNumber}` }));
+  const stuOpts = students.map(s => ({ value: s._id, label: `${s.name} · ${clsLabel(s.currentClass)}` }));
   const student = students.find(s => s._id === f.student);
   const hostelObj = hostels.find(h => h._id === f.hostel);
   // gender hint
@@ -577,7 +577,7 @@ function AllocateModal({ hostels, hostelOpts, onClose, onSaved }) {
       footer={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button>
         <button className="btn btn-primary" onClick={submit} disabled={m.isPending}>{m.isPending ? 'Allocating…' : 'Allocate'}</button></>}>
       <div className="form-group"><label className="form-label">Student *</label>
-        <AntSelect showSearch optionFilterProp="label" style={{ width: '100%' }} value={f.student || undefined} placeholder="Search student by name or admission no"
+        <AntSelect showSearch optionFilterProp="label" style={{ width: '100%' }} value={f.student || undefined} placeholder="Search student by name or class"
           options={stuOpts} onChange={v => set('student', v)} /></div>
       {student && <div style={{ display: 'flex', gap: 14, fontSize: 12, color: 'var(--text-secondary)', margin: '-6px 0 12px' }}>
         <span>Class: <b>{clsLabel(student.currentClass)}</b></span>
