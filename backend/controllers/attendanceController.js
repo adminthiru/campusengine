@@ -6,6 +6,7 @@ const Class = require('../models/Class');
 const School = require('../models/School');
 const { sendSMS } = require('../utils/sms');
 const { notifyParentUsers, notifyStudentUsers } = require('../utils/notify');
+const { notifyStudentParents } = require('../services/notificationService');
 const { getHolidaysForMonth, isSaturdayWorking, getWorkingDaysForMonth } = require('../utils/holidays');
 
 // Mark student attendance
@@ -90,14 +91,34 @@ const markStudentAttendance = async (req, res) => {
       excused:  (name) => ({ title: `${name} - Excused`,  msg: `Your child ${name} was marked excused on ${dateLabel}.`, type: 'info'    }),
       half_day: (name) => ({ title: `${name} - Half Day`, msg: `Your child ${name} was marked half-day on ${dateLabel}.`, type: 'warning' }),
     };
+    const absentIds = [];
     for (const rec of records) {
       if (!rec.student) continue;
       const student = await Student.findById(rec.student).select('name');
       if (!student) continue;
       const tmpl = ATT_MSG[rec.status] || ATT_MSG.present;
       const { title: ntitle, msg: nmsg, type: ntype } = tmpl(student.name);
-      notifyParentUsers(schoolId, [rec.student], 'notifyOnAttendance', ntitle, nmsg, ntype);
+      // Student portal gets the per-status in-app alert for every status.
       notifyStudentUsers(schoolId, [rec.student], 'notifyOnAttendance', ntitle, nmsg, ntype);
+      if (rec.status === 'absent') {
+        absentIds.push(rec.student);   // handled below: parent in-app + push
+      } else {
+        notifyParentUsers(schoolId, [rec.student], 'notifyOnAttendance', ntitle, nmsg, ntype);
+      }
+    }
+
+    // Absent → notify the parent(s): saves an in-app "Attendance Alert" AND sends
+    // a Firebase push to their registered device(s). Reusable service.
+    if (absentIds.length) {
+      notifyStudentParents({
+        schoolId,
+        studentIds: absentIds,
+        permKey: 'notifyOnAttendance',
+        title: 'Attendance Alert',
+        body: 'Your child was marked Absent today.',
+        type: 'error',
+        data: { kind: 'attendance', status: 'absent', date: new Date(date).toISOString() },
+      });
     }
 
     res.json({

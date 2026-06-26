@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import { usePush } from '../../hooks/usePush';
 
 export default function AppLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  usePush(); // register device for push + handle foreground messages
 
   return (
     <div className="app-layout">

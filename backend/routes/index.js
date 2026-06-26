@@ -75,6 +75,23 @@ router.put('/auth/change-password', protect, authCtrl.changePassword);
 router.put('/auth/profile', protect, authCtrl.updateProfile);
 router.put('/auth/notifications/:notifId/read', protect, authCtrl.markNotification);
 
+// ── Push notification device tokens (FCM) ──
+router.post('/notifications/register-token', protect, async (req, res) => {
+  try {
+    const token = (req.body.token || '').trim();
+    if (!token) return res.status(400).json({ success: false, message: 'token is required' });
+    await User.updateOne({ _id: req.user._id }, { $addToSet: { fcmTokens: token } });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+router.post('/notifications/unregister-token', protect, async (req, res) => {
+  try {
+    const token = (req.body.token || '').trim();
+    if (token) await User.updateOne({ _id: req.user._id }, { $pull: { fcmTokens: token } });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // ============== APP LOGINS (portal accounts for students/parents/teachers) ==============
 const appLoginsCtrl = require('../controllers/appLoginsController');
 const APP_LOGIN_ROLES = ['admin', 'correspondent'];

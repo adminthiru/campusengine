@@ -37,6 +37,8 @@ const userSchema = new mongoose.Schema({
     read: { type: Boolean, default: false },
     createdAt: { type: Date, default: Date.now }
   }],
+  // Registered FCM device tokens for push notifications (web/mobile).
+  fcmTokens: { type: [String], default: [] },
   // Reference to role-specific profile
   employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
   studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' },
