@@ -41,11 +41,11 @@ class ThemeProvider extends ChangeNotifier {
     await prefs.setString(AppConstants.keyThemeMode, _toString(mode));
   }
 
-  static ThemeMode _fromString(String s) => switch (s) {
-    'light'  => ThemeMode.light,
-    'dark'   => ThemeMode.dark,
-    _        => ThemeMode.system,
-  };
+  // Only an explicit 'dark' choice yields dark. Anything else — light, a stale
+  // 'system' value, or unknown — resolves to light so the app never follows the
+  // device into dark mode on its own.
+  static ThemeMode _fromString(String s) =>
+      s == 'dark' ? ThemeMode.dark : ThemeMode.light;
 
   static String _toString(ThemeMode mode) => switch (mode) {
     ThemeMode.light  => 'light',
