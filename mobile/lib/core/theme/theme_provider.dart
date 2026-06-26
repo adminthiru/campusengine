@@ -5,7 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/config/app_constants.dart';
 
 class ThemeProvider extends ChangeNotifier {
-  ThemeMode _themeMode = ThemeMode.system;
+  // Default to light on first launch; the user's explicit choice is persisted.
+  ThemeMode _themeMode = ThemeMode.light;
 
   ThemeMode get themeMode => _themeMode;
 
@@ -15,7 +16,8 @@ class ThemeProvider extends ChangeNotifier {
   /// Load saved preference from SharedPreferences on startup
   Future<void> loadTheme() async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString(AppConstants.keyThemeMode) ?? 'system';
+    // No saved preference → light by default (not the device theme).
+    final saved = prefs.getString(AppConstants.keyThemeMode) ?? 'light';
     _themeMode = _fromString(saved);
     notifyListeners();
   }
