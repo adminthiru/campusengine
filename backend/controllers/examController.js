@@ -68,8 +68,20 @@ const uploadAnswerPaper = async (req, res) => {
       });
     }
 
+    // Persist the file in the DB (Render's disk is ephemeral, so /uploads files
+    // vanish on redeploy/restart → "Cannot GET /uploads/..."). Served via /api/files/:id.
+    const Upload = require('../models/Upload');
+    const stored = await Upload.create({
+      school: schoolId,
+      originalName: req.file.originalname,
+      contentType: req.file.mimetype,
+      size: req.file.size,
+      data: req.file.buffer,
+      uploadedBy: req.user._id,
+    });
+
     const paperData = {
-      url: `/uploads/${req.file.filename}`,
+      url: `/api/files/${stored._id}`,
       fileName: req.file.originalname,
       uploadedAt: new Date(),
       uploadedBy: req.user._id

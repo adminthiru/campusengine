@@ -63,6 +63,39 @@ const upload = multer({
   },
 });
 
+// In-memory multer for files that must persist (stored in MongoDB, not on the
+// ephemeral disk). Buffer is available as req.file.buffer.
+const uploadMem = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = (path.extname(file.originalname || '') || '').toLowerCase();
+    if (UPLOAD_ALLOWED_EXT.includes(ext)) return cb(null, true);
+    cb(new Error('File type not allowed'));
+  },
+});
+
+// Public: stream a DB-stored file (answer papers, etc.) by id. Public — like the
+// old /uploads static — so a browser / PDF viewer can open it without a token.
+router.get('/files/:id', async (req, res) => {
+  try {
+    const mongoose = require('mongoose');
+    const Upload = require('../models/Upload');
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).send('Invalid file id');
+    }
+    const file = await Upload.findById(req.params.id);
+    if (!file || !file.data) return res.status(404).send('File not found');
+    const safeName = (file.originalName || 'file').replace(/[\r\n"]/g, '');
+    res.set('Content-Type', file.contentType || 'application/octet-stream');
+    res.set('Content-Disposition', `inline; filename="${safeName}"`);
+    res.set('Cache-Control', 'private, max-age=86400');
+    res.send(file.data);
+  } catch (err) {
+    res.status(500).send('Error serving file');
+  }
+});
+
 // ============== AUTH ==============
 // Public self-signup removed — tenants are provisioned by the super admin
 // Public self-service signup — creates a school tenant + its admin account and
@@ -926,7 +959,7 @@ router.delete('/calendar/:id', protect, authorize('admin', 'correspondent', 'pri
 router.get('/exams', protect, checkSubscription, examCtrl.getExams);
 router.post('/exams', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), examCtrl.createExam);
 router.post('/exams/marks', protect, checkSubscription, examCtrl.enterMarks);
-router.post('/exams/answer-paper', protect, checkSubscription, upload.single('answerPaper'), examCtrl.uploadAnswerPaper);
+router.post('/exams/answer-paper', protect, checkSubscription, uploadMem.single('answerPaper'), examCtrl.uploadAnswerPaper);
 router.delete('/exams/results/:resultId/answer-paper', protect, checkSubscription, async (req, res) => {
   try {
     const { ExamResult } = require('../models/Exam');
@@ -934,7 +967,13 @@ router.delete('/exams/results/:resultId/answer-paper', protect, checkSubscriptio
     const result = await ExamResult.findOne({ _id: req.params.resultId, school: req.user.school });
     if (!result) return res.status(404).json({ success: false, message: 'Not found' });
     const markEntry = result.marks.find(m => m.subject?.toString() === subjectId);
-    if (markEntry) { markEntry.answerPaper = undefined; await result.save(); }
+    if (markEntry) {
+      // Remove the stored file too (url is /api/files/<id>).
+      const m = (markEntry.answerPaper?.url || '').match(/\/files\/([a-f0-9]{24})/i);
+      if (m) { try { await require('../models/Upload').findByIdAndDelete(m[1]); } catch (_) {} }
+      markEntry.answerPaper = undefined;
+      await result.save();
+    }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });

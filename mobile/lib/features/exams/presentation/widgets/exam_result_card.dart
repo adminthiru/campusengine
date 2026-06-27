@@ -57,11 +57,6 @@ String? _paperUrl(dynamic m) {
   return (u is String && u.isNotEmpty) ? u : null;
 }
 
-String? _paperName(dynamic m) {
-  final n = _answerPaper(m)?['fileName'];
-  return (n is String && n.trim().isNotEmpty) ? n : null;
-}
-
 /// Renders a single published exam result: overall total/percentage/grade, a
 /// per-subject marks breakdown, and a highlighted "Answer Papers" section with
 /// a button to open each subject's PDF. Shared by the student Results tab and
@@ -164,7 +159,6 @@ class ExamResultCard extends StatelessWidget {
           ...papers.map((m) => _PaperTile(
                 subject: _subjectName(m),
                 url: _paperUrl(m)!,
-                fileName: _paperName(m),
                 isDark: isDark,
               )),
         ],
@@ -249,17 +243,12 @@ class _SubjectRow extends StatelessWidget {
 class _PaperTile extends StatelessWidget {
   final String subject;
   final String url;
-  final String? fileName;
   final bool isDark;
   const _PaperTile(
-      {required this.subject,
-      required this.url,
-      this.fileName,
-      required this.isDark});
+      {required this.subject, required this.url, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
-    final hasName = fileName != null && fileName!.trim().isNotEmpty;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
@@ -279,22 +268,10 @@ class _PaperTile extends StatelessWidget {
               const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 20),
               const SizedBox(width: 10),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('$subject — Answer Paper',
-                        style:
-                            AppTypography.s13SemiBold(color: AppColors.primary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                    if (hasName)
-                      Text(fileName!,
-                          style: AppTypography.s11Regular(
-                              color: AppColors.textMuted),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
-                  ],
-                ),
+                child: Text('$subject — Answer Paper',
+                    style: AppTypography.s13SemiBold(color: AppColors.primary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
               ),
               const SizedBox(width: 8),
               const Icon(Icons.open_in_new, color: AppColors.primary, size: 18),
