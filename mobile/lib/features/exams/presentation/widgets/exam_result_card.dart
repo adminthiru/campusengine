@@ -201,6 +201,9 @@ class _SubjectRow extends StatelessWidget {
             : 100)
         .toInt();
     final sPct = max > 0 ? (got / max * 100).round() : 0;
+    final grade = (mark is Map && mark['grade'] is String)
+        ? (mark['grade'] as String).trim()
+        : '';
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -227,6 +230,18 @@ class _SubjectRow extends StatelessWidget {
           const SizedBox(width: 8),
           Text('$sPct%',
               style: AppTypography.s12Regular(color: _gradeColor(sPct))),
+          if (grade.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: _gradeColor(sPct).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(grade,
+                  style: AppTypography.s11SemiBold(color: _gradeColor(sPct))),
+            ),
+          ],
         ],
       ]),
     );
