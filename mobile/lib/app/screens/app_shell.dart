@@ -84,8 +84,8 @@ class _AppShellState extends State<AppShell> {
       // Register this device for push notifications now that we're authenticated.
       PushService.setup();
 
-      // Load the unread-notification count for the bell badge.
-      context.read<NotificationsProvider>().refresh();
+      // Keep the unread-notification badge live while the app is open.
+      context.read<NotificationsProvider>().startPolling();
 
       if (role == 'student') {
         final sp = context.read<StudentProfileProvider>();
@@ -110,6 +110,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   String _getTitle(String path, String role) {
+    if (path.endsWith('/notifications')) return 'Notifications';
     if (role == 'student') {
       if (path.startsWith('/student/dashboard')) return 'My Dashboard';
       if (path.startsWith('/student/homework')) return 'Homework';
