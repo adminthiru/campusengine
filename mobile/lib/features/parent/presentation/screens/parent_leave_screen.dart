@@ -65,7 +65,7 @@ class _ApplyTab extends StatefulWidget {
 class _ApplyTabState extends State<_ApplyTab> {
   final _formKey = GlobalKey<FormState>();
   final _reasonCtrl = TextEditingController();
-  String? _selectedChildId;
+  final Set<String> _selectedIds = {}; // multi-select children
   DateTime? _from, _to;
   bool _loading = false;
 
@@ -100,8 +100,8 @@ class _ApplyTabState extends State<_ApplyTab> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedChildId == null) {
-      _snack('Select a child', isError: true);
+    if (_selectedIds.isEmpty) {
+      _snack('Select at least one child', isError: true);
       return;
     }
     if (_from == null || _to == null) {
@@ -109,26 +109,36 @@ class _ApplyTabState extends State<_ApplyTab> {
       return;
     }
     setState(() => _loading = true);
-    try {
-      await ApiClient.post('/parent/student-leave', data: {
-        'studentId': _selectedChildId,
-        'fromDate': _from!.toIso8601String(),
-        'toDate': _to!.toIso8601String(),
-        'days': _days,
-        'reason': _reasonCtrl.text.trim(),
-      });
-      if (!mounted) return;
-      _snack('Leave request submitted');
+    // One leave request per selected child (each is approved independently).
+    int ok = 0;
+    String? lastErr;
+    for (final id in _selectedIds) {
+      try {
+        await ApiClient.post('/parent/student-leave', data: {
+          'studentId': id,
+          'fromDate': _from!.toIso8601String(),
+          'toDate': _to!.toIso8601String(),
+          'days': _days,
+          'reason': _reasonCtrl.text.trim(),
+        });
+        ok++;
+      } catch (e) {
+        lastErr = ApiClient.errorMessage(e);
+      }
+    }
+    if (!mounted) return;
+    if (ok > 0) {
+      _snack('Leave request submitted for $ok student${ok > 1 ? "s" : ""}');
       setState(() {
         _from = null;
         _to = null;
+        _selectedIds.clear();
         _reasonCtrl.clear();
       });
-    } catch (e) {
-      _snack(ApiClient.errorMessage(e), isError: true);
-    } finally {
-      if (mounted) setState(() => _loading = false);
+    } else {
+      _snack(lastErr ?? 'Could not submit leave request', isError: true);
     }
+    setState(() => _loading = false);
   }
 
   void _snack(String msg, {bool isError = false}) =>
@@ -150,63 +160,82 @@ class _ApplyTabState extends State<_ApplyTab> {
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const SizedBox(height: 4),
-            Text('Select Child',
-                style: AppTypography.s14SemiBold(
-                    color: isDark ? Colors.white : AppColors.textPrimary)),
+            Row(children: [
+              Text(children.length > 1 ? 'Select Children' : 'Select Child',
+                  style: AppTypography.s14SemiBold(
+                      color: isDark ? Colors.white : AppColors.textPrimary)),
+              if (children.length > 1) ...[
+                const SizedBox(width: 6),
+                Text('(select one or more)',
+                    style: AppTypography.s12Regular(color: AppColors.textMuted)),
+              ],
+            ]),
             const SizedBox(height: 10),
             if (children.isEmpty)
               Text('No children linked to your account',
                   style: AppTypography.s13Regular(color: AppColors.textMuted))
             else
-              ...children.map((c) => GestureDetector(
-                    onTap: () => setState(() => _selectedChildId = c.id),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: _selectedChildId == c.id
-                            ? AppColors.primary.withValues(alpha: 0.08)
-                            : (isDark ? AppColors.cardDark : Colors.white),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _selectedChildId == c.id
-                              ? AppColors.primary
-                              : (isDark
-                                  ? AppColors.borderDark
-                                  : AppColors.borderLight),
-                          width: _selectedChildId == c.id ? 2 : 1,
-                        ),
+              ...children.map((c) {
+                final sel = _selectedIds.contains(c.id);
+                return GestureDetector(
+                  onTap: () => setState(() {
+                    if (sel) {
+                      _selectedIds.remove(c.id);
+                    } else {
+                      _selectedIds.add(c.id);
+                    }
+                  }),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: sel
+                          ? AppColors.primary.withValues(alpha: 0.08)
+                          : (isDark ? AppColors.cardDark : Colors.white),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: sel
+                            ? AppColors.primary
+                            : (isDark
+                                ? AppColors.borderDark
+                                : AppColors.borderLight),
+                        width: sel ? 2 : 1,
                       ),
-                      child: Row(children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor:
-                              AppColors.primary.withValues(alpha: 0.1),
-                          child: Text(c.initial,
-                              style: AppTypography.s14Bold(
-                                  color: AppColors.primary)),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                              Text(c.name,
-                                  style: AppTypography.s14SemiBold(
-                                      color: isDark
-                                          ? Colors.white
-                                          : AppColors.textPrimary)),
-                              Text(c.classLabel,
-                                  style: AppTypography.s12Regular(
-                                      color: AppColors.textMuted)),
-                            ])),
-                        if (_selectedChildId == c.id)
-                          Icon(Icons.check_circle,
-                              color: AppColors.primary, size: 20),
-                      ]),
                     ),
-                  )),
+                    child: Row(children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor:
+                            AppColors.primary.withValues(alpha: 0.1),
+                        child: Text(c.initial,
+                            style:
+                                AppTypography.s14Bold(color: AppColors.primary)),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                            Text(c.name,
+                                style: AppTypography.s14SemiBold(
+                                    color: isDark
+                                        ? Colors.white
+                                        : AppColors.textPrimary)),
+                            Text(c.classLabel,
+                                style: AppTypography.s12Regular(
+                                    color: AppColors.textMuted)),
+                          ])),
+                      Icon(
+                          sel
+                              ? Icons.check_circle
+                              : Icons.radio_button_unchecked,
+                          color: sel ? AppColors.primary : AppColors.textMuted,
+                          size: 20),
+                    ]),
+                  ),
+                );
+              }),
             const SizedBox(height: 20),
             Text('Leave Dates',
                 style: AppTypography.s14SemiBold(

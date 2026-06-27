@@ -506,6 +506,43 @@ router.put('/student-leaves/:id', protect, authorize('admin', 'correspondent', '
       { returnDocument: 'after' }
     ).populate('student', 'name admissionNumber').populate('parent', 'name phone');
     if (!leave) return res.status(404).json({ success: false, message: 'Not found' });
+
+    // On approval, mark the student absent for each day of the leave. Student
+    // attendance is one day-level record per class+date, so we upsert that day's
+    // record and set this student to absent (idempotent across leaves).
+    if (status === 'approved' && leave.student?._id) {
+      try {
+        const Attendance = require('../models/Attendance');
+        const stu = await Student.findById(leave.student._id).select('currentClass academicYear');
+        if (stu?.currentClass) {
+          const sid = String(leave.student._id);
+          const from = new Date(leave.fromDate);
+          const to = new Date(leave.toDate);
+          let cur = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+          const last = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+          while (cur <= last) {
+            const dayStart = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate());
+            const dayEnd = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1);
+            let att = await Attendance.findOne({
+              school: req.user.school, type: 'student', class: stu.currentClass,
+              date: { $gte: dayStart, $lt: dayEnd },
+            });
+            if (!att) {
+              att = new Attendance({
+                school: req.user.school, type: 'student', class: stu.currentClass,
+                date: dayStart, markedBy: req.user._id, academicYear: stu.academicYear, records: [],
+              });
+            }
+            const rec = att.records.find(r => String(r.student) === sid);
+            if (rec) { rec.status = 'absent'; rec.remarks = 'On approved leave'; }
+            else { att.records.push({ student: leave.student._id, status: 'absent', remarks: 'On approved leave' }); }
+            await att.save();
+            cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1);
+          }
+        }
+      } catch (e) { console.error('[student-leave approve → attendance]', e.message); }
+    }
+
     res.json({ success: true, leave });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
