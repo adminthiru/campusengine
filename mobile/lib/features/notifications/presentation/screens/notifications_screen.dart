@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
 import 'package:skl_teacher/core/widgets/skeleton.dart';
+import 'package:skl_teacher/features/notifications/presentation/providers/notifications_provider.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -26,14 +28,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     try {
       final res = await ApiClient.get('/auth/me');
       final user = res.data['user'] ?? res.data;
+      // Backend stores newest-first (unshift); show it as-is so the latest
+      // notification is at the top.
+      final list = user['notifications'];
       setState(() {
-        _notifications =
-            (user['notifications'] as List<dynamic>? ?? []).reversed.toList();
+        _notifications = list is List ? List<dynamic>.from(list) : [];
         _loading = false;
       });
+      // Opening the list clears the bell badge and marks everything read.
+      _markAllRead();
     } catch (_) {
       setState(() => _loading = false);
     }
+  }
+
+  Future<void> _markAllRead() async {
+    if (mounted) context.read<NotificationsProvider>().clear();
+    try {
+      await ApiClient.post('/notifications/mark-all-read');
+    } catch (_) {}
   }
 
   Future<void> _markRead(String id) async {
