@@ -172,22 +172,41 @@ export default function Attendance() {
 
   // ── Leave Requests tab ───────────────────────────────────────────────────
   const [leaveFilter, setLeaveFilter] = useState('all');
+  const [leaveScope, setLeaveScope]   = useState('student'); // 'student' | 'staff'
   const [leaveNote, setLeaveNote]     = useState({});    // { [id]: noteText }
 
+  // Staff (employee) leave requests
   const { data: leavesData, isLoading: loadingLeaves } = useQuery({
     queryKey: ['leaves', leaveFilter],
-    enabled:  tab === 'leaves',
+    enabled:  tab === 'leaves' && leaveScope === 'staff',
     queryFn:  () => api.get(`/leaves${leaveFilter !== 'all' ? `?status=${leaveFilter}` : ''}`),
   });
-  const leaves = leavesData?.leaves ?? [];
-  // Client-side search over leave requests (employee name/ID or reason)
+  // Hide leaves whose employee was deleted (orphaned records).
+  const staffLeaves = (leavesData?.leaves ?? []).filter(lv => lv.employee);
+
+  // Student leave requests (submitted from the parent / student app)
+  const { data: stuLeavesData, isLoading: loadingStuLeaves } = useQuery({
+    queryKey: ['student-leaves', leaveFilter],
+    enabled:  tab === 'leaves' && leaveScope === 'student',
+    queryFn:  () => api.get(`/student-leaves${leaveFilter !== 'all' ? `?status=${leaveFilter}` : ''}`),
+  });
+  const studentLeaves = (stuLeavesData?.leaves ?? []).filter(lv => lv.student);
+
   const leaveQuery = search.trim().toLowerCase();
-  const displayLeaves = leaveQuery
-    ? leaves.filter(lv =>
-        (lv.employee?.name || '').toLowerCase().includes(leaveQuery) ||
-        (lv.employee?.employeeId || '').toLowerCase().includes(leaveQuery) ||
-        (lv.reason || '').toLowerCase().includes(leaveQuery))
-    : leaves;
+  const loadingLeaveList = leaveScope === 'staff' ? loadingLeaves : loadingStuLeaves;
+  const displayLeaves = leaveScope === 'staff'
+    ? (leaveQuery
+        ? staffLeaves.filter(lv =>
+            (lv.employee?.name || '').toLowerCase().includes(leaveQuery) ||
+            (lv.employee?.employeeId || '').toLowerCase().includes(leaveQuery) ||
+            (lv.reason || '').toLowerCase().includes(leaveQuery))
+        : staffLeaves)
+    : (leaveQuery
+        ? studentLeaves.filter(lv =>
+            (lv.student?.name || '').toLowerCase().includes(leaveQuery) ||
+            (lv.student?.admissionNumber || '').toLowerCase().includes(leaveQuery) ||
+            (lv.reason || '').toLowerCase().includes(leaveQuery))
+        : studentLeaves);
 
   const leaveAction = useMutation({
     mutationFn: ({ id, status, adminNote }) =>
@@ -198,6 +217,17 @@ export default function Attendance() {
     },
     onError: () => toast.error('Action failed'),
   });
+
+  const studentLeaveAction = useMutation({
+    mutationFn: ({ id, status, adminNote }) =>
+      api.put(`/student-leaves/${id}`, { status, adminNote }),
+    onSuccess: (_, { status }) => {
+      toast.success(`Leave ${status}`);
+      qc.invalidateQueries({ queryKey: ['student-leaves'] });
+    },
+    onError: () => toast.error('Action failed'),
+  });
+  const activeLeaveAction = leaveScope === 'staff' ? leaveAction : studentLeaveAction;
 
   // ── Staff Check-in tab state ──────────────────────────────────────────────
   const [showTimingForm, setShowTimingForm] = useState(false);
@@ -734,9 +764,19 @@ export default function Attendance() {
       {/* ── Leave Requests tab ──────────────────────────────────────────────── */}
       {tab === 'leaves' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Search + status filter */}
+          {/* Scope toggle + search + status filter */}
           <div className="filter-bar" style={{ margin: 0 }}>
-            <SearchInput value={search} onChange={setSearch} placeholder="Search by employee or reason..." />
+            <AntSelect
+              style={{ width: 150 }}
+              value={leaveScope}
+              onChange={val => setLeaveScope(val)}
+              options={[
+                { value: 'student', label: 'Students' },
+                { value: 'staff',   label: 'Staff' },
+              ]}
+            />
+            <SearchInput value={search} onChange={setSearch}
+              placeholder={leaveScope === 'staff' ? 'Search by employee or reason...' : 'Search by student or reason...'} />
             <AntSelect
               style={{ width: 170 }}
               value={leaveFilter}
@@ -750,7 +790,7 @@ export default function Attendance() {
             />
           </div>
 
-          {loadingLeaves ? <PageLoader /> : displayLeaves.length === 0 ? (
+          {loadingLeaveList ? <PageLoader /> : displayLeaves.length === 0 ? (
             <div className="card">
               <div className="empty-state">
                 <div className="empty-state-icon"><CheckCircle size={28} /></div>
@@ -764,7 +804,7 @@ export default function Attendance() {
                   <thead>
                     <tr>
                       <th>#</th>
-                      <th>Employee</th>
+                      <th>{leaveScope === 'staff' ? 'Employee' : 'Student'}</th>
                       <th>Type</th>
                       <th>From</th>
                       <th>To</th>
@@ -782,16 +822,31 @@ export default function Attendance() {
                         <tr key={lv._id}>
                           <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{idx + 1}</td>
                           <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <Avatar name={lv.employee?.name} size={30} />
-                              <div>
-                                <div className="text-14-medium">{lv.employee?.name}</div>
-                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{lv.employee?.employeeId}</div>
+                            {leaveScope === 'staff' ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Avatar name={lv.employee?.name} size={30} />
+                                <div>
+                                  <div className="text-14-medium">{lv.employee?.name}</div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{lv.employee?.employeeId}</div>
+                                </div>
                               </div>
-                            </div>
+                            ) : (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Avatar name={lv.student?.name} size={30} />
+                                <div>
+                                  <div className="text-14-medium">{lv.student?.name}</div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                    {lv.student?.admissionNumber}
+                                    {lv.parent?.name ? ` · by ${lv.parent.name}` : ''}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </td>
                           <td>
-                            <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--primary)' }}>{lv.leaveType}</span>
+                            <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--primary)' }}>
+                              {leaveScope === 'staff' ? lv.leaveType : 'Leave'}
+                            </span>
                           </td>
                           <td style={{ fontSize: 13 }}>{format(new Date(lv.fromDate), 'dd MMM yyyy')}</td>
                           <td style={{ fontSize: 13 }}>{format(new Date(lv.toDate), 'dd MMM yyyy')}</td>
@@ -822,8 +877,8 @@ export default function Attendance() {
                                 />
                                 <div style={{ display: 'flex', gap: 6 }}>
                                   <button
-                                    onClick={() => leaveAction.mutate({ id: lv._id, status: 'approved', adminNote: leaveNote[lv._id] || '' })}
-                                    disabled={leaveAction.isPending}
+                                    onClick={() => activeLeaveAction.mutate({ id: lv._id, status: 'approved', adminNote: leaveNote[lv._id] || '' })}
+                                    disabled={activeLeaveAction.isPending}
                                     style={{
                                       flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                                       padding: '5px 0', borderRadius: 6, border: 'none', cursor: 'pointer',
@@ -831,8 +886,8 @@ export default function Attendance() {
                                     }}
                                   ><CheckCircle size={13} /> Approve</button>
                                   <button
-                                    onClick={() => leaveAction.mutate({ id: lv._id, status: 'rejected', adminNote: leaveNote[lv._id] || '' })}
-                                    disabled={leaveAction.isPending}
+                                    onClick={() => activeLeaveAction.mutate({ id: lv._id, status: 'rejected', adminNote: leaveNote[lv._id] || '' })}
+                                    disabled={activeLeaveAction.isPending}
                                     style={{
                                       flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                                       padding: '5px 0', borderRadius: 6, border: 'none', cursor: 'pointer',
