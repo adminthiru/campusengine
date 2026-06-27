@@ -379,6 +379,7 @@ class _InfoTab extends StatelessWidget {
   Widget _profileHeader(bool isDark, Map s) {
     final status = _str(s['status']);
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? AppColors.cardDark : Colors.white,
