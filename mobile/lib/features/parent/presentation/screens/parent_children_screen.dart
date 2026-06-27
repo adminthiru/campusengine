@@ -811,6 +811,7 @@ class _HomeworkCard extends StatelessWidget {
         : const <Map>[];
     final due = _fmtDate(hw['dueDate']);
     final subjName = hw['subject'] is Map ? hw['subject']['name'] : null;
+    final desc = (hw['description'] as String?)?.trim() ?? '';
     final note = (sub?['note'] as String?)?.trim() ?? '';
 
     final (statusLabel, statusColor) = switch (status) {
@@ -836,6 +837,17 @@ class _HomeworkCard extends StatelessWidget {
               Text(hw['title'] ?? 'Homework',
                   style: GoogleFonts.inter(
                       fontSize: 14, fontWeight: FontWeight.w600)),
+              if (desc.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text(desc,
+                      style: GoogleFonts.inter(
+                          fontSize: 12.5,
+                          height: 1.35,
+                          color: isDark
+                              ? Colors.white70
+                              : AppColors.textSecondary)),
+                ),
               if (subjName != null)
                 Text(subjName,
                     style: GoogleFonts.inter(
