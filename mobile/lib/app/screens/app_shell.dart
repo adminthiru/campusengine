@@ -21,7 +21,7 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   // Class teacher tabs (with Attendance)
   static const _classTeacherTabs = [
     _NavItem(
@@ -75,6 +75,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthProvider>();
       final role = auth.role;
@@ -98,6 +99,21 @@ class _AppShellState extends State<AppShell> {
         if (profileProvider.profile == null) profileProvider.fetchProfile();
       }
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Returning to the app — pull the latest unread count so the bell badge
+    // reflects notifications received while it was backgrounded.
+    if (state == AppLifecycleState.resumed && mounted) {
+      context.read<NotificationsProvider>().refresh();
+    }
   }
 
   int _currentIndex(BuildContext ctx, List<_NavItem> tabs) {

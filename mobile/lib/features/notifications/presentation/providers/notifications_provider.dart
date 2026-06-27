@@ -27,7 +27,7 @@ class NotificationsProvider extends ChangeNotifier {
   }
 
   /// Refresh immediately and keep the badge live while the app runs.
-  void startPolling({Duration interval = const Duration(seconds: 30)}) {
+  void startPolling({Duration interval = const Duration(seconds: 15)}) {
     refresh();
     _poll ??= Timer.periodic(interval, (_) => refresh());
   }
