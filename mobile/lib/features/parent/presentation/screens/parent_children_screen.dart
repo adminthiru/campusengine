@@ -1017,87 +1017,143 @@ class _FeesTabState extends State<_FeesTab> {
               style: GoogleFonts.inter(color: AppColors.textMuted)));
     }
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Break fees down per term (a fee record carries a terms[] array). Falls
+    // back to the record-level aggregate for legacy records without terms.
+    final rows = <Map<String, dynamic>>[];
     int totalDue = 0, totalPaid = 0;
     for (final f in _fees) {
-      totalDue += (f['netAmount'] as num? ?? 0).toInt();
-      totalPaid += (f['paidAmount'] as num? ?? 0).toInt();
+      if (f is! Map) continue;
+      final terms = (f['terms'] is List) ? f['terms'] as List : const [];
+      if (terms.isNotEmpty) {
+        for (final t in terms) {
+          if (t is! Map) continue;
+          final net = (t['netAmount'] as num? ?? 0).toInt();
+          final paid = (t['paidAmount'] as num? ?? 0).toInt();
+          rows.add({
+            'name': (t['name'] ?? 'Term').toString(),
+            'paid': paid,
+            'net': net,
+            'status': (t['status'] ?? _deriveStatus(paid, net)).toString(),
+          });
+          totalDue += net;
+          totalPaid += paid;
+        }
+      } else {
+        final net = (f['netAmount'] as num? ?? 0).toInt();
+        final paid = (f['paidAmount'] as num? ?? 0).toInt();
+        rows.add({
+          'name': (f['feeType']?['name'] ?? f['description'] ?? 'Fee').toString(),
+          'paid': paid,
+          'net': net,
+          'status': (f['status'] ?? _deriveStatus(paid, net)).toString(),
+        });
+        totalDue += net;
+        totalPaid += paid;
+      }
     }
     final pending = totalDue - totalPaid;
+    final totalStatus =
+        totalPaid <= 0 ? 'pending' : (totalPaid >= totalDue ? 'paid' : 'partial');
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      child: Column(
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
         children: [
-          Row(
-            children: [
-              _summaryCard('Total', '₹$totalDue', AppColors.textPrimary),
-              const SizedBox(width: 12),
-              _summaryCard('Paid', '₹$totalPaid', AppColors.accentGreen),
-              const SizedBox(width: 12),
-              _summaryCard('Pending', '₹$pending',
-                  pending > 0 ? AppColors.accentRed : AppColors.accentGreen),
-            ],
-          ),
+          Row(children: [
+            _summaryCard('Total', '₹$totalDue', AppColors.textPrimary),
+            const SizedBox(width: 12),
+            _summaryCard('Paid', '₹$totalPaid', AppColors.accentGreen),
+            const SizedBox(width: 12),
+            _summaryCard('Pending', '₹$pending',
+                pending > 0 ? AppColors.accentRed : AppColors.accentGreen),
+          ]),
           const SizedBox(height: 16),
-          ...List.generate(_fees.length, (i) {
-            final f = _fees[i];
-            final status = f['status'] as String? ?? '';
-            final sColor = _statusColor(status);
-            final net = (f['netAmount'] as num? ?? 0).toInt();
-            final paid = (f['paidAmount'] as num? ?? 0).toInt();
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.cardDark : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                    color:
-                        isDark ? AppColors.borderDark : AppColors.borderLight),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(f['feeType']?['name'] ?? f['description'] ?? 'Fee',
-                            style: GoogleFonts.inter(
-                                fontSize: 14, fontWeight: FontWeight.w600)),
-                        Text('₹$paid / ₹$net',
-                            style: GoogleFonts.inter(
-                                fontSize: 12, color: AppColors.textMuted)),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: sColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      status.isEmpty
-                          ? ''
-                          : status[0].toUpperCase() + status.substring(1),
-                      style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: sColor,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
+          ...rows.map((r) => _feeRow(r['name'] as String, r['paid'] as int,
+              r['net'] as int, r['status'] as String, isDark)),
+          _totalRow(totalPaid, totalDue, totalStatus, isDark),
         ],
       ),
+    );
+  }
+
+  Widget _feeRow(String name, int paid, int net, String status, bool isDark) =>
+      Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.cardDark : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: isDark ? AppColors.borderDark : AppColors.borderLight),
+        ),
+        child: Row(children: [
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(name,
+                  style: GoogleFonts.inter(
+                      fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              Text('₹$paid / ₹$net',
+                  style: GoogleFonts.inter(
+                      fontSize: 12, color: AppColors.textMuted)),
+            ]),
+          ),
+          _statusBadge(status),
+        ]),
+      );
+
+  Widget _totalRow(int paid, int net, String status, bool isDark) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: isDark ? 0.16 : 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+        ),
+        child: Row(children: [
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Total Fees',
+                  style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : AppColors.textPrimary)),
+              const SizedBox(height: 2),
+              Text('₹$paid / ₹$net',
+                  style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary)),
+            ]),
+          ),
+          _statusBadge(status),
+        ]),
+      );
+
+  Widget _statusBadge(String status) {
+    final sColor = _statusColor(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: sColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        status.isEmpty ? '' : status[0].toUpperCase() + status.substring(1),
+        style: GoogleFonts.inter(
+            fontSize: 12, color: sColor, fontWeight: FontWeight.w600),
       ),
     );
+  }
+
+  String _deriveStatus(int paid, int net) {
+    if (paid <= 0) return 'pending';
+    if (paid >= net) return 'paid';
+    return 'partial';
   }
 
   Widget _summaryCard(String label, String val, Color color) => Expanded(
