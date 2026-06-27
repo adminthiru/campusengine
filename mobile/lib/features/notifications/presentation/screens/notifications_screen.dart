@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/services/push_service.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
 import 'package:skl_teacher/core/widgets/skeleton.dart';
+import 'package:skl_teacher/features/notifications/presentation/providers/notifications_provider.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -80,10 +82,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       // Dedicated endpoint returns notifications newest-first + an unread count.
       final res = await ApiClient.get('/notifications');
       final list = res.data is Map ? res.data['notifications'] : null;
+      final unread = res.data is Map ? res.data['unread'] : null;
       setState(() {
         _notifications = list is List ? list : const [];
         _loading = false;
       });
+      if (mounted) {
+        context
+            .read<NotificationsProvider>()
+            .setCount(unread is num ? unread.toInt() : 0);
+      }
     } catch (e) {
       setState(() {
         _loading = false;
@@ -96,9 +104,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     try {
       await ApiClient.put('/auth/notifications/$id/read');
       setState(() {
-        final idx = _notifications.indexWhere((n) => n['_id'] == id);
+        final idx = _notifications.indexWhere((n) => n is Map && n['_id'] == id);
         if (idx >= 0) _notifications[idx]['read'] = true;
       });
+      if (mounted) context.read<NotificationsProvider>().decrement();
     } catch (_) {}
   }
 

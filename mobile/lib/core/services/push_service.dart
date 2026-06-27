@@ -13,6 +13,10 @@ final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
 class PushService {
   static bool _listening = false;
 
+  // Called when a foreground push arrives, so the UI (e.g. the bell badge) can
+  // refresh its unread count. Set by the app shell; guarded by the setter.
+  static void Function()? onForegroundMessage;
+
   // Web Push (VAPID) public key — Firebase Console ▸ Cloud Messaging ▸
   // Web Push certificates. Required by getToken() on web; ignored on mobile.
   static const String _webVapidKey =
@@ -49,6 +53,7 @@ class PushService {
     _listening = true;
     FirebaseMessaging.instance.onTokenRefresh.listen(_sendToken);
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      onForegroundMessage?.call(); // refresh the bell badge
       final n = message.notification;
       if (n == null) return;
       scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(

@@ -8,6 +8,7 @@ import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/theme_provider.dart';
 import 'package:skl_teacher/features/auth/presentation/providers/auth_provider.dart';
 import 'package:skl_teacher/features/auth/presentation/providers/school_permissions_provider.dart';
+import 'package:skl_teacher/features/notifications/presentation/providers/notifications_provider.dart';
 import 'package:skl_teacher/features/parent/presentation/providers/parent_data_provider.dart';
 import 'package:skl_teacher/features/profile/presentation/providers/profile_provider.dart';
 import 'package:skl_teacher/features/student/presentation/providers/student_profile_provider.dart';
@@ -83,6 +84,13 @@ class _AppShellState extends State<AppShell> {
       // Register this device for push notifications now that we're authenticated.
       PushService.setup();
 
+      // Load the unread-notification count for the bell badge, and keep it
+      // fresh when a foreground push arrives.
+      context.read<NotificationsProvider>().refresh();
+      PushService.onForegroundMessage = () {
+        if (mounted) context.read<NotificationsProvider>().refresh();
+      };
+
       if (role == 'student') {
         final sp = context.read<StudentProfileProvider>();
         if (sp.profile == null) sp.fetchProfile();
@@ -106,6 +114,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   String _getTitle(String path, String role) {
+    if (path.endsWith('/notifications')) return 'Notifications';
     if (role == 'student') {
       if (path.startsWith('/student/dashboard')) return 'My Dashboard';
       if (path.startsWith('/student/homework')) return 'Homework';
@@ -188,18 +197,26 @@ class _AppShellState extends State<AppShell> {
               )
             : null,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              if (role == 'student') {
-                context.go('/student/notifications');
-              } else if (role == 'parent') {
-                context.go('/parent/notifications');
-              } else {
-                context.go('/notifications');
-              }
-            },
-          ),
+          Builder(builder: (context) {
+            final unread = context.watch<NotificationsProvider>().unread;
+            return IconButton(
+              icon: Badge(
+                isLabelVisible: unread > 0,
+                label: Text(unread > 99 ? '99+' : '$unread'),
+                backgroundColor: AppColors.accentRed,
+                child: const Icon(Icons.notifications_outlined),
+              ),
+              onPressed: () {
+                if (role == 'student') {
+                  context.go('/student/notifications');
+                } else if (role == 'parent') {
+                  context.go('/parent/notifications');
+                } else {
+                  context.go('/notifications');
+                }
+              },
+            );
+          }),
           IconButton(
             icon: AnimatedSwitcher(
               duration: const Duration(milliseconds: 300),

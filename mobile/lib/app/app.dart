@@ -14,6 +14,7 @@ import '../features/auth/presentation/providers/school_permissions_provider.dart
 import '../features/profile/presentation/providers/profile_provider.dart';
 import '../features/student/presentation/providers/student_profile_provider.dart';
 import '../features/parent/presentation/providers/parent_data_provider.dart';
+import '../features/notifications/presentation/providers/notifications_provider.dart';
 import 'router/app_router.dart';
 
 class SKLTeacherApp extends StatelessWidget {
@@ -35,6 +36,7 @@ class SKLTeacherApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => SchoolPermissionsProvider()),
         ChangeNotifierProvider(create: (_) => StudentProfileProvider()),
         ChangeNotifierProvider(create: (_) => ParentDataProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationsProvider()),
       ],
       child: const _AppRouterContainer(),
     );
