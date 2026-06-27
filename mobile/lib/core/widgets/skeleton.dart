@@ -42,8 +42,10 @@ class SkeletonShimmer extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Shimmer.fromColors(
-      baseColor: isDark ? AppColors.borderDark : const Color(0xFFE2E8F0),
-      highlightColor: isDark ? AppColors.cardDark : const Color(0xFFF1F5F9),
+      // Visibly contrasted against the page background so a loading state never
+      // reads as a blank screen on the light theme.
+      baseColor: isDark ? AppColors.borderDark : const Color(0xFFCBD5E1),
+      highlightColor: isDark ? AppColors.cardDark : const Color(0xFFEDF1F6),
       child: child,
     );
   }

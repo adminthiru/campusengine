@@ -117,31 +117,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final unreadCount =
         _notifications.where((n) => n is Map && n['read'] != true).length;
 
+    final body = _buildBody(isDark, unreadCount);
     return Scaffold(
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
-      body: Column(
-        children: [
-          if (kIsWeb && !_pushEnabled) _enableBanner(isDark),
-          Expanded(child: _buildBody(isDark, unreadCount)),
-        ],
-      ),
+      // Only wrap in a Column when the web "Enable" banner is shown; otherwise
+      // render the body directly (avoids a needless Column/Expanded nesting).
+      body: (kIsWeb && !_pushEnabled)
+          ? Column(children: [_enableBanner(isDark), Expanded(child: body)])
+          : body,
     );
   }
 
   Widget _buildBody(bool isDark, int unreadCount) {
     if (_loading) return const SkeletonList();
 
-    // Empty OR error — both are pull-to-refreshable so the screen is never blank
-    // and the user can retry by swiping down.
+    // Empty OR error — pull-to-refreshable so the screen is never blank.
     if (_notifications.isEmpty) {
       final isErr = _error != null;
       return RefreshIndicator(
         onRefresh: _load,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(24, 120, 24, 24),
           children: [
-            SizedBox(height: MediaQuery.of(context).size.height * 0.28),
             Icon(isErr ? Icons.cloud_off_outlined : Icons.notifications_none,
                 size: 60, color: AppColors.textMuted),
             const SizedBox(height: 12),
@@ -157,41 +155,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       );
     }
 
+    // Flat list: header (unread count) + one tile per notification. A single
+    // ListView (no nested Column/Expanded) avoids layout-collapse edge cases.
+    final showHeader = unreadCount > 0;
     return RefreshIndicator(
-                  onRefresh: _load,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (unreadCount > 0)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                          child: Text(
-                            '$unreadCount unread',
-                            style: AppTypography.s13SemiBold(
-                                color: AppColors.primary),
-                          ),
-                        ),
-                      Expanded(
-                        child: ListView.builder(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.all(12),
-                          itemCount: _notifications.length,
-                          itemBuilder: (_, i) {
-                            final n = _notifications[i];
-                            final isRead = n['read'] == true;
-                            final id = n['_id'] as String? ?? '';
-                            return _NotifTile(
-                              notification: n,
-                              isRead: isRead,
-                              isDark: isDark,
-                              onTap: isRead ? null : () => _markRead(id),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                );
+      onRefresh: _load,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+        itemCount: _notifications.length + (showHeader ? 1 : 0),
+        itemBuilder: (_, i) {
+          if (showHeader && i == 0) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+              child: Text('$unreadCount unread',
+                  style: AppTypography.s13SemiBold(color: AppColors.primary)),
+            );
+          }
+          final n = _notifications[i - (showHeader ? 1 : 0)];
+          final isRead = n is Map && n['read'] == true;
+          final id = (n is Map && n['_id'] is String) ? n['_id'] as String : '';
+          return _NotifTile(
+            notification: n,
+            isRead: isRead,
+            isDark: isDark,
+            onTap: isRead || id.isEmpty ? null : () => _markRead(id),
+          );
+        },
+      ),
+    );
   }
 }
 
@@ -258,9 +250,10 @@ class _NotifTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = notification['title'] as String? ?? 'Notification';
-    final message = notification['message'] as String? ?? '';
-    final createdAt = notification['createdAt'];
+    final map = notification is Map ? notification as Map : const {};
+    final title = map['title'] is String ? map['title'] as String : 'Notification';
+    final message = map['message'] is String ? map['message'] as String : '';
+    final createdAt = map['createdAt'];
     final category = _categoryOf(title);
     final color = _colorFor(category);
 
