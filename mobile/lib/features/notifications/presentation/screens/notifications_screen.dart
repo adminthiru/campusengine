@@ -16,6 +16,7 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   List<dynamic> _notifications = [];
   bool _loading = true;
+  String? _error;
   bool _pushEnabled = false; // hides the web "Enable notifications" banner once done
 
   @override
@@ -71,17 +72,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       );
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final res = await ApiClient.get('/auth/me');
-      final user = res.data['user'] ?? res.data;
+      // Dedicated endpoint returns notifications newest-first + an unread count.
+      final res = await ApiClient.get('/notifications');
+      final list = res.data is Map ? res.data['notifications'] : null;
       setState(() {
-        _notifications =
-            (user['notifications'] as List<dynamic>? ?? []).reversed.toList();
+        _notifications = list is List ? list : const [];
         _loading = false;
       });
-    } catch (_) {
-      setState(() => _loading = false);
+    } catch (e) {
+      setState(() {
+        _loading = false;
+        _error = ApiClient.errorMessage(e);
+      });
     }
   }
 
@@ -98,7 +105,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final unreadCount = _notifications.where((n) => n['read'] != true).length;
+    final unreadCount =
+        _notifications.where((n) => n is Map && n['read'] != true).length;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
@@ -112,23 +120,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _buildBody(bool isDark, int unreadCount) {
-    return _loading
-        ? const SkeletonList()
-        : _notifications.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.notifications_none,
-                          size: 60, color: AppColors.textMuted),
-                      const SizedBox(height: 12),
-                      Text('No notifications yet',
-                          style: AppTypography.s16SemiBold(
-                              color: AppColors.textMuted)),
-                    ],
-                  ),
-                )
-              : RefreshIndicator(
+    if (_loading) return const SkeletonList();
+
+    // Empty OR error — both are pull-to-refreshable so the screen is never blank
+    // and the user can retry by swiping down.
+    if (_notifications.isEmpty) {
+      final isErr = _error != null;
+      return RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(24),
+          children: [
+            SizedBox(height: MediaQuery.of(context).size.height * 0.28),
+            Icon(isErr ? Icons.cloud_off_outlined : Icons.notifications_none,
+                size: 60, color: AppColors.textMuted),
+            const SizedBox(height: 12),
+            Text(isErr ? "Couldn't load notifications" : 'No notifications yet',
+                textAlign: TextAlign.center,
+                style: AppTypography.s16SemiBold(color: AppColors.textMuted)),
+            const SizedBox(height: 6),
+            Text(isErr ? 'Pull down to retry' : 'Pull down to refresh',
+                textAlign: TextAlign.center,
+                style: AppTypography.s13Regular(color: AppColors.textMuted)),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
                   onRefresh: _load,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -179,6 +199,20 @@ class _NotifTile extends StatelessWidget {
     this.onTap,
   });
 
+  // Backend stores `type` as a severity (info/success/warning/error), not a
+  // category, so derive the category from the title for a meaningful icon.
+  String _categoryOf(String title) {
+    final t = title.toLowerCase();
+    if (t.contains('attendance') || t.contains('absent')) return 'attendance';
+    if (t.contains('homework')) return 'homework';
+    if (t.contains('exam') || t.contains('result') || t.contains('mark')) {
+      return 'exam';
+    }
+    if (t.contains('fee')) return 'fee';
+    if (t.contains('leave')) return 'leave';
+    return 'default';
+  }
+
   IconData _iconFor(String? type) {
     switch (type) {
       case 'attendance':
@@ -217,9 +251,9 @@ class _NotifTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = notification['title'] as String? ?? 'Notification';
     final message = notification['message'] as String? ?? '';
-    final type = notification['type'] as String?;
     final createdAt = notification['createdAt'];
-    final color = _colorFor(type);
+    final category = _categoryOf(title);
+    final color = _colorFor(category);
 
     String timeAgo = '';
     try {
@@ -265,7 +299,7 @@ class _NotifTile extends StatelessWidget {
                 color: color.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(_iconFor(type), color: color, size: 20),
+              child: Icon(_iconFor(category), color: color, size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(
