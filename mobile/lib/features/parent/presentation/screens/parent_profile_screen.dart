@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
 import 'package:skl_teacher/features/auth/presentation/providers/auth_provider.dart';
@@ -143,34 +143,16 @@ class ParentProfileScreen extends StatelessWidget {
             const SizedBox(height: 20),
           ],
 
-          // ── Actions ──────────────────────────────────────────────────────
-          _SectionLabel('Actions', isDark),
+          // ── Account ──────────────────────────────────────────────────────
+          _SectionLabel('Account', isDark),
           const SizedBox(height: 10),
           _ActionTile(
-            icon: Icons.people_outlined,
+            icon: Icons.lock_outline,
             color: AppColors.primary,
-            title: 'View Children Details',
-            subtitle: 'Attendance, homework, fees & exams',
+            title: 'Change Password',
+            subtitle: 'Update your account password',
             isDark: isDark,
-            onTap: () => context.go('/parent/children'),
-          ),
-          const SizedBox(height: 8),
-          _ActionTile(
-            icon: Icons.event_note_outlined,
-            color: AppColors.warning,
-            title: 'Leave Requests',
-            subtitle: 'Apply and track leave requests',
-            isDark: isDark,
-            onTap: () => context.go('/parent/leave'),
-          ),
-          const SizedBox(height: 8),
-          _ActionTile(
-            icon: Icons.calendar_month_outlined,
-            color: AppColors.accentPurple,
-            title: 'School Calendar',
-            subtitle: 'Holidays, events, exam days and school dates',
-            isDark: isDark,
-            onTap: () => context.go('/calendar'),
+            onTap: () => _showChangePasswordSheet(context, isDark),
           ),
           const SizedBox(height: 8),
           _ActionTile(
@@ -186,6 +168,15 @@ class ParentProfileScreen extends StatelessWidget {
         ]),
       ),
       ),
+    );
+  }
+
+  void _showChangePasswordSheet(BuildContext context, bool isDark) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ChangePasswordSheet(isDark: isDark),
     );
   }
 
@@ -282,6 +273,198 @@ class ParentProfileScreen extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+// ─── Change Password Bottom Sheet ─────────────────────────────────────────────
+class _ChangePasswordSheet extends StatefulWidget {
+  final bool isDark;
+  const _ChangePasswordSheet({required this.isDark});
+  @override
+  State<_ChangePasswordSheet> createState() => _ChangePasswordSheetState();
+}
+
+class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _currentCtrl = TextEditingController();
+  final _newCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _currentCtrl.dispose();
+    _newCtrl.dispose();
+    _confirmCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _loading = true);
+    try {
+      await ApiClient.put('/auth/change-password', data: {
+        'currentPassword': _currentCtrl.text,
+        'newPassword': _newCtrl.text,
+      });
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Password changed successfully'),
+        backgroundColor: AppColors.accentGreen,
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ApiClient.errorMessage(e)),
+        backgroundColor: AppColors.accentRed,
+      ));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.cardDark : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color:
+                        isDark ? AppColors.borderDark : AppColors.borderLight,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text('Change Password',
+                  style: AppTypography.s18Bold(
+                      color: isDark ? Colors.white : AppColors.textPrimary)),
+              const SizedBox(height: 20),
+              _PasswordField(
+                controller: _currentCtrl,
+                label: 'Current Password',
+                obscure: _obscureCurrent,
+                onToggle: () =>
+                    setState(() => _obscureCurrent = !_obscureCurrent),
+                validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+              ),
+              const SizedBox(height: 12),
+              _PasswordField(
+                controller: _newCtrl,
+                label: 'New Password',
+                obscure: _obscureNew,
+                onToggle: () => setState(() => _obscureNew = !_obscureNew),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Required';
+                  if (v.length < 6) return 'Minimum 6 characters';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              _PasswordField(
+                controller: _confirmCtrl,
+                label: 'Confirm New Password',
+                obscure: _obscureConfirm,
+                onToggle: () =>
+                    setState(() => _obscureConfirm = !_obscureConfirm),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Required';
+                  if (v != _newCtrl.text) return 'Passwords do not match';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: _loading ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: _loading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2))
+                      : Text('Update Password',
+                          style:
+                              AppTypography.s15SemiBold(color: Colors.white)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PasswordField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final bool obscure;
+  final VoidCallback onToggle;
+  final String? Function(String?) validator;
+
+  const _PasswordField({
+    required this.controller,
+    required this.label,
+    required this.obscure,
+    required this.onToggle,
+    required this.validator,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return TextFormField(
+      controller: controller,
+      obscureText: obscure,
+      validator: validator,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: const Icon(Icons.lock_outline),
+        suffixIcon: IconButton(
+          icon: Icon(obscure
+              ? Icons.visibility_outlined
+              : Icons.visibility_off_outlined),
+          onPressed: onToggle,
+        ),
+        filled: true,
+        fillColor: isDark ? AppColors.bgDark : const Color(0xFFF8FAFC),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+              color: isDark ? AppColors.borderDark : AppColors.borderLight),
+        ),
       ),
     );
   }

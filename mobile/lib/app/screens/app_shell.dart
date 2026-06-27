@@ -63,6 +63,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         '/parent/children', Icons.people_outlined, Icons.people, 'My Children'),
     _NavItem(
         '/parent/leave', Icons.event_note_outlined, Icons.event_note, 'Leave'),
+    _NavItem('/calendar', Icons.calendar_month_outlined, Icons.calendar_month,
+        'Calendar'),
     _NavItem('/parent/profile', Icons.person_outlined, Icons.person, 'Profile'),
   ];
 
