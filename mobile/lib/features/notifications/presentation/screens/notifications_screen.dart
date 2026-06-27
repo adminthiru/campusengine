@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
+import 'package:skl_teacher/core/services/push_service.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
 import 'package:skl_teacher/core/widgets/skeleton.dart';
@@ -14,12 +16,59 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   List<dynamic> _notifications = [];
   bool _loading = true;
+  bool _pushEnabled = false; // hides the web "Enable notifications" banner once done
 
   @override
   void initState() {
     super.initState();
     _load();
   }
+
+  // iOS web/PWA only shows the permission prompt from a user gesture, so we
+  // request it from this tap rather than automatically on app load.
+  Future<void> _enablePush() async {
+    final ok = await PushService.requestAndRegister();
+    if (!mounted) return;
+    setState(() => _pushEnabled = ok);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok
+          ? 'Push notifications enabled on this device.'
+          : 'Permission blocked — allow notifications in your browser/site settings. On iPhone, add the app to your Home Screen first.'),
+      duration: const Duration(seconds: 5),
+    ));
+  }
+
+  Widget _enableBanner(bool isDark) => Container(
+        margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: isDark ? 0.16 : 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+        ),
+        child: Row(children: [
+          const Icon(Icons.notifications_active_outlined,
+              color: AppColors.primary, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text('Enable push notifications on this device',
+                style: AppTypography.s13Medium(
+                    color: isDark ? Colors.white : AppColors.textPrimary)),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: _enablePush,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Enable'),
+          ),
+        ]),
+      );
 
   Future<void> _load() async {
     setState(() => _loading = true);
@@ -53,9 +102,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
-      body: _loading
-          ? const SkeletonList()
-          : _notifications.isEmpty
+      body: Column(
+        children: [
+          if (kIsWeb && !_pushEnabled) _enableBanner(isDark),
+          Expanded(child: _buildBody(isDark, unreadCount)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody(bool isDark, int unreadCount) {
+    return _loading
+        ? const SkeletonList()
+        : _notifications.isEmpty
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -103,8 +162,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ),
                     ],
                   ),
-                ),
-    );
+                );
   }
 }
 
