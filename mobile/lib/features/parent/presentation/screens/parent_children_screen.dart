@@ -6,6 +6,7 @@ import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/widgets/skeleton.dart';
 import 'package:skl_teacher/features/auth/presentation/providers/school_permissions_provider.dart';
 import 'package:skl_teacher/features/exams/presentation/widgets/exam_result_card.dart';
+import 'package:skl_teacher/features/homework/presentation/widgets/homework_submission_sheet.dart';
 import 'package:skl_teacher/features/parent/presentation/providers/parent_data_provider.dart';
 
 class ParentChildrenScreen extends StatefulWidget {
@@ -777,8 +778,11 @@ class _HomeworkTabState extends State<_HomeworkTab> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         itemCount: _items.length,
-        itemBuilder: (_, i) =>
-            _HomeworkCard(hw: _items[i] as Map, isDark: isDark),
+        itemBuilder: (_, i) => _HomeworkCard(
+            hw: _items[i] as Map,
+            studentId: widget.studentId,
+            onChanged: _load,
+            isDark: isDark),
       ),
     );
   }
@@ -786,8 +790,15 @@ class _HomeworkTabState extends State<_HomeworkTab> {
 
 class _HomeworkCard extends StatelessWidget {
   final Map hw;
+  final String studentId;
+  final Future<void> Function() onChanged;
   final bool isDark;
-  const _HomeworkCard({required this.hw, required this.isDark});
+  const _HomeworkCard({
+    required this.hw,
+    required this.studentId,
+    required this.onChanged,
+    required this.isDark,
+  });
 
   static String _fmtDate(dynamic d) {
     try {
@@ -927,6 +938,37 @@ class _HomeworkCard extends StatelessWidget {
             );
           }),
         ],
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () async {
+              final changed = await showHomeworkSubmissionSheet(
+                context,
+                homeworkId: (hw['_id'] ?? '').toString(),
+                studentId: studentId,
+                title: (hw['title'] ?? 'Homework').toString(),
+                submission: sub,
+              );
+              if (changed) onChanged();
+            },
+            icon: Icon(
+                status == 'completed'
+                    ? Icons.edit_outlined
+                    : Icons.upload_file,
+                size: 18),
+            label: Text(status == 'completed'
+                ? 'Update Submission'
+                : 'Submit Homework'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
       ]),
     );
   }

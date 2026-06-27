@@ -5,6 +5,7 @@ import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
 import 'package:skl_teacher/core/widgets/skeleton.dart';
+import 'package:skl_teacher/features/homework/presentation/widgets/homework_submission_sheet.dart';
 import 'package:skl_teacher/features/student/presentation/providers/student_profile_provider.dart';
 
 class StudentHomeworkScreen extends StatefulWidget {
@@ -64,6 +65,8 @@ class _StudentHomeworkScreenState extends State<StudentHomeworkScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final studentId =
+        context.watch<StudentProfileProvider>().profile?.id ?? '';
     return Scaffold(
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
       body: Column(
@@ -90,11 +93,20 @@ class _StudentHomeworkScreenState extends State<StudentHomeworkScreen>
                     controller: _tab,
                     children: [
                       _HomeworkList(
-                          items: _all, onRefresh: _load, isDark: isDark),
+                          items: _all,
+                          onRefresh: _load,
+                          studentId: studentId,
+                          isDark: isDark),
                       _HomeworkList(
-                          items: _pending, onRefresh: _load, isDark: isDark),
+                          items: _pending,
+                          onRefresh: _load,
+                          studentId: studentId,
+                          isDark: isDark),
                       _HomeworkList(
-                          items: _completed, onRefresh: _load, isDark: isDark),
+                          items: _completed,
+                          onRefresh: _load,
+                          studentId: studentId,
+                          isDark: isDark),
                     ],
                   ),
           ),
@@ -107,9 +119,13 @@ class _StudentHomeworkScreenState extends State<StudentHomeworkScreen>
 class _HomeworkList extends StatelessWidget {
   final List<dynamic> items;
   final Future<void> Function() onRefresh;
+  final String studentId;
   final bool isDark;
   const _HomeworkList(
-      {required this.items, required this.onRefresh, required this.isDark});
+      {required this.items,
+      required this.onRefresh,
+      required this.studentId,
+      required this.isDark});
 
   @override
   Widget build(BuildContext context) {
@@ -133,7 +149,11 @@ class _HomeworkList extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         itemCount: items.length,
-        itemBuilder: (_, i) => _HwCard(hw: items[i], isDark: isDark),
+        itemBuilder: (_, i) => _HwCard(
+            hw: items[i],
+            studentId: studentId,
+            onChanged: onRefresh,
+            isDark: isDark),
       ),
     );
   }
@@ -141,8 +161,15 @@ class _HomeworkList extends StatelessWidget {
 
 class _HwCard extends StatelessWidget {
   final dynamic hw;
+  final String studentId;
+  final Future<void> Function() onChanged;
   final bool isDark;
-  const _HwCard({required this.hw, required this.isDark});
+  const _HwCard({
+    required this.hw,
+    required this.studentId,
+    required this.onChanged,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -263,6 +290,41 @@ class _HwCard extends StatelessWidget {
                           ],
                         ),
                       ],
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final changed =
+                                await showHomeworkSubmissionSheet(
+                              context,
+                              homeworkId: (hw['_id'] ?? '').toString(),
+                              studentId: studentId,
+                              title: title,
+                              submission: sub is Map ? sub : null,
+                            );
+                            if (changed) onChanged();
+                          },
+                          icon: Icon(
+                              isDone
+                                  ? Icons.edit_outlined
+                                  : Icons.upload_file,
+                              size: 18),
+                          label: Text(isDone
+                              ? 'Update Submission'
+                              : 'Submit Homework'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 9),
+                            side: BorderSide(
+                                color: AppColors.primary
+                                    .withValues(alpha: 0.5)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
