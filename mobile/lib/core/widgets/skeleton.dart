@@ -111,7 +111,11 @@ class SkeletonList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SkeletonShimmer(
+      // shrinkWrap + NeverScrollable so this is safe to drop into ANY parent —
+      // a Scaffold body, an Expanded, a Column, or a scroll view — without
+      // hitting unbounded-height constraint errors (box.dart assertion).
       child: ListView.separated(
+        shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         padding: padding,
         itemCount: count,
