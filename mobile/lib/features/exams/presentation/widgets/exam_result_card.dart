@@ -298,11 +298,13 @@ class _PaperTile extends StatelessWidget {
   }
 }
 
-/// Opens a single exam result in a modal bottom sheet. Used by the parent
-/// Exams tab where the result is fetched on demand for the selected child.
+/// Opens the exam result for a student in a modal bottom sheet. The sheet opens
+/// immediately with a loading state and fetches the result itself — so the tap
+/// feels instant instead of waiting on the network before anything appears.
 Future<void> showExamResultSheet(
   BuildContext context, {
-  required Map<String, dynamic> result,
+  required String examId,
+  required String studentId,
 }) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
   return showModalBottomSheet(
@@ -312,16 +314,73 @@ Future<void> showExamResultSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (_) => Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 12,
-        bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+    builder: (_) =>
+        _ExamResultSheet(examId: examId, studentId: studentId, isDark: isDark),
+  );
+}
+
+class _ExamResultSheet extends StatefulWidget {
+  final String examId;
+  final String studentId;
+  final bool isDark;
+  const _ExamResultSheet(
+      {required this.examId, required this.studentId, required this.isDark});
+
+  @override
+  State<_ExamResultSheet> createState() => _ExamResultSheetState();
+}
+
+class _ExamResultSheetState extends State<_ExamResultSheet> {
+  Map<String, dynamic>? _result;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final res = await ApiClient.get('/exams/results',
+          params: {'examId': widget.examId, 'studentId': widget.studentId});
+      final results = res.data is Map ? res.data['results'] : null;
+      final list = results is List ? results : const [];
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _result = list.isNotEmpty
+            ? Map<String, dynamic>.from(list.first as Map)
+            : null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = ApiClient.errorMessage(e);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    return ConstrainedBox(
+      constraints:
+          BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 12,
+          bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: 40,
             height: 4,
@@ -331,14 +390,47 @@ Future<void> showExamResultSheet(
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          Flexible(
-            child: SingleChildScrollView(
-              child: ExamResultCard(
-                  result: result, isDark: isDark, margin: EdgeInsets.zero),
-            ),
-          ),
-        ],
+          Flexible(child: _content(isDark)),
+        ]),
       ),
-    ),
-  );
+    );
+  }
+
+  Widget _content(bool isDark) {
+    if (_loading) {
+      return const SizedBox(
+        height: 160,
+        child:
+            Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      );
+    }
+    if (_error != null) {
+      return _message(Icons.cloud_off_outlined, "Couldn't load the result",
+          'Pull down and try again.', isDark);
+    }
+    if (_result == null) {
+      return _message(Icons.emoji_events_outlined, 'Not available yet',
+          'Marks for this exam are not published for this student.', isDark);
+    }
+    return SingleChildScrollView(
+      child: ExamResultCard(
+          result: _result!, isDark: isDark, margin: EdgeInsets.zero),
+    );
+  }
+
+  Widget _message(IconData icon, String title, String sub, bool isDark) =>
+      Padding(
+        padding: const EdgeInsets.fromLTRB(8, 28, 8, 40),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 48, color: AppColors.textMuted),
+          const SizedBox(height: 12),
+          Text(title,
+              style: AppTypography.s16SemiBold(
+                  color: isDark ? Colors.white : AppColors.textPrimary)),
+          const SizedBox(height: 6),
+          Text(sub,
+              textAlign: TextAlign.center,
+              style: AppTypography.s13Regular(color: AppColors.textMuted)),
+        ]),
+      );
 }

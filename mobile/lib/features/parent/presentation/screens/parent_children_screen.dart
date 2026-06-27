@@ -987,7 +987,6 @@ class _ExamsTab extends StatefulWidget {
 class _ExamsTabState extends State<_ExamsTab> {
   List<dynamic> _exams = [];
   bool _loading = true;
-  bool _opening = false; // reentrancy guard while a result is being fetched
 
   @override
   void initState() {
@@ -1012,29 +1011,10 @@ class _ExamsTabState extends State<_ExamsTab> {
     }
   }
 
-  // Fetch this child's published result for the exam and show it in a sheet.
-  Future<void> _openResult(String examId) async {
-    if (_opening) return;
-    _opening = true;
-    try {
-      final res = await ApiClient.get('/exams/results',
-          params: {'examId': examId, 'studentId': widget.studentId});
-      final results = res.data['results'] as List<dynamic>? ?? [];
-      if (!mounted) return;
-      if (results.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Marks are not available for this student yet.')));
-        return;
-      }
-      await showExamResultSheet(context,
-          result: Map<String, dynamic>.from(results.first as Map));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(ApiClient.errorMessage(e))));
-    } finally {
-      _opening = false;
-    }
+  // Open the result sheet instantly; it fetches & shows its own loading state.
+  void _openResult(String examId) {
+    showExamResultSheet(context,
+        examId: examId, studentId: widget.studentId);
   }
 
   @override
