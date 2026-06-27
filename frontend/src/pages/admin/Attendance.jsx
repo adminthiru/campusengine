@@ -864,7 +864,8 @@ export default function Attendance() {
                             )}
                           </td>
                           <td>
-                          {lv.status === 'pending' ? (
+                          {/* Student leaves stay actionable so admins can re-sync attendance. */}
+                          {(lv.status === 'pending' || leaveScope === 'student') ? (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 180 }}>
                                 <input
                                   placeholder="Note (optional)"

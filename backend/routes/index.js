@@ -516,13 +516,20 @@ router.put('/student-leaves/:id', protect, authorize('admin', 'correspondent', '
         const stu = await Student.findById(leave.student._id).select('currentClass academicYear');
         if (stu?.currentClass) {
           const sid = String(leave.student._id);
+          // Store/match the attendance date the SAME canonical way the rest of
+          // the app does: new Date("yyyy-MM-dd") = UTC midnight. Otherwise a
+          // freshly-created day record (class with no prior attendance) wouldn't
+          // match the admin view's exact-date query → leave wouldn't show.
+          const pad = (n) => String(n).padStart(2, '0');
+          const canonical = (dt) =>
+            new Date(`${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`);
           const from = new Date(leave.fromDate);
           const to = new Date(leave.toDate);
           let cur = new Date(from.getFullYear(), from.getMonth(), from.getDate());
           const last = new Date(to.getFullYear(), to.getMonth(), to.getDate());
           while (cur <= last) {
-            const dayStart = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate());
-            const dayEnd = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1);
+            const dayStart = canonical(cur);
+            const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
             let att = await Attendance.findOne({
               school: req.user.school, type: 'student', class: stu.currentClass,
               date: { $gte: dayStart, $lt: dayEnd },
