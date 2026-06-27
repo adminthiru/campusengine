@@ -42,10 +42,8 @@ class SkeletonShimmer extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Shimmer.fromColors(
-      // Visibly contrasted against the page background so a loading state never
-      // reads as a blank screen on the light theme.
-      baseColor: isDark ? AppColors.borderDark : const Color(0xFFCBD5E1),
-      highlightColor: isDark ? AppColors.cardDark : const Color(0xFFEDF1F6),
+      baseColor: isDark ? AppColors.borderDark : const Color(0xFFE2E8F0),
+      highlightColor: isDark ? AppColors.cardDark : const Color(0xFFF1F5F9),
       child: child,
     );
   }
@@ -111,11 +109,7 @@ class SkeletonList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SkeletonShimmer(
-      // shrinkWrap + NeverScrollable so this is safe to drop into ANY parent —
-      // a Scaffold body, an Expanded, a Column, or a scroll view — without
-      // hitting unbounded-height constraint errors (box.dart assertion).
       child: ListView.separated(
-        shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         padding: padding,
         itemCount: count,

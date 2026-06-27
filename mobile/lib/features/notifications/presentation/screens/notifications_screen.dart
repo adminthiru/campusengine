@@ -1,13 +1,9 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import 'package:skl_teacher/core/network/api_client.dart';
-import 'package:skl_teacher/core/services/push_service.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
 import 'package:skl_teacher/core/widgets/skeleton.dart';
-import 'package:skl_teacher/features/notifications/presentation/providers/notifications_provider.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -18,8 +14,6 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   List<dynamic> _notifications = [];
   bool _loading = true;
-  String? _error;
-  bool _pushEnabled = false; // hides the web "Enable notifications" banner once done
 
   @override
   void initState() {
@@ -27,76 +21,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _load();
   }
 
-  // iOS web/PWA only shows the permission prompt from a user gesture, so we
-  // request it from this tap rather than automatically on app load.
-  Future<void> _enablePush() async {
-    final ok = await PushService.requestAndRegister();
-    if (!mounted) return;
-    setState(() => _pushEnabled = ok);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(ok
-          ? 'Push notifications enabled on this device.'
-          : 'Permission blocked — allow notifications in your browser/site settings. On iPhone, add the app to your Home Screen first.'),
-      duration: const Duration(seconds: 5),
-    ));
-  }
-
-  Widget _enableBanner(bool isDark) => Container(
-        margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: isDark ? 0.16 : 0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-        ),
-        child: Row(children: [
-          const Icon(Icons.notifications_active_outlined,
-              color: AppColors.primary, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text('Enable push notifications on this device',
-                style: AppTypography.s13Medium(
-                    color: isDark ? Colors.white : AppColors.textPrimary)),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: _enablePush,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text('Enable'),
-          ),
-        ]),
-      );
-
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    setState(() => _loading = true);
     try {
-      // Dedicated endpoint returns notifications newest-first + an unread count.
-      final res = await ApiClient.get('/notifications');
-      final list = res.data is Map ? res.data['notifications'] : null;
-      final unread = res.data is Map ? res.data['unread'] : null;
+      final res = await ApiClient.get('/auth/me');
+      final user = res.data['user'] ?? res.data;
       setState(() {
-        _notifications = list is List ? list : const [];
+        _notifications =
+            (user['notifications'] as List<dynamic>? ?? []).reversed.toList();
         _loading = false;
       });
-      if (mounted) {
-        context
-            .read<NotificationsProvider>()
-            .setCount(unread is num ? unread.toInt() : 0);
-      }
-    } catch (e) {
-      setState(() {
-        _loading = false;
-        _error = ApiClient.errorMessage(e);
-      });
+    } catch (_) {
+      setState(() => _loading = false);
     }
   }
 
@@ -104,85 +40,70 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     try {
       await ApiClient.put('/auth/notifications/$id/read');
       setState(() {
-        final idx = _notifications.indexWhere((n) => n is Map && n['_id'] == id);
+        final idx = _notifications.indexWhere((n) => n['_id'] == id);
         if (idx >= 0) _notifications[idx]['read'] = true;
       });
-      if (mounted) context.read<NotificationsProvider>().decrement();
     } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final unreadCount =
-        _notifications.where((n) => n is Map && n['read'] != true).length;
+    final unreadCount = _notifications.where((n) => n['read'] != true).length;
 
-    final body = _buildBody(isDark, unreadCount);
     return Scaffold(
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
-      // Only wrap in a Column when the web "Enable" banner is shown; otherwise
-      // render the body directly (avoids a needless Column/Expanded nesting).
-      body: (kIsWeb && !_pushEnabled)
-          ? Column(children: [_enableBanner(isDark), Expanded(child: body)])
-          : body,
-    );
-  }
-
-  Widget _buildBody(bool isDark, int unreadCount) {
-    if (_loading) return const SkeletonList();
-
-    // Empty OR error — pull-to-refreshable so the screen is never blank.
-    if (_notifications.isEmpty) {
-      final isErr = _error != null;
-      return RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(24, 120, 24, 24),
-          children: [
-            Icon(isErr ? Icons.cloud_off_outlined : Icons.notifications_none,
-                size: 60, color: AppColors.textMuted),
-            const SizedBox(height: 12),
-            Text(isErr ? "Couldn't load notifications" : 'No notifications yet',
-                textAlign: TextAlign.center,
-                style: AppTypography.s16SemiBold(color: AppColors.textMuted)),
-            const SizedBox(height: 6),
-            Text(isErr ? 'Pull down to retry' : 'Pull down to refresh',
-                textAlign: TextAlign.center,
-                style: AppTypography.s13Regular(color: AppColors.textMuted)),
-          ],
-        ),
-      );
-    }
-
-    // Flat list: header (unread count) + one tile per notification. A single
-    // ListView (no nested Column/Expanded) avoids layout-collapse edge cases.
-    final showHeader = unreadCount > 0;
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView.builder(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-        itemCount: _notifications.length + (showHeader ? 1 : 0),
-        itemBuilder: (_, i) {
-          if (showHeader && i == 0) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-              child: Text('$unreadCount unread',
-                  style: AppTypography.s13SemiBold(color: AppColors.primary)),
-            );
-          }
-          final n = _notifications[i - (showHeader ? 1 : 0)];
-          final isRead = n is Map && n['read'] == true;
-          final id = (n is Map && n['_id'] is String) ? n['_id'] as String : '';
-          return _NotifTile(
-            notification: n,
-            isRead: isRead,
-            isDark: isDark,
-            onTap: isRead || id.isEmpty ? null : () => _markRead(id),
-          );
-        },
-      ),
+      body: _loading
+          ? const SkeletonList()
+          : _notifications.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.notifications_none,
+                          size: 60, color: AppColors.textMuted),
+                      const SizedBox(height: 12),
+                      Text('No notifications yet',
+                          style: AppTypography.s16SemiBold(
+                              color: AppColors.textMuted)),
+                    ],
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (unreadCount > 0)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                          child: Text(
+                            '$unreadCount unread',
+                            style: AppTypography.s13SemiBold(
+                                color: AppColors.primary),
+                          ),
+                        ),
+                      Expanded(
+                        child: ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(12),
+                          itemCount: _notifications.length,
+                          itemBuilder: (_, i) {
+                            final n = _notifications[i];
+                            final isRead = n['read'] == true;
+                            final id = n['_id'] as String? ?? '';
+                            return _NotifTile(
+                              notification: n,
+                              isRead: isRead,
+                              isDark: isDark,
+                              onTap: isRead ? null : () => _markRead(id),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
     );
   }
 }
@@ -199,20 +120,6 @@ class _NotifTile extends StatelessWidget {
     required this.isDark,
     this.onTap,
   });
-
-  // Backend stores `type` as a severity (info/success/warning/error), not a
-  // category, so derive the category from the title for a meaningful icon.
-  String _categoryOf(String title) {
-    final t = title.toLowerCase();
-    if (t.contains('attendance') || t.contains('absent')) return 'attendance';
-    if (t.contains('homework')) return 'homework';
-    if (t.contains('exam') || t.contains('result') || t.contains('mark')) {
-      return 'exam';
-    }
-    if (t.contains('fee')) return 'fee';
-    if (t.contains('leave')) return 'leave';
-    return 'default';
-  }
 
   IconData _iconFor(String? type) {
     switch (type) {
@@ -250,12 +157,11 @@ class _NotifTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final map = notification is Map ? notification as Map : const {};
-    final title = map['title'] is String ? map['title'] as String : 'Notification';
-    final message = map['message'] is String ? map['message'] as String : '';
-    final createdAt = map['createdAt'];
-    final category = _categoryOf(title);
-    final color = _colorFor(category);
+    final title = notification['title'] as String? ?? 'Notification';
+    final message = notification['message'] as String? ?? '';
+    final type = notification['type'] as String?;
+    final createdAt = notification['createdAt'];
+    final color = _colorFor(type);
 
     String timeAgo = '';
     try {
@@ -301,7 +207,7 @@ class _NotifTile extends StatelessWidget {
                 color: color.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(_iconFor(category), color: color, size: 20),
+              child: Icon(_iconFor(type), color: color, size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(

@@ -63,17 +63,6 @@ async function notifyUsers(users, { title, body, type = 'info', data = {} }) {
   return { users: users.length, ...pushRes };
 }
 
-// Collect every guardian (Parent) id linked to the given students — via the
-// primaryGuardian AND the guardians[] array. Resolving only primaryGuardian
-// misses parents linked solely through guardians[], which silently drops their
-// notifications. De-duped, stringified.
-function guardianIdsOf(students) {
-  return [...new Set(students.flatMap(s => [
-    s.primaryGuardian?.toString(),
-    ...((s.guardians || []).map(g => g?.toString())),
-  ]).filter(Boolean))];
-}
-
 // ── High level: notify everyone tied to a set of classes (in-app + push) ─────────
 // Reusable for Exams now, and Homework/Fees/etc later. audiences picks which
 // groups receive it; pass empty/undefined classIds to target the whole school.
@@ -90,12 +79,12 @@ async function notifyClasses({ schoolId, classIds, audiences = ['student', 'pare
 
     if (audiences.includes('student') || audiences.includes('parent')) {
       const students = await Student.find({ school: schoolId, currentClass: { $in: ids }, status: { $ne: 'dropped' } })
-        .select('_id primaryGuardian guardians');
+        .select('_id primaryGuardian');
       if (audiences.includes('student') && !(studentPermKey && school?.studentPermissions?.[studentPermKey] === false)) {
         add(await User.find({ school: schoolId, role: 'student', studentId: { $in: students.map(s => s._id) } }));
       }
       if (audiences.includes('parent') && !(parentPermKey && school?.parentPermissions?.[parentPermKey] === false)) {
-        const parentIds = guardianIdsOf(students);
+        const parentIds = [...new Set(students.map(s => s.primaryGuardian?.toString()).filter(Boolean))];
         if (parentIds.length) add(await User.find({ school: schoolId, role: 'parent', parentId: { $in: parentIds } }));
       }
     }
@@ -130,8 +119,8 @@ async function notifyStudentParents({ schoolId, studentIds, permKey, title, body
       if (school?.parentPermissions?.[permKey] === false) return { sent: 0, users: 0, skipped: 'permission-off' };
     }
     const ids = Array.isArray(studentIds) ? studentIds : [studentIds];
-    const students = await Student.find({ _id: { $in: ids }, school: schoolId }).select('primaryGuardian guardians');
-    const parentIds = guardianIdsOf(students);
+    const students = await Student.find({ _id: { $in: ids }, school: schoolId }).select('primaryGuardian');
+    const parentIds = [...new Set(students.map(s => s.primaryGuardian?.toString()).filter(Boolean))];
     if (!parentIds.length) return { sent: 0, users: 0 };
 
     const users = await User.find({ parentId: { $in: parentIds }, school: schoolId, role: 'parent' });
