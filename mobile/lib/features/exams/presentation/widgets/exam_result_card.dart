@@ -320,33 +320,41 @@ Future<void> showExamResultSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (_) => Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 12,
-        bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 14),
-            decoration: BoxDecoration(
-              color: AppColors.textMuted.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(2),
-            ),
+    builder: (sheetCtx) {
+      // Cap the height explicitly instead of Flexible-in-a-min-Column, which can
+      // hand the scroll view unbounded height (box.dart layout assertion).
+      final maxH = MediaQuery.of(sheetCtx).size.height * 0.85;
+      return Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 12,
+          bottom: 16 + MediaQuery.of(sheetCtx).viewInsets.bottom,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxH),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.textMuted.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: ExamResultCard(
+                      result: result, isDark: isDark, margin: EdgeInsets.zero),
+                ),
+              ),
+            ],
           ),
-          Flexible(
-            child: SingleChildScrollView(
-              child: ExamResultCard(
-                  result: result, isDark: isDark, margin: EdgeInsets.zero),
-            ),
-          ),
-        ],
-      ),
-    ),
+        ),
+      );
+    },
   );
 }
