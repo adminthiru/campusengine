@@ -167,7 +167,7 @@ class _ChildDetailViewState extends State<_ChildDetailView>
                 case 'Attendance':
                   return _AttendanceTab(childId: widget.child.id);
                 case 'Homework':
-                  return _HomeworkTab(classId: widget.child.classId ?? '');
+                  return _HomeworkTab(studentId: widget.child.id);
                 case 'Exams':
                   return _ExamsTab(
                       classId: widget.child.classId ?? '',
@@ -728,8 +728,8 @@ class _AttendanceTabState extends State<_AttendanceTab> {
 // ─── Homework Tab ────────────────────────────────────────────────────────────
 
 class _HomeworkTab extends StatefulWidget {
-  final String classId;
-  const _HomeworkTab({required this.classId});
+  final String studentId;
+  const _HomeworkTab({required this.studentId});
   @override
   State<_HomeworkTab> createState() => _HomeworkTabState();
 }
@@ -745,13 +745,14 @@ class _HomeworkTabState extends State<_HomeworkTab> {
   }
 
   Future<void> _load() async {
-    if (widget.classId.isEmpty) {
+    if (widget.studentId.isEmpty) {
       setState(() => _loading = false);
       return;
     }
     try {
-      final res =
-          await ApiClient.get('/homework', params: {'classId': widget.classId});
+      // Per-student homework + this child's submission status & attachments.
+      final res = await ApiClient.get('/homework/student-summary',
+          params: {'studentId': widget.studentId});
       setState(() {
         _items = res.data['homework'] as List<dynamic>? ?? [];
         _loading = false;
@@ -773,50 +774,149 @@ class _HomeworkTabState extends State<_HomeworkTab> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      itemCount: _items.length,
-      itemBuilder: (_, i) {
-        final h = _items[i];
-        final due = _fmtDate(h['dueDate']);
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.cardDark : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-                color: isDark ? AppColors.borderDark : AppColors.borderLight),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(h['title'] ?? 'Homework',
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        itemCount: _items.length,
+        itemBuilder: (_, i) =>
+            _HomeworkCard(hw: _items[i] as Map, isDark: isDark),
+      ),
+    );
+  }
+}
+
+class _HomeworkCard extends StatelessWidget {
+  final Map hw;
+  final bool isDark;
+  const _HomeworkCard({required this.hw, required this.isDark});
+
+  static String _fmtDate(dynamic d) {
+    try {
+      final dt = DateTime.parse(d.toString()).toLocal();
+      const m = [
+        '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      return '${dt.day} ${m[dt.month]} ${dt.year}';
+    } catch (_) {
+      return d?.toString() ?? '';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sub = hw['submission'] is Map ? hw['submission'] as Map : null;
+    final status = (sub?['status'] as String?) ?? 'pending';
+    final attachments = (sub?['attachments'] is List)
+        ? (sub!['attachments'] as List).whereType<Map>().toList()
+        : const <Map>[];
+    final due = _fmtDate(hw['dueDate']);
+    final subjName = hw['subject'] is Map ? hw['subject']['name'] : null;
+    final note = (sub?['note'] as String?)?.trim() ?? '';
+
+    final (statusLabel, statusColor) = switch (status) {
+      'completed' => ('Submitted', AppColors.accentGreen),
+      'in_progress' => ('In Progress', AppColors.warning),
+      _ => ('Pending', AppColors.textMuted),
+    };
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color: isDark ? AppColors.borderDark : AppColors.borderLight),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(hw['title'] ?? 'Homework',
                   style: GoogleFonts.inter(
                       fontSize: 14, fontWeight: FontWeight.w600)),
-              if (h['subject']?['name'] != null)
-                Text(h['subject']['name'],
+              if (subjName != null)
+                Text(subjName,
                     style: GoogleFonts.inter(
                         fontSize: 12, color: AppColors.primary)),
               if (due.isNotEmpty)
                 Text('Due: $due',
                     style: GoogleFonts.inter(
                         fontSize: 12, color: AppColors.textMuted)),
-            ],
+            ]),
           ),
-        );
-      },
-      ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(statusLabel,
+                style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: statusColor)),
+          ),
+        ]),
+        if (note.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(note,
+              style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: isDark ? Colors.white70 : AppColors.textSecondary)),
+        ],
+        if (sub?['submittedAt'] != null) ...[
+          const SizedBox(height: 6),
+          Text('Submitted on ${_fmtDate(sub!['submittedAt'])}',
+              style: GoogleFonts.inter(
+                  fontSize: 11, color: AppColors.textMuted)),
+        ],
+        if (attachments.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          ...attachments.map((a) {
+            final url = (a['url'] as String?) ?? '';
+            final name = (a['name'] as String?) ?? 'Attachment';
+            final isImage = a['fileType'] == 'image';
+            return Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Material(
+                color: AppColors.primary.withValues(alpha: isDark ? 0.16 : 0.08),
+                borderRadius: BorderRadius.circular(10),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: url.isEmpty ? null : () => openServerFile(context, url),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    child: Row(children: [
+                      Icon(
+                          isImage
+                              ? Icons.image_outlined
+                              : Icons.picture_as_pdf,
+                          color: AppColors.primary,
+                          size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(name,
+                            style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      const Icon(Icons.open_in_new,
+                          color: AppColors.primary, size: 18),
+                    ]),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
+      ]),
     );
-  }
-
-  String _fmtDate(dynamic d) {
-    try {
-      final dt = DateTime.parse(d.toString());
-      return '${dt.day}/${dt.month}/${dt.year}';
-    } catch (_) {
-      return d?.toString() ?? '';
-    }
   }
 }
 

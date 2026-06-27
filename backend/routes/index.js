@@ -1273,12 +1273,22 @@ router.put('/homework/:id/submissions/:studentId', protect, checkSubscription, a
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
-router.post('/homework/:id/submissions/:studentId/attachment', protect, checkSubscription, upload.single('file'), async (req, res) => {
+router.post('/homework/:id/submissions/:studentId/attachment', protect, checkSubscription, uploadMem.single('file'), async (req, res) => {
   try {
     const HomeworkSubmission = require('../models/HomeworkSubmission');
+    const Upload = require('../models/Upload');
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
     const fileType = req.file.mimetype.startsWith('image/') ? 'image' : 'pdf';
-    const fileUrl = `/uploads/${req.file.filename}`;
+    // Persist in DB (Render disk is ephemeral) and serve via /api/files/:id.
+    const stored = await Upload.create({
+      school: req.user.school,
+      originalName: req.file.originalname,
+      contentType: req.file.mimetype,
+      size: req.file.size,
+      data: req.file.buffer,
+      uploadedBy: req.user._id,
+    });
+    const fileUrl = `/api/files/${stored._id}`;
     const sub = await HomeworkSubmission.findOneAndUpdate(
       { homework: req.params.id, student: req.params.studentId, school: req.user.school },
       {
