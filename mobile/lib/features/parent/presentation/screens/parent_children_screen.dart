@@ -191,67 +191,355 @@ class _InfoTab extends StatelessWidget {
   final ChildInfo child;
   const _InfoTab({required this.child});
 
+  static String _str(dynamic v) => (v is String) ? v : (v == null ? '' : '$v');
+
+  static String _cap(String s) =>
+      s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+
+  static String _fmtDate(dynamic v) {
+    try {
+      final dt = DateTime.parse(v.toString()).toLocal();
+      const m = [
+        '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      return '${dt.day} ${m[dt.month]} ${dt.year}';
+    } catch (_) {
+      return _str(v);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return SingleChildScrollView(
+    final s = child.raw;
+
+    final guardians = (s['guardians'] is List) ? s['guardians'] as List : const [];
+    final primaryG = (s['primaryGuardian'] is Map)
+        ? s['primaryGuardian'] as Map
+        : (guardians.isNotEmpty && guardians.first is Map
+            ? guardians.first as Map
+            : null);
+    final primaryId = primaryG?['_id']?.toString();
+
+    final addr = s['address'] is Map ? s['address'] as Map : const {};
+    final addrLine = [addr['street'], addr['city'], addr['state'], addr['pincode']]
+        .where((v) => v != null && v.toString().trim().isNotEmpty)
+        .join(', ');
+
+    final med = s['medicalInfo'] is Map ? s['medicalInfo'] as Map : const {};
+    final conditions = (med['conditions'] is List)
+        ? (med['conditions'] as List)
+            .where((c) => c != null && c.toString().trim().isNotEmpty)
+            .map((c) => c.toString())
+            .toList()
+        : <String>[];
+
+    final bg = <String, String>{};
+    void addBg(String k, dynamic v) {
+      if (v != null && v.toString().trim().isNotEmpty) bg[k] = v.toString();
+    }
+    addBg('Nationality', s['nationality']);
+    addBg('Religion', s['religion']);
+    addBg('Mother Tongue', s['motherTongue']);
+    addBg('Caste', s['caste']);
+    addBg('Category', s['category'] is String ? _cap(s['category']) : null);
+    addBg('Previous School', s['previousSchool']);
+    addBg('Identification Mark', s['identificationMark']);
+
+    return RefreshIndicator(
+      onRefresh: () => context.read<ParentDataProvider>().fetchChildren(),
+      child: SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.cardDark : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: isDark ? AppColors.borderDark : AppColors.borderLight),
-        ),
-        child: Column(
-          children: [
-            CircleAvatar(
-              radius: 32,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-              child: Text(
-                child.initial,
-                style: GoogleFonts.inter(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _profileHeader(isDark, s),
+        const SizedBox(height: 18),
+
+        _section('Academic Details'),
+        _card(isDark, [
+          _row('Admission No.', child.admissionNumber, isDark),
+          if (_str(s['rollNumber']).isNotEmpty)
+            _row('Roll Number', _str(s['rollNumber']), isDark),
+          _row('Class', child.classLabel, isDark),
+          if (s['admissionDate'] != null)
+            _row('Admission Date', _fmtDate(s['admissionDate']), isDark),
+          if (_str(s['academicYear']).isNotEmpty)
+            _row('Academic Year', _str(s['academicYear']), isDark),
+        ]),
+        const SizedBox(height: 16),
+
+        _section('Personal Details'),
+        _card(isDark, [
+          if (_str(s['gender']).isNotEmpty)
+            _row('Gender', _cap(_str(s['gender'])), isDark),
+          if (s['dateOfBirth'] != null)
+            _row('Date of Birth', _fmtDate(s['dateOfBirth']), isDark),
+          if (_str(s['bloodGroup']).isNotEmpty)
+            _row('Blood Group', _str(s['bloodGroup']), isDark),
+          if (_str(s['aadharNumber']).isNotEmpty)
+            _row('Aadhar No.', _str(s['aadharNumber']), isDark),
+          if (_str(s['phone']).isNotEmpty) _row('Phone', _str(s['phone']), isDark),
+          if (_str(s['alternativeMobile']).isNotEmpty)
+            _row('Alt. Mobile', _str(s['alternativeMobile']), isDark),
+          if (_str(s['email']).isNotEmpty) _row('Email', _str(s['email']), isDark),
+          if (s['isHosteller'] == true) _row('Hosteller', 'Yes', isDark),
+        ]),
+        const SizedBox(height: 16),
+
+        if (primaryG != null) ...[
+          _section('Primary Guardian'),
+          _guardianCard(primaryG, true, isDark),
+          const SizedBox(height: 16),
+        ],
+
+        if (guardians.length > 1) ...[
+          _section('Parents / Guardians'),
+          ...guardians.whereType<Map>().map((g) => _guardianCard(
+              g, primaryId != null && g['_id']?.toString() == primaryId, isDark)),
+          const SizedBox(height: 16),
+        ],
+
+        if (addrLine.isNotEmpty) ...[
+          _section('Address'),
+          _card(isDark, [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.location_on_outlined,
+                    size: 16, color: AppColors.textMuted),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: Text(addrLine,
+                        style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: isDark
+                                ? Colors.white70
+                                : AppColors.textSecondary))),
+              ]),
+            ),
+          ]),
+          const SizedBox(height: 16),
+        ],
+
+        if (bg.isNotEmpty) ...[
+          _section('Background'),
+          _card(isDark,
+              bg.entries.map((e) => _row(e.key, e.value, isDark)).toList()),
+          const SizedBox(height: 16),
+        ],
+
+        if (conditions.isNotEmpty) ...[
+          _section('Medical Conditions'),
+          _card(isDark, [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: conditions
+                    .map((c) => Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.warning.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(c,
+                              style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.warning)),
+                        ))
+                    .toList(),
               ),
             ),
-            const SizedBox(height: 12),
-            Text(child.name,
-                style: GoogleFonts.inter(
-                    fontSize: 17, fontWeight: FontWeight.w700)),
-            Text(child.classLabel,
-                style: GoogleFonts.inter(
-                    fontSize: 13, color: AppColors.textMuted)),
-            const SizedBox(height: 16),
-            _infoRow('Admission No.', child.admissionNumber),
-            if (child.bloodGroup != null)
-              _infoRow('Blood Group', child.bloodGroup!),
-            if (child.phone != null) _infoRow('Phone', child.phone!),
-          ],
-        ),
-      ),
+          ]),
+          const SizedBox(height: 16),
+        ],
+
+        if (_str(s['remarks']).isNotEmpty) ...[
+          _section('Remarks'),
+          _card(isDark, [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(_str(s['remarks']),
+                  style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: isDark ? Colors.white70 : AppColors.textSecondary)),
+            ),
+          ]),
+        ],
+        const SizedBox(height: 24),
+      ]),
+    ),
     );
   }
 
-  Widget _infoRow(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 120,
-              child: Text(label,
-                  style: GoogleFonts.inter(
-                      fontSize: 13, color: AppColors.textMuted)),
-            ),
-            Expanded(
-                child: Text(value,
-                    style: GoogleFonts.inter(
-                        fontSize: 13, fontWeight: FontWeight.w500))),
-          ],
+  Widget _profileHeader(bool isDark, Map s) {
+    final status = _str(s['status']);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: isDark ? AppColors.borderDark : AppColors.borderLight),
+      ),
+      child: Column(children: [
+        CircleAvatar(
+          radius: 32,
+          backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+          child: Text(child.initial,
+              style: GoogleFonts.inter(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary)),
         ),
+        const SizedBox(height: 12),
+        Text(child.name,
+            style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 2),
+        Text(child.classLabel,
+            style: GoogleFonts.inter(fontSize: 13, color: AppColors.textMuted)),
+        if (status.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: (status == 'active' ? AppColors.accentGreen : AppColors.warning)
+                  .withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(_cap(status),
+                style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: status == 'active'
+                        ? AppColors.accentGreen
+                        : AppColors.warning)),
+          ),
+        ],
+      ]),
+    );
+  }
+
+  Widget _section(String title) => Padding(
+        padding: const EdgeInsets.only(bottom: 8, left: 2),
+        child: Text(title.toUpperCase(),
+            style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+                color: AppColors.textMuted)),
       );
+
+  Widget _card(bool isDark, List<Widget> children) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.cardDark : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: isDark ? AppColors.borderDark : AppColors.borderLight),
+        ),
+        child: Column(children: children),
+      );
+
+  Widget _row(String label, String value, bool isDark) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(
+            width: 120,
+            child: Text(label,
+                style: GoogleFonts.inter(
+                    fontSize: 13, color: AppColors.textMuted)),
+          ),
+          Expanded(
+              child: Text(value,
+                  style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.white : AppColors.textPrimary))),
+        ]),
+      );
+
+  Widget _guardianCard(Map g, bool isPrimary, bool isDark) {
+    final name = _str(g['name']).isEmpty ? '—' : _str(g['name']);
+    final initial = name == '—' ? '?' : name.trim()[0].toUpperCase();
+    final relation = _cap(_str(g['relation']));
+    final phone = _str(g['phone']);
+    final altPhone = _str(g['alternatePhone']);
+    final occupation = _str(g['occupation']);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: isDark ? AppColors.borderDark : AppColors.borderLight),
+      ),
+      child: Row(children: [
+        CircleAvatar(
+          radius: 22,
+          backgroundColor: isPrimary ? AppColors.primary : AppColors.textSecondary,
+          child: Text(initial,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Flexible(
+                child: Text(name,
+                    style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : AppColors.textPrimary),
+                    overflow: TextOverflow.ellipsis),
+              ),
+              if (isPrimary) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Text('Primary',
+                      style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary)),
+                ),
+              ],
+            ]),
+            if (relation.isNotEmpty || occupation.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                    [relation, occupation].where((e) => e.isNotEmpty).join(' · '),
+                    style: GoogleFonts.inter(
+                        fontSize: 12, color: AppColors.textMuted)),
+              ),
+          ]),
+        ),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          if (phone.isNotEmpty)
+            Text(phone,
+                style: GoogleFonts.inter(
+                    fontSize: 13, color: AppColors.textSecondary)),
+          if (altPhone.isNotEmpty)
+            Text('$altPhone (Alt)',
+                style:
+                    GoogleFonts.inter(fontSize: 11, color: AppColors.textMuted)),
+        ]),
+      ]),
+    );
+  }
 }
 
 // ─── Attendance Tab ──────────────────────────────────────────────────────────

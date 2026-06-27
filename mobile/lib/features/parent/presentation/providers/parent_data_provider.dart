@@ -11,6 +11,7 @@ class ChildInfo {
   final String? classSection;
   final String? phone;
   final String? bloodGroup;
+  final Map<String, dynamic> raw; // full student json for the detail view
 
   ChildInfo({
     required this.id,
@@ -22,6 +23,7 @@ class ChildInfo {
     this.classSection,
     this.phone,
     this.bloodGroup,
+    this.raw = const {},
   });
 
   factory ChildInfo.fromJson(Map<String, dynamic> j) {
@@ -36,6 +38,7 @@ class ChildInfo {
       classSection: cls?['section'],
       phone: j['phone'],
       bloodGroup: j['bloodGroup'],
+      raw: j,
     );
   }
 
