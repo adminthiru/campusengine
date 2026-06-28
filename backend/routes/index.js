@@ -1549,7 +1549,7 @@ router.get('/homework/student-summary', protect, checkSubscription, async (req, 
       .populate('class', 'name section')
       .populate('subject', 'name color')
       .populate('createdBy', 'name')
-      .sort({ dueDate: -1 });
+      .sort({ createdAt: -1 });   // newly added homework first
 
     const submissions = await HomeworkSubmission.find({
       school: req.user.school,
