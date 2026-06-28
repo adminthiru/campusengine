@@ -551,6 +551,36 @@ router.put('/student-leaves/:id', protect, authorize('admin', 'correspondent', '
       } catch (e) { console.error('[student-leave approve → attendance]', e.message); }
     }
 
+    // Notify the student + parent(s) that the request was approved/rejected
+    // (in-app + push). Fires for both decisions.
+    if ((status === 'approved' || status === 'rejected') && leave.student?._id) {
+      try {
+        const { notifyUsers } = require('../services/notificationService');
+        const sid = leave.student._id;
+        const s = await Student.findById(sid).select('primaryGuardian guardians');
+        const parentIds = [s?.primaryGuardian, ...((s?.guardians) || [])].filter(Boolean);
+        const recipients = await User.find({
+          school: req.user.school,
+          $or: [
+            { role: 'student', studentId: sid },
+            ...(parentIds.length ? [{ role: 'parent', parentId: { $in: parentIds } }] : []),
+          ],
+        });
+        if (recipients.length) {
+          const fmt = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+          const dateLabel = String(leave.fromDate) === String(leave.toDate)
+            ? fmt(leave.fromDate)
+            : `${fmt(leave.fromDate)} – ${fmt(leave.toDate)}`;
+          await notifyUsers(recipients, {
+            title: `Leave ${status === 'approved' ? 'Approved' : 'Rejected'}`,
+            body: `${leave.student?.name || 'Student'}'s leave request for ${dateLabel} has been ${status}.`,
+            type: status === 'approved' ? 'success' : 'error',
+            data: { kind: 'student_leave', status, leaveId: String(leave._id) },
+          });
+        }
+      } catch (e) { console.error('[student-leave notify]', e.message); }
+    }
+
     res.json({ success: true, leave });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
