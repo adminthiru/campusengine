@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:skl_teacher/core/network/api_client.dart';
 import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
 import 'package:skl_teacher/core/theme/app_dimensions.dart';
@@ -183,11 +184,11 @@ class MoreScreen extends StatelessWidget {
           _sectionLabel('Account', isDark),
           const SizedBox(height: 8),
           _MenuTile(
-            icon: Icons.settings_outlined,
-            iconColor: AppColors.textSecondary,
-            title: 'Settings',
-            subtitle: 'App preferences and password',
-            onTap: () => context.go('/settings'),
+            icon: Icons.lock_outline,
+            iconColor: AppColors.info,
+            title: 'Change Password',
+            subtitle: 'Update your account password',
+            onTap: () => _showChangePasswordSheet(context),
             isDark: isDark,
           ),
           const SizedBox(height: 8),
@@ -222,6 +223,15 @@ class MoreScreen extends StatelessWidget {
           color: isDark ? AppColors.textMuted : AppColors.textSecondary,
         ),
       );
+
+  void _showChangePasswordSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _ChangePasswordSheet(),
+    );
+  }
 
   void _showLogoutBottomSheet(BuildContext context, AuthProvider authProvider) {
     showModalBottomSheet(
@@ -414,6 +424,252 @@ class _ProfileCard extends StatelessWidget {
           ),
           const Icon(Icons.chevron_right, color: Colors.white, size: 24),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Change Password Sheet ────────────────────────────────────────────────────
+
+class _ChangePasswordSheet extends StatefulWidget {
+  const _ChangePasswordSheet();
+
+  @override
+  State<_ChangePasswordSheet> createState() => _ChangePasswordSheetState();
+}
+
+class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _currentCtrl = TextEditingController();
+  final _newCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+
+  bool _showCurrent = false;
+  bool _showNew = false;
+  bool _showConfirm = false;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _currentCtrl.dispose();
+    _newCtrl.dispose();
+    _confirmCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() { _loading = true; _error = null; });
+    try {
+      await ApiClient.put('/auth/change-password', data: {
+        'currentPassword': _currentCtrl.text.trim(),
+        'newPassword': _newCtrl.text.trim(),
+      });
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Password changed successfully'),
+            backgroundColor: AppColors.accentGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _error = ApiClient.errorMessage(e);
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + bottom),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle bar
+            Center(
+              child: Container(
+                width: 44, height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.borderDark : AppColors.borderLight,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Change Password',
+                style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                    color: isDark ? Colors.white : AppColors.textPrimary)),
+            const SizedBox(height: 4),
+            Text('Enter your current password then choose a new one.',
+                style: AppTypography.s13Regular(color: AppColors.textMuted)),
+            const SizedBox(height: 20),
+
+            // Current password
+            _PasswordField(
+              controller: _currentCtrl,
+              label: 'Current Password',
+              show: _showCurrent,
+              onToggle: () => setState(() => _showCurrent = !_showCurrent),
+              isDark: isDark,
+              validator: (v) =>
+                  (v == null || v.isEmpty) ? 'Required' : null,
+            ),
+            const SizedBox(height: 14),
+
+            // New password
+            _PasswordField(
+              controller: _newCtrl,
+              label: 'New Password',
+              show: _showNew,
+              onToggle: () => setState(() => _showNew = !_showNew),
+              isDark: isDark,
+              validator: (v) {
+                if (v == null || v.isEmpty) return 'Required';
+                if (v.length < 6) return 'At least 6 characters';
+                return null;
+              },
+            ),
+            const SizedBox(height: 14),
+
+            // Confirm new password
+            _PasswordField(
+              controller: _confirmCtrl,
+              label: 'Confirm New Password',
+              show: _showConfirm,
+              onToggle: () => setState(() => _showConfirm = !_showConfirm),
+              isDark: isDark,
+              validator: (v) {
+                if (v == null || v.isEmpty) return 'Required';
+                if (v != _newCtrl.text) return 'Passwords do not match';
+                return null;
+              },
+            ),
+
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.accentRed.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.accentRed.withValues(alpha: 0.25)),
+                ),
+                child: Text(_error!,
+                    style: AppTypography.s13Regular(color: AppColors.accentRed)),
+              ),
+            ],
+
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: _loading ? null : _submit,
+                child: _loading
+                    ? const SizedBox(
+                        width: 22, height: 22,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2.5, color: Colors.white))
+                    : Text('Update Password',
+                        style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w600, fontSize: 15)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PasswordField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final bool show;
+  final VoidCallback onToggle;
+  final bool isDark;
+  final String? Function(String?) validator;
+
+  const _PasswordField({
+    required this.controller,
+    required this.label,
+    required this.show,
+    required this.onToggle,
+    required this.isDark,
+    required this.validator,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller,
+      obscureText: !show,
+      validator: validator,
+      style: AppTypography.s14Regular(
+          color: isDark ? Colors.white : AppColors.textPrimary),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: AppTypography.s13Regular(color: AppColors.textMuted),
+        suffixIcon: IconButton(
+          icon: Icon(
+            show ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+            size: 20,
+            color: AppColors.textMuted,
+          ),
+          onPressed: onToggle,
+        ),
+        filled: true,
+        fillColor: isDark
+            ? AppColors.borderDark.withValues(alpha: 0.3)
+            : const Color(0xFFF8FAFC),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+              color: isDark ? AppColors.borderDark : AppColors.borderLight),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+              color: isDark ? AppColors.borderDark : AppColors.borderLight),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.accentRed),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.accentRed, width: 1.5),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
     );
   }
