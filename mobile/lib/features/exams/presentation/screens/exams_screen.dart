@@ -1609,7 +1609,6 @@ class _MarksEntryViewState extends State<_MarksEntryView> {
   Widget build(BuildContext context) {
     final p = context.watch<ExamsProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final canEdit = !widget.exam.isResultPublished;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
@@ -1736,7 +1735,7 @@ class _MarksEntryViewState extends State<_MarksEntryView> {
                             },
                           ),
           ),
-          if (!_isEditing && !p.isLoadingStudents && p.students.isNotEmpty && canEdit)
+          if (!_isEditing && !p.isLoadingStudents && p.students.isNotEmpty)
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -1940,33 +1939,51 @@ class _StudentMarkCardState extends State<_StudentMarkCard> {
                   ],
                 ),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Checkbox(
-                    value: _isAbsent,
-                    activeColor: AppColors.error,
-                    onChanged: widget.isReadOnly
-                        ? null
-                        : (v) {
-                            if (v != null) {
-                              setState(() => _isAbsent = v);
-                              _notify();
-                            }
-                          },
-                    visualDensity: VisualDensity.compact,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              if (widget.isReadOnly) ...[
+                // Read-only: show badge only when actually absent
+                if (_isAbsent)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                          color: AppColors.error.withValues(alpha: 0.4)),
+                    ),
+                    child: Text('Absent',
+                        style: AppTypography.s11Bold(
+                            color: AppColors.error)),
                   ),
-                  const SizedBox(width: 4),
-                  Text('Absent',
-                      style: AppTypography.s12Medium(
-                          color: _isAbsent
-                              ? AppColors.error
-                              : (isDark
-                                  ? AppColors.textMuted
-                                  : AppColors.textSecondary))),
-                ],
-              ),
+              ] else ...[
+                // Edit mode: checkbox
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Checkbox(
+                      value: _isAbsent,
+                      activeColor: AppColors.error,
+                      onChanged: (v) {
+                        if (v != null) {
+                          setState(() => _isAbsent = v);
+                          _notify();
+                        }
+                      },
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize:
+                          MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    const SizedBox(width: 4),
+                    Text('Absent',
+                        style: AppTypography.s12Medium(
+                            color: _isAbsent
+                                ? AppColors.error
+                                : (isDark
+                                    ? AppColors.textMuted
+                                    : AppColors.textSecondary))),
+                  ],
+                ),
+              ],
             ],
           ),
           if (!_isAbsent) ...[
@@ -2325,6 +2342,7 @@ class _ReadOnlyField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isEmpty = value == '–';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
@@ -2341,9 +2359,16 @@ class _ReadOnlyField extends StatelessWidget {
                   color:
                       isDark ? AppColors.textMuted : AppColors.textSecondary)),
           const SizedBox(height: 2),
-          Text(value,
-              style: AppTypography.s14SemiBold(
-                  color: isDark ? Colors.white : AppColors.textPrimary)),
+          Text(
+            isEmpty ? '—' : value,
+            style: isEmpty
+                ? AppTypography.s13Regular(
+                    color: isDark
+                        ? AppColors.textMuted
+                        : AppColors.textSecondary)
+                : AppTypography.s14SemiBold(
+                    color: isDark ? Colors.white : AppColors.textPrimary),
+          ),
         ],
       ),
     );
