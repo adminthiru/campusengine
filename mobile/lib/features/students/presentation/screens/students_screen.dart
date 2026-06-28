@@ -206,9 +206,7 @@ class _StudentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = student['name'] as String? ?? '';
-    final adm = student['admissionNumber'] as String? ?? '';
     final gender = student['gender'] as String? ?? '';
-    final phone = student['phone'] as String? ?? '';
     final cls = student['currentClass'];
     final classLabel =
         cls is Map ? '${cls['name'] ?? ''} ${cls['section'] ?? ''}'.trim() : '';
@@ -219,11 +217,11 @@ class _StudentCard extends StatelessWidget {
         : AppColors.primary;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: isDark ? AppColors.cardDark : Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
             color: isDark ? AppColors.borderDark : AppColors.borderLight),
         boxShadow: isDark ? [] : AppColors.shadowSm,
@@ -231,14 +229,14 @@ class _StudentCard extends StatelessWidget {
       child: Row(
         children: [
           CircleAvatar(
-            radius: 22,
+            radius: 18,
             backgroundColor: avatarColor.withValues(alpha: 0.1),
             child: Text(
               name.isNotEmpty ? name[0].toUpperCase() : '?',
-              style: AppTypography.s16Bold(color: avatarColor),
+              style: AppTypography.s14Bold(color: avatarColor),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -246,42 +244,32 @@ class _StudentCard extends StatelessWidget {
                 Text(name,
                     style: AppTypography.s14SemiBold(
                         color: isDark ? Colors.white : AppColors.textPrimary)),
-                const SizedBox(height: 2),
-                Text(adm,
-                    style:
-                        AppTypography.s12Regular(color: AppColors.textMuted)),
+                if (roll.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text('Roll: $roll',
+                      style: AppTypography.s12Regular(
+                          color: AppColors.textMuted)),
+                ],
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               if (classLabel.isNotEmpty)
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(classLabel,
-                      style:
-                          AppTypography.s12SemiBold(color: AppColors.primary)),
+                      style: AppTypography.s12SemiBold(
+                          color: AppColors.primary)),
                 ),
-              if (roll.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text('Roll: $roll',
-                    style:
-                        AppTypography.s12Regular(color: AppColors.textMuted)),
-              ],
-              if (phone.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(phone,
-                    style:
-                        AppTypography.s12Regular(color: AppColors.textMuted)),
-              ],
-              const SizedBox(height: 4),
-              Icon(Icons.chevron_right, size: 18, color: AppColors.textMuted),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right, size: 16, color: AppColors.textMuted),
             ],
           ),
         ],
