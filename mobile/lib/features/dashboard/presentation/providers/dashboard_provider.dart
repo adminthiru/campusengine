@@ -55,28 +55,35 @@ class DashboardProvider extends ChangeNotifier {
         }
       }
 
-      // 2. Fetch homework
-      // We will fetch all active homework and filter locally to homework for the teacher's classes or subjects.
-      // Alternatively, we just fetch active homework for the class if they are only a class teacher.
-      // Since backend doesn't filter by teacher currently, we'll fetch all and filter locally by matching subjects/classes.
-      final hwRes = await ApiClient.get('/homework', params: {
-        'status': 'active', // only active homework
-      });
+      // 2. Fetch active homework scoped to teacher's class(es) + subjects
+      final myOwnedSubjectIds =
+          subjectTeachers.map((s) => s.subject.id).toSet();
+      final myAllClassIds = <String>{
+        if (classTeacher != null) classTeacher.classInfo.id,
+        ...subjectTeachers.map((s) => s.classInfo.id),
+      };
 
+      // Pre-filter by classId on the API when possible (reduces response size)
+      final hwParams = <String, dynamic>{'status': 'active'};
+      if (classTeacher != null) hwParams['classId'] = classTeacher.classInfo.id;
+
+      final hwRes = await ApiClient.get('/homework', params: hwParams);
       final hwData = hwRes.data is Map ? hwRes.data['homework'] : null;
       if (hwData is List) {
-        final allHomework = hwData.map((e) => Homework.fromJson(e)).toList();
+        final all = hwData.map((e) => Homework.fromJson(e)).toList();
 
-        // Filter homework for this teacher:
-        // Either they created it, or it's for their class, or it's for their subjects.
-        final myClassId = classTeacher?.classInfo.id;
-        final mySubjectIds = subjectTeachers.map((s) => s.subject.id).toSet();
-
-        _activeHomework = allHomework.where((hw) {
-          final isMyClass = hw.classRef?.id == myClassId;
-          final isMySubject = mySubjectIds.contains(hw.subject?.id);
-          // Assuming user ID is profile id, or we just rely on class/subject matches
-          return isMyClass || isMySubject;
+        _activeHomework = all.where((hw) {
+          final hwClassId = hw.classRef?.id ?? '';
+          // Must be in one of this teacher's classes
+          if (myAllClassIds.isNotEmpty &&
+              !myAllClassIds.contains(hwClassId)) { return false; }
+          // If teacher has explicit subject assignments, restrict to those subjects
+          if (myOwnedSubjectIds.isNotEmpty) {
+            final sid = hw.subject?.id ?? '';
+            return sid.isEmpty || myOwnedSubjectIds.contains(sid);
+          }
+          // Pure class teacher: show all homework for their class
+          return true;
         }).toList();
       }
 
