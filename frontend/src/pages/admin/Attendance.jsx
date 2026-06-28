@@ -173,7 +173,7 @@ export default function Attendance() {
   // ── Leave Requests tab ───────────────────────────────────────────────────
   const [leaveFilter, setLeaveFilter] = useState('all');
   const [leaveScope, setLeaveScope]   = useState('student'); // 'student' | 'staff'
-  const [leaveNote, setLeaveNote]     = useState({});    // { [id]: noteText }
+  const [editingLeaves, setEditingLeaves] = useState(() => new Set()); // ids re-opened for edit
 
   // Staff (employee) leave requests
   const { data: leavesData, isLoading: loadingLeaves } = useQuery({
@@ -864,43 +864,38 @@ export default function Attendance() {
                             )}
                           </td>
                           <td>
-                          {/* Student leaves stay actionable so admins can re-sync attendance. */}
-                          {(lv.status === 'pending' || leaveScope === 'student') ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 180 }}>
-                                <input
-                                  placeholder="Note (optional)"
-                                  value={leaveNote[lv._id] || ''}
-                                  onChange={e => setLeaveNote(n => ({ ...n, [lv._id]: e.target.value }))}
+                          {(lv.status === 'pending' || editingLeaves.has(lv._id)) ? (
+                              <div style={{ display: 'flex', gap: 6, minWidth: 170 }}>
+                                <button
+                                  onClick={() => { activeLeaveAction.mutate({ id: lv._id, status: 'approved' }); setEditingLeaves(s => { const n = new Set(s); n.delete(lv._id); return n; }); }}
+                                  disabled={activeLeaveAction.isPending}
                                   style={{
-                                    fontSize: 12, padding: '4px 8px', borderRadius: 6,
-                                    border: '1px solid var(--border)', outline: 'none', width: '100%',
+                                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                    padding: '6px 0', borderRadius: 6, border: 'none', cursor: 'pointer',
+                                    background: '#10b981', color: '#fff', fontSize: 12, fontWeight: 600,
                                   }}
-                                />
-                                <div style={{ display: 'flex', gap: 6 }}>
-                                  <button
-                                    onClick={() => activeLeaveAction.mutate({ id: lv._id, status: 'approved', adminNote: leaveNote[lv._id] || '' })}
-                                    disabled={activeLeaveAction.isPending}
-                                    style={{
-                                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                                      padding: '5px 0', borderRadius: 6, border: 'none', cursor: 'pointer',
-                                      background: '#10b981', color: '#fff', fontSize: 12, fontWeight: 600,
-                                    }}
-                                  ><CheckCircle size={13} /> Approve</button>
-                                  <button
-                                    onClick={() => activeLeaveAction.mutate({ id: lv._id, status: 'rejected', adminNote: leaveNote[lv._id] || '' })}
-                                    disabled={activeLeaveAction.isPending}
-                                    style={{
-                                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                                      padding: '5px 0', borderRadius: 6, border: 'none', cursor: 'pointer',
-                                      background: '#ef4444', color: '#fff', fontSize: 12, fontWeight: 600,
-                                    }}
-                                  ><XCircle size={13} /> Reject</button>
-                                </div>
+                                ><CheckCircle size={13} /> Approve</button>
+                                <button
+                                  onClick={() => { activeLeaveAction.mutate({ id: lv._id, status: 'rejected' }); setEditingLeaves(s => { const n = new Set(s); n.delete(lv._id); return n; }); }}
+                                  disabled={activeLeaveAction.isPending}
+                                  style={{
+                                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                    padding: '6px 0', borderRadius: 6, border: 'none', cursor: 'pointer',
+                                    background: '#ef4444', color: '#fff', fontSize: 12, fontWeight: 600,
+                                  }}
+                                ><XCircle size={13} /> Reject</button>
                               </div>
                           ) : (
-                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
+                            <button
+                              onClick={() => setEditingLeaves(s => new Set(s).add(lv._id))}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 5,
+                                padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
+                                background: 'transparent', color: 'var(--primary)',
+                                border: '1px solid var(--border)', fontSize: 12, fontWeight: 600,
+                              }}
+                            ><Edit2 size={13} /> Edit</button>
                           )}
-
                           </td>
                         </tr>
                       );
