@@ -1215,80 +1215,222 @@ class _ExamsTabState extends State<_ExamsTab> {
       padding: const EdgeInsets.all(16),
       itemCount: _exams.length,
       itemBuilder: (_, i) {
-        final e = _exams[i];
+        final e = _exams[i] as Map;
         final examId = e['_id']?.toString() ?? '';
-        final isPublished = e['isResultPublished'] as bool? ?? false;
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.cardDark : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-                color: isDark ? AppColors.borderDark : AppColors.borderLight),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: isPublished ? () => _openResult(examId) : null,
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(e['name'] ?? 'Exam',
-                            style: GoogleFonts.inter(
-                                fontSize: 14, fontWeight: FontWeight.w600)),
-                        Text(_fmtDate(e['examDate'] ?? e['date']),
-                            style: GoogleFonts.inter(
-                                fontSize: 12, color: AppColors.textMuted)),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: (isPublished
-                              ? AppColors.accentGreen
-                              : AppColors.warning)
-                          .withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      isPublished ? 'Results Out' : 'Scheduled',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isPublished
-                            ? AppColors.accentGreen
-                            : AppColors.warning,
-                      ),
-                    ),
-                  ),
-                  if (isPublished) ...[
-                    const SizedBox(width: 6),
-                    Icon(Icons.chevron_right,
-                        size: 20, color: AppColors.textMuted),
-                  ],
-                ],
-              ),
-            ),
-          ),
+        return _ExamCard(
+          exam: e,
+          classId: widget.classId,
+          isDark: isDark,
+          onOpenResult: () => _openResult(examId),
         );
       },
       ),
     );
   }
+}
 
-  String _fmtDate(dynamic d) {
+class _ExamCard extends StatelessWidget {
+  final Map exam;
+  final String classId;
+  final bool isDark;
+  final VoidCallback onOpenResult;
+  const _ExamCard({
+    required this.exam,
+    required this.classId,
+    required this.isDark,
+    required this.onOpenResult,
+  });
+
+  static String _classId(dynamic c) {
+    if (c is Map) return (c['_id'] ?? '').toString();
+    if (c is String) return c;
+    return '';
+  }
+
+  static String _fmtDate(dynamic d) {
     try {
       final dt = DateTime.parse(d.toString());
       return '${dt.day}/${dt.month}/${dt.year}';
     } catch (_) {
       return d?.toString() ?? '';
     }
+  }
+
+  static String _fmtShort(dynamic d) {
+    try {
+      final dt = DateTime.parse(d.toString()).toLocal();
+      const m = [
+        '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      return '${dt.day} ${m[dt.month]}';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isPublished = exam['isResultPublished'] as bool? ?? false;
+    final name = exam['name']?.toString() ?? 'Exam';
+    final examDate = exam['examDate'] ?? exam['date'];
+
+    // Subject-wise schedule for this student's class.
+    final raw = exam['schedule'];
+    final List<Map> schedule = [];
+    if (raw is List) {
+      for (final s in raw) {
+        if (s is! Map) continue;
+        final cid = _classId(s['class']);
+        if (cid.isEmpty || classId.isEmpty || cid == classId) schedule.add(s);
+      }
+    }
+    schedule.sort((a, b) =>
+        (a['date']?.toString() ?? '').compareTo(b['date']?.toString() ?? ''));
+
+    final divider = Divider(
+      height: 22,
+      thickness: 1,
+      color: isDark ? AppColors.borderDark : AppColors.borderLight,
+    );
+    final statusColor = isPublished ? AppColors.accentGreen : AppColors.warning;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: isDark ? AppColors.borderDark : AppColors.borderLight),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // ── Header ──
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name,
+                      style: GoogleFonts.inter(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color:
+                              isDark ? Colors.white : AppColors.textPrimary)),
+                  if (examDate != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(_fmtDate(examDate),
+                          style: GoogleFonts.inter(
+                              fontSize: 12, color: AppColors.textMuted)),
+                    ),
+                ]),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration:
+                    BoxDecoration(color: statusColor, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 6),
+              Text(isPublished ? 'Results Out' : 'Scheduled',
+                  style: GoogleFonts.inter(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: statusColor)),
+            ]),
+          ),
+        ]),
+        // ── Subject-wise schedule ──
+        if (schedule.isNotEmpty) ...[
+          divider,
+          Text('EXAM SCHEDULE',
+              style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                  color: AppColors.textMuted)),
+          const SizedBox(height: 10),
+          ...schedule.map(_scheduleRow),
+        ],
+        // ── View results ──
+        if (isPublished) ...[
+          divider,
+          InkWell(
+            onTap: onOpenResult,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(children: [
+                const Icon(Icons.assignment_turned_in_outlined,
+                    size: 18, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Text('View Results',
+                    style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary)),
+                const Spacer(),
+                const Icon(Icons.chevron_right,
+                    size: 20, color: AppColors.primary),
+              ]),
+            ),
+          ),
+        ],
+      ]),
+    );
+  }
+
+  Widget _scheduleRow(Map s) {
+    final subj = s['subject'] is Map
+        ? (s['subject']['name'] ?? '').toString()
+        : (s['subject']?.toString() ?? '');
+    final date = _fmtShort(s['date']);
+    final start = (s['startTime'] ?? '').toString();
+    final end = (s['endTime'] ?? '').toString();
+    final time = [start, end].where((t) => t.isNotEmpty).join(' – ');
+    final meta = [if (date.isNotEmpty) date, if (time.isNotEmpty) time].join(' · ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 6,
+          height: 6,
+          margin: const EdgeInsets.only(top: 6, right: 9),
+          decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.55),
+              shape: BoxShape.circle),
+        ),
+        Expanded(
+          child: Text(subj.isEmpty ? 'Subject' : subj,
+              style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : AppColors.textPrimary)),
+        ),
+        const SizedBox(width: 10),
+        Text(meta.isEmpty ? 'TBA' : meta,
+            style: GoogleFonts.inter(
+                fontSize: 12, color: AppColors.textSecondary)),
+      ]),
+    );
   }
 }
 

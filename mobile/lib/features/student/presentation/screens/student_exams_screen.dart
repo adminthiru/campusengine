@@ -19,6 +19,7 @@ class _StudentExamsScreenState extends State<StudentExamsScreen>
   late final TabController _tab;
   List<dynamic> _exams = [];
   List<dynamic> _results = [];
+  String? _classId;
   bool _loadingExams = true;
   bool _loadingResults = true;
 
@@ -41,6 +42,7 @@ class _StudentExamsScreenState extends State<StudentExamsScreen>
     final studentId = sp.profile?.id;
 
     setState(() {
+      _classId = classId;
       _loadingExams = true;
       _loadingResults = true;
     });
@@ -99,6 +101,7 @@ class _StudentExamsScreenState extends State<StudentExamsScreen>
               children: [
                 _ExamScheduleTab(
                     exams: _exams,
+                    classId: _classId,
                     loading: _loadingExams,
                     onRefresh: _load,
                     isDark: isDark),
@@ -119,14 +122,30 @@ class _StudentExamsScreenState extends State<StudentExamsScreen>
 // ─── Schedule Tab ─────────────────────────────────────────────────────────────
 class _ExamScheduleTab extends StatelessWidget {
   final List<dynamic> exams;
+  final String? classId;
   final bool loading;
   final Future<void> Function() onRefresh;
   final bool isDark;
   const _ExamScheduleTab(
       {required this.exams,
+      required this.classId,
       required this.loading,
       required this.onRefresh,
       required this.isDark});
+
+  static String _classIdOf(dynamic c) {
+    if (c is Map) return (c['_id'] ?? '').toString();
+    if (c is String) return c;
+    return '';
+  }
+
+  static String _shortDate(dynamic d) {
+    try {
+      return DateFormat('dd MMM').format(DateTime.parse(d.toString()).toLocal());
+    } catch (_) {
+      return '';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -155,8 +174,23 @@ class _ExamScheduleTab extends StatelessWidget {
           final e = exams[i];
           final name = e['name'] as String? ?? 'Exam';
           final isPublished = e['isResultPublished'] as bool? ?? false;
-          final dateStr = _fmtDate(e['date'] ?? e['startDate']);
-          final subjects = e['subjects'] as List<dynamic>? ?? [];
+          final dateStr = _fmtDate(e['examDate'] ?? e['date'] ?? e['startDate']);
+
+          // Subject-wise schedule for this student's class.
+          final raw = e['schedule'];
+          final List<Map> schedule = [];
+          if (raw is List) {
+            for (final s in raw) {
+              if (s is! Map) continue;
+              final cid = _classIdOf(s['class']);
+              if (cid.isEmpty || classId == null || classId!.isEmpty ||
+                  cid == classId) {
+                schedule.add(s);
+              }
+            }
+          }
+          schedule.sort((a, b) => (a['date']?.toString() ?? '')
+              .compareTo(b['date']?.toString() ?? ''));
 
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
@@ -207,30 +241,59 @@ class _ExamScheduleTab extends StatelessWidget {
                           AppTypography.s13Regular(color: AppColors.textMuted)),
                 ]),
               ],
-              if (subjects.isNotEmpty) ...[
+              if (schedule.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Divider(
+                    height: 1,
+                    color: isDark
+                        ? AppColors.borderDark
+                        : AppColors.borderLight),
+                const SizedBox(height: 10),
+                Text('EXAM SCHEDULE',
+                    style: AppTypography.s11SemiBold(color: AppColors.textMuted)
+                        .copyWith(letterSpacing: 0.4)),
                 const SizedBox(height: 8),
-                Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: subjects.map((s) {
-                      final sName = s['subject']?['name'] as String? ??
-                          s['name'] as String? ??
-                          '';
-                      final sDate = _fmtDate(s['date']);
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.07),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          sDate.isNotEmpty ? '$sName · $sDate' : sName,
-                          style: AppTypography.s11Regular(
-                              color: AppColors.primary),
-                        ),
-                      );
-                    }).toList()),
+                ...schedule.map((s) {
+                  final sName = s['subject'] is Map
+                      ? (s['subject']['name'] ?? '').toString()
+                      : (s['subject']?.toString() ?? '');
+                  final sDate = _shortDate(s['date']);
+                  final start = (s['startTime'] ?? '').toString();
+                  final end = (s['endTime'] ?? '').toString();
+                  final time =
+                      [start, end].where((t) => t.isNotEmpty).join(' – ');
+                  final meta = [
+                    if (sDate.isNotEmpty) sDate,
+                    if (time.isNotEmpty) time
+                  ].join(' · ');
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 9),
+                    child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            margin: const EdgeInsets.only(top: 6, right: 9),
+                            decoration: BoxDecoration(
+                                color:
+                                    AppColors.primary.withValues(alpha: 0.55),
+                                shape: BoxShape.circle),
+                          ),
+                          Expanded(
+                            child: Text(sName.isEmpty ? 'Subject' : sName,
+                                style: AppTypography.s13SemiBold(
+                                    color: isDark
+                                        ? Colors.white
+                                        : AppColors.textPrimary)),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(meta.isEmpty ? 'TBA' : meta,
+                              style: AppTypography.s12Regular(
+                                  color: AppColors.textSecondary)),
+                        ]),
+                  );
+                }),
               ],
             ]),
           );
