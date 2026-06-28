@@ -41,6 +41,51 @@ class _StudentFeesScreenState extends State<StudentFeesScreen> {
     }
   }
 
+  // Break fees down per term if terms[] exists, otherwise per fee type record.
+  List<Map<String, dynamic>> _buildRows() {
+    final rows = <Map<String, dynamic>>[];
+    for (final f in _fees) {
+      if (f is! Map) continue;
+      final terms = (f['terms'] is List) ? f['terms'] as List : const [];
+      if (terms.isNotEmpty) {
+        for (final t in terms) {
+          if (t is! Map) continue;
+          final net = (t['netAmount'] as num? ?? 0).toInt();
+          final paid = (t['paidAmount'] as num? ?? 0).toInt();
+          rows.add({
+            'name': (t['name'] ?? 'Term').toString(),
+            'paid': paid,
+            'net': net,
+            'status': (t['status'] ?? _deriveStatus(paid, net)).toString(),
+          });
+        }
+      } else {
+        final net = (f['netAmount'] as num? ?? 0).toInt();
+        final paid = (f['paidAmount'] as num? ?? 0).toInt();
+        rows.add({
+          'name':
+              (f['feeType']?['name'] ?? f['description'] ?? 'Fee').toString(),
+          'paid': paid,
+          'net': net,
+          'status': (f['status'] ?? _deriveStatus(paid, net)).toString(),
+        });
+      }
+    }
+    return rows;
+  }
+
+  String _deriveStatus(int paid, int net) {
+    if (paid <= 0) return 'pending';
+    if (paid >= net) return 'paid';
+    return 'partial';
+  }
+
+  String _fmtShort(int v) {
+    if (v >= 100000) return '${(v / 100000).toStringAsFixed(1)}L';
+    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
+    return '$v';
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -52,6 +97,11 @@ class _StudentFeesScreenState extends State<StudentFeesScreen> {
     }
     final pending = totalDue - totalPaid;
     final pct = totalDue > 0 ? (totalPaid / totalDue * 100).round() : 100;
+    final totalStatus = totalPaid <= 0
+        ? 'pending'
+        : (totalPaid >= totalDue ? 'paid' : 'partial');
+
+    final rows = _buildRows();
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
@@ -63,7 +113,7 @@ class _StudentFeesScreenState extends State<StudentFeesScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // ── Summary Card ────────────────────────────────────────
+                  // ── Gradient summary card ───────────────────────────────
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
@@ -83,14 +133,14 @@ class _StudentFeesScreenState extends State<StudentFeesScreen> {
                               style: AppTypography.s14Regular(
                                   color: Colors.white.withValues(alpha: 0.85))),
                           const SizedBox(height: 6),
-                          Text('₹${_fmt(pending)}',
+                          Text('₹${_fmtShort(pending)}',
                               style:
                                   AppTypography.s30Bold(color: Colors.white)),
                           const SizedBox(height: 16),
                           Row(children: [
-                            _SummaryItem('Total', '₹${_fmt(totalDue)}'),
+                            _SummaryItem('Total', '₹${_fmtShort(totalDue)}'),
                             const SizedBox(width: 20),
-                            _SummaryItem('Paid', '₹${_fmt(totalPaid)}'),
+                            _SummaryItem('Paid', '₹${_fmtShort(totalPaid)}'),
                             const SizedBox(width: 20),
                             _SummaryItem('Done', '$pct%'),
                           ]),
@@ -101,8 +151,8 @@ class _StudentFeesScreenState extends State<StudentFeesScreen> {
                               value: pct / 100,
                               backgroundColor:
                                   Colors.white.withValues(alpha: 0.3),
-                              valueColor:
-                                  const AlwaysStoppedAnimation(Colors.white),
+                              valueColor: const AlwaysStoppedAnimation(
+                                  Colors.white),
                               minHeight: 6,
                             ),
                           ),
@@ -122,26 +172,38 @@ class _StudentFeesScreenState extends State<StudentFeesScreen> {
                               color: AppColors.textMuted)),
                     ]))
                   else ...[
+                    // ── Section label ──────────────────────────────────────
                     Text('Fee Breakdown',
                         style: AppTypography.s14SemiBold(
-                            color:
-                                isDark ? Colors.white : AppColors.textPrimary)),
+                            color: isDark
+                                ? Colors.white
+                                : AppColors.textPrimary)),
                     const SizedBox(height: 10),
-                    ..._fees.map((f) => _FeeCard(fee: f, isDark: isDark)),
+
+                    // ── Category rows ──────────────────────────────────────
+                    ...rows.map((r) => _FeeRow(
+                          name: r['name'] as String,
+                          paid: r['paid'] as int,
+                          net: r['net'] as int,
+                          status: r['status'] as String,
+                          isDark: isDark,
+                        )),
+
+                    // ── Total row ──────────────────────────────────────────
+                    _TotalRow(
+                        paid: totalPaid,
+                        net: totalDue,
+                        status: totalStatus,
+                        isDark: isDark),
                   ],
                 ],
               ),
             ),
     );
   }
-
-  String _fmt(int v) {
-    if (v >= 100000) return '₹${(v / 100000).toStringAsFixed(1)}L';
-    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
-    return '$v';
-  }
 }
 
+// ── Skeleton ─────────────────────────────────────────────────────────────────
 class _FeesSkeleton extends StatelessWidget {
   const _FeesSkeleton();
 
@@ -152,24 +214,24 @@ class _FeesSkeleton extends StatelessWidget {
         physics: const NeverScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: const [
-          // Summary card
           SkeletonBox(height: 160, radius: 20),
           SizedBox(height: 20),
-          // "Fee Breakdown" title
           SkeletonBox(width: 130, height: 14),
           SizedBox(height: 10),
-          // Fee cards
-          SkeletonBox(height: 96, radius: 14),
-          SizedBox(height: 12),
-          SkeletonBox(height: 96, radius: 14),
-          SizedBox(height: 12),
-          SkeletonBox(height: 96, radius: 14),
+          SkeletonBox(height: 64, radius: 12),
+          SizedBox(height: 10),
+          SkeletonBox(height: 64, radius: 12),
+          SizedBox(height: 10),
+          SkeletonBox(height: 64, radius: 12),
+          SizedBox(height: 10),
+          SkeletonBox(height: 64, radius: 12),
         ],
       ),
     );
   }
 }
 
+// ── Summary item inside gradient card ────────────────────────────────────────
 class _SummaryItem extends StatelessWidget {
   final String label, value;
   const _SummaryItem(this.label, this.value);
@@ -186,95 +248,134 @@ class _SummaryItem extends StatelessWidget {
       );
 }
 
-class _FeeCard extends StatelessWidget {
-  final dynamic fee;
+// ── Category fee row ──────────────────────────────────────────────────────────
+class _FeeRow extends StatelessWidget {
+  final String name, status;
+  final int paid, net;
   final bool isDark;
-  const _FeeCard({required this.fee, required this.isDark});
+  const _FeeRow(
+      {required this.name,
+      required this.paid,
+      required this.net,
+      required this.status,
+      required this.isDark});
 
   @override
   Widget build(BuildContext context) {
-    final feeType = fee['feeType']?['name'] as String? ??
-        fee['description'] as String? ??
-        'Fee';
-    final net = (fee['netAmount'] as num? ?? 0).toInt();
-    final paid = (fee['paidAmount'] as num? ?? 0).toInt();
-    final status = fee['status'] as String? ?? 'pending';
-    final dueDate = fee['dueDate'];
-    String due = '';
-    try {
-      final dt = DateTime.parse(dueDate.toString());
-      due = '${dt.day}/${dt.month}/${dt.year}';
-    } catch (_) {}
-
-    final Color statusColor;
-    switch (status) {
-      case 'paid':
-        statusColor = AppColors.accentGreen;
-        break;
-      case 'partial':
-        statusColor = AppColors.warning;
-        break;
-      case 'overdue':
-        statusColor = AppColors.accentRed;
-        break;
-      default:
-        statusColor = AppColors.textMuted;
-    }
-    final pct = net > 0 ? (paid / net).clamp(0.0, 1.0) : 0.0;
-
+    final sColor = _statusColor(status);
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: isDark ? AppColors.cardDark : Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
             color: isDark ? AppColors.borderDark : AppColors.borderLight),
         boxShadow: isDark ? [] : AppColors.shadowSm,
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(
-              child: Text(feeType,
-                  style: AppTypography.s14SemiBold(
-                      color: isDark ? Colors.white : AppColors.textPrimary))),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(status[0].toUpperCase() + status.substring(1),
-                style: AppTypography.s12SemiBold(color: statusColor)),
-          ),
-        ]),
-        const SizedBox(height: 10),
-        Row(children: [
-          Text('₹$paid',
-              style: AppTypography.s16Bold(color: AppColors.accentGreen)),
-          Text(' / ₹$net',
-              style: AppTypography.s14Regular(color: AppColors.textMuted)),
-          if (due.isNotEmpty) ...[
-            const Spacer(),
-            Icon(Icons.calendar_today_outlined,
-                size: 12, color: AppColors.textMuted),
-            const SizedBox(width: 4),
-            Text('Due $due',
+      child: Row(children: [
+        Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(name,
+                style: AppTypography.s14SemiBold(
+                    color: isDark ? Colors.white : AppColors.textPrimary)),
+            const SizedBox(height: 3),
+            Text('₹$paid / ₹$net',
                 style: AppTypography.s12Regular(color: AppColors.textMuted)),
-          ],
-        ]),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: pct.toDouble(),
-            backgroundColor:
-                isDark ? AppColors.borderDark : AppColors.borderLight,
-            valueColor: AlwaysStoppedAnimation(statusColor),
-            minHeight: 5,
+          ]),
+        ),
+        // Status badge
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: sColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            status.isEmpty ? '' : status[0].toUpperCase() + status.substring(1),
+            style: AppTypography.s12SemiBold(color: sColor),
           ),
         ),
       ]),
     );
+  }
+
+  Color _statusColor(String s) {
+    switch (s) {
+      case 'paid':
+        return AppColors.accentGreen;
+      case 'partial':
+        return AppColors.warning;
+      case 'overdue':
+        return AppColors.accentRed;
+      default:
+        return AppColors.textMuted;
+    }
+  }
+}
+
+// ── Total fees row ────────────────────────────────────────────────────────────
+class _TotalRow extends StatelessWidget {
+  final int paid, net;
+  final String status;
+  final bool isDark;
+  const _TotalRow(
+      {required this.paid,
+      required this.net,
+      required this.status,
+      required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final sColor = _statusColor(status);
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color:
+            AppColors.primary.withValues(alpha: isDark ? 0.16 : 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.3)),
+      ),
+      child: Row(children: [
+        Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Total Fees',
+                style: AppTypography.s14SemiBold(
+                    color: isDark ? Colors.white : AppColors.textPrimary)),
+            const SizedBox(height: 3),
+            Text('₹$paid / ₹$net',
+                style: AppTypography.s12SemiBold(color: AppColors.primary)),
+          ]),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: sColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            status.isEmpty ? '' : status[0].toUpperCase() + status.substring(1),
+            style: AppTypography.s12SemiBold(color: sColor),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Color _statusColor(String s) {
+    switch (s) {
+      case 'paid':
+        return AppColors.accentGreen;
+      case 'partial':
+        return AppColors.warning;
+      case 'overdue':
+        return AppColors.accentRed;
+      default:
+        return AppColors.textMuted;
+    }
   }
 }
