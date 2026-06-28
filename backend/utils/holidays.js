@@ -61,12 +61,9 @@ const DAY_NAMES = ['sunday','monday','tuesday','wednesday','thursday','friday','
  * @param {string}   saturdaySchedule  — class-level override (optional)
  * @returns {{ workingDays: number, holidayCount: number, weekendCount: number }}
  */
-async function getWorkingDaysForMonth(schoolId, year, month, schoolWorkingDays = {}, saturdaySchedule = 'school_default', upToDay = null) {
+async function getWorkingDaysForMonth(schoolId, year, month, schoolWorkingDays = {}, saturdaySchedule = 'school_default') {
   const holidays   = await getHolidaysForMonth(schoolId, year, month);
   const daysInMonth = new Date(year, month, 0).getDate();
-  // upToDay caps the count at a given day (e.g. "today" for the current month)
-  // so an in-progress month doesn't count its not-yet-arrived working days.
-  const lastDay = (upToDay && upToDay < daysInMonth) ? upToDay : daysInMonth;
 
   // Default to Mon–Fri if not configured
   const wd = {
@@ -81,7 +78,7 @@ async function getWorkingDaysForMonth(schoolId, year, month, schoolWorkingDays =
 
   let workingDays = 0, weekendCount = 0;
 
-  for (let day = 1; day <= lastDay; day++) {
+  for (let day = 1; day <= daysInMonth; day++) {
     const d       = new Date(year, month - 1, day);
     const dayName = DAY_NAMES[d.getDay()];
     const dateStr = d.toISOString().slice(0, 10);

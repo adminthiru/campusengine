@@ -232,17 +232,19 @@ const getStudentAttendanceSummary = async (req, res) => {
     }
 
     const now = new Date();
-    const curY = now.getFullYear(), curM = now.getMonth() + 1, curD = now.getDate();
+    const curY = now.getFullYear(), curM = now.getMonth() + 1;
 
     // Determine the attendance window and the set of months whose calendar
     // working days form the denominator. With an explicit month/year we use
-    // that month; otherwise we span the active academic year up to today.
+    // that month; otherwise we span the active academic year up to the
+    // current month. Each month contributes its FULL working-day count so the
+    // total matches the Attendance/calendar module exactly.
     let dateFilter = null;
     const monthsToCount = [];
     if (month && year) {
       const y = Number(year), m = Number(month);
       dateFilter = { $gte: new Date(y, m - 1, 1), $lt: new Date(y, m, 1) };
-      monthsToCount.push({ y, m, upToDay: (y === curY && m === curM) ? curD : null });
+      monthsToCount.push({ y, m });
     } else {
       const startMonth = schoolDoc?.academicYear?.startMonth || 6;
       const endMonth = schoolDoc?.academicYear?.endMonth || 3;
@@ -253,9 +255,7 @@ const getStudentAttendanceSummary = async (req, res) => {
       const lastIdx = Math.min(curY * 12 + (curM - 1), ayEndIdx);
       dateFilter = { $gte: new Date(ayStartYear, startMonth - 1, 1) };
       for (let idx = startIdx; idx <= lastIdx; idx++) {
-        const y = Math.floor(idx / 12);
-        const m = (idx % 12) + 1;
-        monthsToCount.push({ y, m, upToDay: (y === curY && m === curM) ? curD : null });
+        monthsToCount.push({ y: Math.floor(idx / 12), m: (idx % 12) + 1 });
       }
     }
 
@@ -276,8 +276,8 @@ const getStudentAttendanceSummary = async (req, res) => {
     // Total days = calendar working days (from the calendar/holidays module),
     // not just the days that happen to have been marked.
     let workingDays = 0;
-    for (const { y, m, upToDay } of monthsToCount) {
-      const r = await getWorkingDaysForMonth(schoolId, y, m, swd, satSchedule, upToDay);
+    for (const { y, m } of monthsToCount) {
+      const r = await getWorkingDaysForMonth(schoolId, y, m, swd, satSchedule);
       workingDays += r.workingDays;
     }
 
