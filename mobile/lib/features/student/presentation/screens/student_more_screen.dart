@@ -411,11 +411,12 @@ class _ProfileSheetState extends State<_ProfileSheet> {
   }
 
   void _confirmLogout(BuildContext context, AuthProvider auth) {
-    Navigator.pop(context);
+    // Show confirmation stacked on top; auth.logout() triggers navigation
+    // which dismisses all sheets — no need to pop the profile sheet manually.
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => Consumer<ThemeProvider>(
+      builder: (sheetCtx) => Consumer<ThemeProvider>(
         builder: (_, tp, __) {
           final isDark = tp.isDark;
           return Container(
@@ -465,7 +466,7 @@ class _ProfileSheetState extends State<_ProfileSheet> {
                             borderRadius: BorderRadius.circular(
                                 AppDimensions.radiusMd)),
                       ),
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () => Navigator.pop(sheetCtx),
                       child: Text('Cancel',
                           style: TextStyle(
                               color: AppColors.textMuted,
@@ -486,7 +487,7 @@ class _ProfileSheetState extends State<_ProfileSheet> {
                                 AppDimensions.radiusMd)),
                       ),
                       onPressed: () {
-                        Navigator.pop(context);
+                        Navigator.pop(sheetCtx);
                         auth.logout();
                       },
                       child: const Text('Log Out',
