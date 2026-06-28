@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 
@@ -602,19 +604,24 @@ class ExamsProvider extends ChangeNotifier {
     required String classId,
     required String studentId,
     required String subjectId,
-    required String filePath,
+    String? filePath,
     required String fileName,
+    Uint8List? bytes,
   }) async {
+    if (filePath == null && bytes == null) return false;
     _isActionLoading = true;
     _error = null;
     notifyListeners();
     try {
+      final MultipartFile multipart = filePath != null
+          ? await MultipartFile.fromFile(filePath, filename: fileName)
+          : MultipartFile.fromBytes(bytes!, filename: fileName);
       final formData = FormData.fromMap({
         'examId': examId,
         'classId': classId,
         'studentId': studentId,
         'subjectId': subjectId,
-        'answerPaper': await MultipartFile.fromFile(filePath, filename: fileName),
+        'answerPaper': multipart,
       });
 
       final res = await ApiClient.post(ApiEndpoints.examAnswerPaper, data: formData);

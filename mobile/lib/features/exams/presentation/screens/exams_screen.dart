@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -1709,7 +1711,7 @@ class _MarksEntryViewState extends State<_MarksEntryView> {
                                   remarks: updated.remarks,
                                 ),
                                 onUploadPdf: _isEditing
-                                    ? (path, name) async {
+                                    ? (path, name, bytes) async {
                                         final success =
                                             await p.uploadAnswerPaper(
                                           examId: widget.exam.id,
@@ -1720,6 +1722,7 @@ class _MarksEntryViewState extends State<_MarksEntryView> {
                                               widget.schedule.subjectId ?? '',
                                           filePath: path,
                                           fileName: name,
+                                          bytes: bytes,
                                         );
                                         if (!success &&
                                             context.mounted &&
@@ -1817,7 +1820,7 @@ class _StudentMarkCard extends StatefulWidget {
   final bool isDark;
   final bool isReadOnly;
   final Function(ExamMarkEntry) onChanged;
-  final Future<void> Function(String path, String name)? onUploadPdf;
+  final Future<void> Function(String? path, String name, Uint8List? bytes)? onUploadPdf;
 
   const _StudentMarkCard({
     required this.index,
@@ -1843,19 +1846,23 @@ class _StudentMarkCardState extends State<_StudentMarkCard> {
 
   Future<void> _pickAndUploadPdf() async {
     if (widget.onUploadPdf == null) return;
-    
+
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf'],
+      withData: true, // ensures bytes are loaded on Android content URIs
     );
-    
-    if (result != null && result.files.single.path != null) {
-      final path = result.files.single.path!;
-      final name = result.files.single.name;
-      setState(() => _isUploadingPdf = true);
-      await widget.onUploadPdf!(path, name);
-      if (mounted) setState(() => _isUploadingPdf = false);
-    }
+
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.single;
+    final name = file.name;
+    final path = file.path;           // may be null on Android content URIs
+    final bytes = file.bytes;         // always populated when withData: true
+    if (path == null && bytes == null) return;
+
+    setState(() => _isUploadingPdf = true);
+    await widget.onUploadPdf!(path, name, bytes);
+    if (mounted) setState(() => _isUploadingPdf = false);
   }
 
   @override
