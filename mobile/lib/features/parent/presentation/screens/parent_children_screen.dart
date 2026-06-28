@@ -631,19 +631,31 @@ class _AttendanceTabState extends State<_AttendanceTab> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // Each record is a full attendance document with a `records[]` array;
+    // pull out THIS child's per-day status (full word, e.g. 'half_day').
     final Map<int, String> dayStatus = {};
-    for (final r in _records) {
+    for (final doc in _records) {
+      if (doc is! Map) continue;
+      if (doc['type'] != null && doc['type'] != 'student') continue;
+      DateTime d;
       try {
-        final d = DateTime.parse(r['date'].toString());
-        dayStatus[d.day] = r['status'] as String? ?? 'P';
-      } catch (_) {}
+        d = DateTime.parse(doc['date'].toString()).toUtc();
+      } catch (_) {
+        continue;
+      }
+      final recs = doc['records'];
+      if (recs is! List) continue;
+      for (final rec in recs) {
+        if (rec is! Map) continue;
+        if (_recStudentId(rec) != widget.childId) continue;
+        final st = rec['status'];
+        if (st is String && st.isNotEmpty) dayStatus[d.day] = st;
+        break;
+      }
     }
 
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
     final firstWeekday = DateTime(_month.year, _month.month, 1).weekday;
-    final present = dayStatus.values.where((s) => s == 'P').length;
-    final absent = dayStatus.values.where((s) => s == 'A').length;
-    final leave = dayStatus.values.where((s) => s == 'L').length;
 
     return Column(
       children: [
@@ -668,13 +680,15 @@ class _AttendanceTabState extends State<_AttendanceTab> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              _statChip('P $present', AppColors.accentGreen),
-              const SizedBox(width: 8),
-              _statChip('A $absent', AppColors.accentRed),
-              const SizedBox(width: 8),
-              _statChip('L $leave', AppColors.warning),
+              for (final c in _categories)
+                _statChip(
+                  '${c.$2} ${dayStatus.values.where((s) => s == c.$1).length}',
+                  c.$3,
+                ),
             ],
           ),
         ),
@@ -699,13 +713,7 @@ class _AttendanceTabState extends State<_AttendanceTab> {
                   if (i < firstWeekday - 1) return const SizedBox();
                   final day = i - (firstWeekday - 2);
                   final status = dayStatus[day];
-                  final color = status == 'P'
-                      ? AppColors.accentGreen
-                      : status == 'A'
-                          ? AppColors.accentRed
-                          : status == 'L'
-                              ? AppColors.warning
-                              : null;
+                  final color = _colorFor(status);
                   return Container(
                     decoration: BoxDecoration(
                       color: color != null
@@ -737,6 +745,30 @@ class _AttendanceTabState extends State<_AttendanceTab> {
           ),
       ],
     );
+  }
+
+  // The five student-attendance categories shown to parents, in full words.
+  static const List<(String, String, Color)> _categories = [
+    ('present', 'Present', AppColors.accentGreen),
+    ('absent', 'Absent', AppColors.accentRed),
+    ('half_day', 'Half Day', AppColors.accentOrange),
+    ('late', 'Late', AppColors.warning),
+    ('excused', 'Excused', AppColors.info),
+  ];
+
+  Color? _colorFor(String? status) {
+    for (final c in _categories) {
+      if (c.$1 == status) return c.$3;
+    }
+    return null;
+  }
+
+  // The student ref may be a populated map ({_id,...}) or a bare id string.
+  String _recStudentId(Map rec) {
+    final s = rec['student'];
+    if (s is Map) return (s['_id'] ?? '').toString();
+    if (s is String) return s;
+    return '';
   }
 
   Widget _statChip(String label, Color color) => Container(
