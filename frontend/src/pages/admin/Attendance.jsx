@@ -523,7 +523,8 @@ export default function Attendance() {
                 <span style={{
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                   minWidth: 18, height: 18, padding: '0 5px',
-                  background: '#ef4444', color: '#fff',
+                  background: tab === key ? 'var(--primary)' : '#e2e8f0',
+                  color: tab === key ? '#fff' : '#64748b',
                   fontSize: 11, fontWeight: 700, borderRadius: 20,
                   lineHeight: 1,
                 }}>{badge}</span>
