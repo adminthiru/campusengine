@@ -192,6 +192,20 @@ export default function Attendance() {
   });
   const studentLeaves = (stuLeavesData?.leaves ?? []).filter(lv => lv.student);
 
+  // Always-on query: total pending leaves across both student + staff
+  // Used only for the tab badge — lightweight, refetches every 30 s.
+  const { data: pendingLeavesCount = 0 } = useQuery({
+    queryKey: ['pending-leaves-count'],
+    queryFn: async () => {
+      const [stuRes, staffRes] = await Promise.all([
+        api.get('/student-leaves?status=pending').catch(() => null),
+        api.get('/leaves?status=pending').catch(() => null),
+      ]);
+      return (stuRes?.leaves?.length ?? 0) + (staffRes?.leaves?.length ?? 0);
+    },
+    refetchInterval: 30000,
+  });
+
   const leaveQuery = search.trim().toLowerCase();
   const loadingLeaveList = leaveScope === 'staff' ? loadingLeaves : loadingStuLeaves;
   const displayLeaves = leaveScope === 'staff'
@@ -492,8 +506,8 @@ export default function Attendance() {
             { key: 'student',  label: 'Student Attendance' },
             { key: 'employee', label: 'Employee Attendance' },
             { key: 'checkin',  label: 'Staff Check-in' },
-            { key: 'leaves',   label: 'Leave Requests' },
-          ].map(({ key, label }) => (
+            { key: 'leaves',   label: 'Leave Requests', badge: pendingLeavesCount },
+          ].map(({ key, label, badge }) => (
             <button key={key}
               onClick={() => { setTab(key); setSearch(''); if (key === 'student') setEmpRole(''); window.scrollTo({ top: 0, behavior: 'instant' }); }}
               style={{
@@ -502,8 +516,18 @@ export default function Attendance() {
                 color: tab === key ? 'var(--primary)' : 'var(--text-secondary)',
                 borderBottom: `2px solid ${tab === key ? 'var(--primary)' : 'transparent'}`,
                 transition: 'all 0.15s', whiteSpace: 'nowrap', flexShrink: 0,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
               }}>
               {label}
+              {badge > 0 && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  minWidth: 18, height: 18, padding: '0 5px',
+                  background: '#ef4444', color: '#fff',
+                  fontSize: 11, fontWeight: 700, borderRadius: 20,
+                  lineHeight: 1,
+                }}>{badge}</span>
+              )}
             </button>
           ))}
         </div>
