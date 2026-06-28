@@ -1,6 +1,6 @@
 // ── Student Detail Screen ─────────────────────────────────────────────────────
-// Mirrors the web StudentDetail component with tabs:
-// Overview | More Info | Attendance | Homework | Exams | Fees
+// Mirrors the web StudentDetail: Overview | More Info | Attendance |
+// Exam Results | Home Works | Fees
 // ─────────────────────────────────────────────────────────────────────────────
 
 import 'package:flutter/material.dart';
@@ -11,13 +11,12 @@ import 'package:skl_teacher/core/theme/app_colors.dart';
 import 'package:skl_teacher/core/theme/app_typography.dart';
 import 'package:skl_teacher/core/widgets/skeleton.dart';
 
-// Tab constants
 const _tabs = [
   'Overview',
   'More Info',
   'Attendance',
-  'Homework',
-  'Exams',
+  'Exam Results',
+  'Home Works',
   'Fees',
 ];
 
@@ -80,7 +79,6 @@ class _StudentDetailScreenState extends State<StudentDetailScreen>
         appBar: _buildAppBar(isDark, widget.studentName ?? 'Student'),
         body: SkeletonShimmer(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // Profile header placeholder
             Container(
               color: isDark ? AppColors.cardDark : Colors.white,
               padding: const EdgeInsets.all(16),
@@ -99,7 +97,6 @@ class _StudentDetailScreenState extends State<StudentDetailScreen>
               ]),
             ),
             const SizedBox(height: 16),
-            // Section card placeholders
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -123,8 +120,7 @@ class _StudentDetailScreenState extends State<StudentDetailScreen>
         appBar: _buildAppBar(isDark, 'Error'),
         body: Center(
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Icon(Icons.error_outline,
-                size: 52, color: AppColors.accentRed),
+            const Icon(Icons.error_outline, size: 52, color: AppColors.accentRed),
             const SizedBox(height: 12),
             Text(_error ?? 'Failed to load student',
                 style: AppTypography.s14Regular(color: AppColors.textMuted)),
@@ -154,12 +150,10 @@ class _StudentDetailScreenState extends State<StudentDetailScreen>
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
       appBar: _buildAppBar(isDark, name),
       body: Column(children: [
-        // ── Profile Header Card ──────────────────────────────────────────────
         Container(
           color: isDark ? AppColors.cardDark : Colors.white,
           padding: const EdgeInsets.all(16),
           child: Row(children: [
-            // Avatar
             CircleAvatar(
               radius: 30,
               backgroundColor: genderColor.withValues(alpha: 0.12),
@@ -176,40 +170,39 @@ class _StudentDetailScreenState extends State<StudentDetailScreen>
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                  Text(name,
-                      style: AppTypography.s16Bold(
-                          color: isDark ? Colors.white : AppColors.textPrimary),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 3),
-                  Wrap(spacing: 6, children: [
-                    if (admNo.isNotEmpty)
-                      _Chip(admNo,
-                          bg: AppColors.badgeInfoBg, fg: AppColors.primary),
-                    if (classLabel.isNotEmpty)
-                      _Chip(classLabel,
-                          bg: AppColors.primary.withValues(alpha: 0.08),
-                          fg: AppColors.primary),
-                    if (roll.isNotEmpty)
-                      _Chip('Roll $roll',
-                          bg: AppColors.badgeSuccessBg,
-                          fg: AppColors.accentGreen),
-                  ]),
-                  const SizedBox(height: 4),
-                  Row(children: [
-                    _StatusDot(status),
-                    const SizedBox(width: 5),
-                    Text(status.toUpperCase(),
-                        style: AppTypography.s12SemiBold(
-                            color: status == 'active'
-                                ? AppColors.accentGreen
-                                : AppColors.textMuted)),
-                  ]),
-                ])),
+              Text(name,
+                  style: AppTypography.s16Bold(
+                      color: isDark ? Colors.white : AppColors.textPrimary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 3),
+              Wrap(spacing: 6, children: [
+                if (admNo.isNotEmpty)
+                  _Chip(admNo,
+                      bg: AppColors.badgeInfoBg, fg: AppColors.primary),
+                if (classLabel.isNotEmpty)
+                  _Chip(classLabel,
+                      bg: AppColors.primary.withValues(alpha: 0.08),
+                      fg: AppColors.primary),
+                if (roll.isNotEmpty)
+                  _Chip('Roll $roll',
+                      bg: AppColors.badgeSuccessBg,
+                      fg: AppColors.accentGreen),
+              ]),
+              const SizedBox(height: 4),
+              Row(children: [
+                _StatusDot(status),
+                const SizedBox(width: 5),
+                Text(status.toUpperCase(),
+                    style: AppTypography.s12SemiBold(
+                        color: status == 'active'
+                            ? AppColors.accentGreen
+                            : AppColors.textMuted)),
+              ]),
+            ])),
           ]),
         ),
 
-        // ── Tab Bar ─────────────────────────────────────────────────────────
         Container(
           color: isDark ? AppColors.cardDark : Colors.white,
           child: TabBar(
@@ -228,14 +221,13 @@ class _StudentDetailScreenState extends State<StudentDetailScreen>
           ),
         ),
 
-        // ── Tab Content ──────────────────────────────────────────────────────
         Expanded(
           child: TabBarView(controller: _tc, children: [
             _OverviewTab(student: s, isDark: isDark, onRefresh: _load),
             _MoreInfoTab(student: s, isDark: isDark, onRefresh: _load),
             _AttendanceTab(studentId: widget.studentId, isDark: isDark),
-            _HomeworkTab(studentId: widget.studentId, isDark: isDark),
             _ExamsTab(studentId: widget.studentId, isDark: isDark),
+            _HomeworkTab(studentId: widget.studentId, isDark: isDark),
             _FeesTab(studentId: widget.studentId, isDark: isDark),
           ]),
         ),
@@ -278,122 +270,160 @@ class _OverviewTab extends StatelessWidget {
     final admDateFmt = admDate != null ? _fmtDate(admDate) : '—';
     final guardians = s['guardians'] as List? ?? [];
     final primaryG = guardians.isNotEmpty ? guardians[0] : null;
+    final transport = s['transportRoute'];
+    final busStop = s['busStop'] as String?;
 
     return RefreshIndicator(
       onRefresh: onRefresh,
       color: AppColors.primary,
       child: SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Academic Details
-        _SectionTitle('Academic Details', isDark),
-        _InfoCard(isDark: isDark, children: [
-          _Row('Admission Number', s['admissionNumber'] ?? '—', isDark),
-          _Row('Admission Date', admDateFmt, isDark),
-          _Row('Class', classLabel, isDark),
-          _Row('Roll Number', s['rollNumber'] ?? '—', isDark),
-        ]),
-        const SizedBox(height: 16),
-
-        // Personal Details
-        _SectionTitle('Personal Details', isDark),
-        _InfoCard(isDark: isDark, children: [
-          _Row('Full Name', s['name'] ?? '—', isDark),
-          _Row('Gender', (s['gender'] ?? '—').toString().capitalize(), isDark),
-          _Row('Date of Birth', dobFmt, isDark),
-          _Row('Status', (s['status'] ?? '—').toString().capitalize(), isDark),
-          if (s['bloodGroup'] != null)
-            _Row('Blood Group', s['bloodGroup'], isDark),
-          if (s['aadharNumber'] != null)
-            _Row('Aadhar Number', s['aadharNumber'], isDark),
-        ]),
-        const SizedBox(height: 16),
-
-        // Parent Contact
-        if (primaryG != null) ...[
-          _SectionTitle('Primary Guardian', isDark),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.cardDark : Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: isDark ? AppColors.borderDark : AppColors.borderLight),
-              boxShadow: isDark ? [] : AppColors.shadowSm,
-            ),
-            child: Row(children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: AppColors.primary,
-                child: Text((primaryG['name'] ?? 'P')[0].toUpperCase(),
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    Text(primaryG['name'] ?? '—',
-                        style: AppTypography.s14SemiBold(
-                            color:
-                                isDark ? Colors.white : AppColors.textPrimary)),
-                    const SizedBox(height: 3),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.badgeInfoBg,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                          (primaryG['relation'] ?? '').toString().capitalize(),
-                          style: AppTypography.s12SemiBold(
-                              color: AppColors.primary)),
-                    ),
-                    if (primaryG['phone'] != null) ...[
-                      const SizedBox(height: 4),
-                      Row(children: [
-                        Icon(Icons.phone_outlined,
-                            size: 13, color: AppColors.textMuted),
-                        const SizedBox(width: 4),
-                        Text(primaryG['phone'] ?? '',
-                            style: AppTypography.s13Regular(
-                                color: AppColors.textSecondary)),
-                      ]),
-                    ],
-                  ])),
-            ]),
-          ),
-          const SizedBox(height: 16),
-        ],
-
-        // Address
-        if (s['address']?['street'] != null) ...[
-          _SectionTitle('Address', isDark),
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Academic Details
+          _SectionTitle('Academic Details', isDark),
           _InfoCard(isDark: isDark, children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Row(children: [
-                Icon(Icons.location_on_outlined,
-                    size: 16, color: AppColors.textMuted),
-                const SizedBox(width: 8),
-                Expanded(
-                    child: Text(s['address']['street'] ?? '—',
-                        style: AppTypography.s14Regular(
-                            color: isDark
-                                ? Colors.white
-                                : AppColors.textSecondary))),
-              ]),
-            ),
+            _Row('Admission Number', s['admissionNumber'] ?? '—', isDark),
+            _Row('Admission Date', admDateFmt, isDark),
+            _Row('Class', classLabel, isDark),
+            _Row('Roll Number', s['rollNumber'] ?? '—', isDark),
+            if (s['academicYear'] != null)
+              _Row('Academic Year', s['academicYear'], isDark),
           ]),
           const SizedBox(height: 16),
-        ],
-      ]),
-    ),
+
+          // Personal Details
+          _SectionTitle('Personal Details', isDark),
+          _InfoCard(isDark: isDark, children: [
+            _Row('Full Name', s['name'] ?? '—', isDark),
+            _Row('Gender', (s['gender'] ?? '—').toString().capitalize(), isDark),
+            _Row('Date of Birth', dobFmt, isDark),
+            _Row('Status', (s['status'] ?? '—').toString().capitalize(), isDark),
+            if (s['bloodGroup'] != null)
+              _Row('Blood Group', s['bloodGroup'], isDark),
+            if (s['category'] != null)
+              _Row('Category', (s['category'] ?? '').toString().toUpperCase(), isDark),
+            if (s['aadharNumber'] != null)
+              _Row('Aadhar Number', s['aadharNumber'], isDark),
+          ]),
+          const SizedBox(height: 16),
+
+          // Parent Contact
+          if (primaryG != null) ...[
+            _SectionTitle('Parent Contact', isDark),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.cardDark : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                    color: isDark ? AppColors.borderDark : AppColors.borderLight),
+                boxShadow: isDark ? [] : AppColors.shadowSm,
+              ),
+              child: Row(children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: AppColors.primary,
+                  child: Text((primaryG['name'] ?? 'P')[0].toUpperCase(),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                  Text(primaryG['name'] ?? '—',
+                      style: AppTypography.s14SemiBold(
+                          color: isDark ? Colors.white : AppColors.textPrimary)),
+                  const SizedBox(height: 3),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.badgeInfoBg,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                        (primaryG['relation'] ?? '').toString().capitalize(),
+                        style: AppTypography.s12SemiBold(
+                            color: AppColors.primary)),
+                  ),
+                  if (s['phone'] != null && (s['phone'] as String).isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(children: [
+                      Icon(Icons.phone_outlined,
+                          size: 13, color: AppColors.textMuted),
+                      const SizedBox(width: 4),
+                      Text(s['phone'],
+                          style: AppTypography.s13Regular(
+                              color: AppColors.textSecondary)),
+                    ]),
+                  ],
+                  if (s['alternativeMobile'] != null &&
+                      (s['alternativeMobile'] as String).isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Row(children: [
+                      Icon(Icons.phone_outlined,
+                          size: 13, color: AppColors.textMuted),
+                      const SizedBox(width: 4),
+                      Text('${s['alternativeMobile']} (Alt)',
+                          style: AppTypography.s12Regular(
+                              color: AppColors.textSecondary)),
+                    ]),
+                  ],
+                ])),
+              ]),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Address
+          if (s['address']?['street'] != null) ...[
+            _SectionTitle('Address', isDark),
+            _InfoCard(isDark: isDark, children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Row(children: [
+                  Icon(Icons.location_on_outlined,
+                      size: 16, color: AppColors.textMuted),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: Text(s['address']['street'] ?? '—',
+                          style: AppTypography.s14Regular(
+                              color: isDark
+                                  ? Colors.white
+                                  : AppColors.textSecondary))),
+                ]),
+              ),
+            ]),
+            const SizedBox(height: 16),
+          ],
+
+          // Transport
+          if (transport != null) ...[
+            _SectionTitle('Transport', isDark),
+            _InfoCard(isDark: isDark, children: [
+              _Row(
+                'Route',
+                transport is Map
+                    ? [
+                        if (transport['routeNumber'] != null)
+                          '#${transport['routeNumber']}',
+                        transport['vehicleNumber'] ?? transport['routeName'] ?? '',
+                      ].where((e) => e.isNotEmpty).join(' · ')
+                    : transport.toString(),
+                isDark,
+              ),
+              if (busStop != null && busStop.isNotEmpty)
+                _Row('Bus Stop', busStop, isDark),
+            ]),
+            const SizedBox(height: 16),
+          ],
+        ]),
+      ),
     );
   }
 }
@@ -428,145 +458,149 @@ class _MoreInfoTab extends StatelessWidget {
       onRefresh: onRefresh,
       color: AppColors.primary,
       child: SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // All Guardians
-        _SectionTitle('Parents / Guardians', isDark),
-        if (guardians.isEmpty)
-          _EmptyState('No guardian contacts added')
-        else
-          ...guardians.asMap().entries.map((entry) {
-            final i = entry.key;
-            final g = entry.value;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 10),
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _SectionTitle('Parent / Guardian Contacts', isDark),
+          if (guardians.isEmpty)
+            _EmptyState('No guardian contacts added')
+          else
+            ...guardians.asMap().entries.map((entry) {
+              final i = entry.key;
+              final g = entry.value;
+              final altPhone = g['alternatePhone'] ?? g['alternativeMobile'];
+              final email = g['email'] as String?;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.cardDark : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color:
+                          isDark ? AppColors.borderDark : AppColors.borderLight),
+                  boxShadow: isDark ? [] : AppColors.shadowSm,
+                ),
+                child: Row(children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor:
+                        i == 0 ? AppColors.primary : AppColors.textSecondary,
+                    child: Text((g['name'] ?? '?')[0].toUpperCase(),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                    Row(children: [
+                      Text(g['name'] ?? '—',
+                          style: AppTypography.s14SemiBold(
+                              color: isDark
+                                  ? Colors.white
+                                  : AppColors.textPrimary)),
+                      if (i == 0) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                              color: AppColors.badgeInfoBg,
+                              borderRadius: BorderRadius.circular(10)),
+                          child: Text('Primary',
+                              style: AppTypography.s12SemiBold(
+                                  color: AppColors.primary)),
+                        ),
+                      ],
+                    ]),
+                    const SizedBox(height: 3),
+                    Text((g['relation'] ?? '').toString().capitalize(),
+                        style: AppTypography.s12Regular(
+                            color: AppColors.textMuted)),
+                  ])),
+                  Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                    if (g['phone'] != null)
+                      Text(g['phone'],
+                          style: AppTypography.s13Regular(
+                              color: AppColors.textSecondary)),
+                    if (altPhone != null)
+                      Text('$altPhone (Alt)',
+                          style: AppTypography.s12Regular(
+                              color: AppColors.textMuted)),
+                    if (email != null && email.isNotEmpty)
+                      Text(email,
+                          style: AppTypography.s12Regular(
+                              color: AppColors.textMuted)),
+                  ]),
+                ]),
+              );
+            }),
+
+          const SizedBox(height: 16),
+
+          if (bgFields.isNotEmpty) ...[
+            _SectionTitle('Background', isDark),
+            _InfoCard(
+                isDark: isDark,
+                children:
+                    bgFields.map((e) => _Row(e.key, e.value, isDark)).toList()),
+            const SizedBox(height: 16),
+          ],
+
+          if (medConds.isNotEmpty) ...[
+            _SectionTitle('Medical Conditions', isDark),
+            Container(
+              width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: isDark ? AppColors.cardDark : Colors.white,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                    color:
-                        isDark ? AppColors.borderDark : AppColors.borderLight),
+                    color: isDark ? AppColors.borderDark : AppColors.borderLight),
                 boxShadow: isDark ? [] : AppColors.shadowSm,
               ),
-              child: Row(children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor:
-                      i == 0 ? AppColors.primary : AppColors.textSecondary,
-                  child: Text((g['name'] ?? '?')[0].toUpperCase(),
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15)),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      Row(children: [
-                        Text(g['name'] ?? '—',
-                            style: AppTypography.s14SemiBold(
-                                color: isDark
-                                    ? Colors.white
-                                    : AppColors.textPrimary)),
-                        if (i == 0) ...[
-                          const SizedBox(width: 6),
-                          Container(
+              child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: medConds
+                      .map((c) => Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 1),
+                                horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                                color: AppColors.badgeInfoBg,
-                                borderRadius: BorderRadius.circular(10)),
-                            child: Text('Primary',
+                              color: AppColors.badgeWarningBg,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                  color: AppColors.warning
+                                      .withValues(alpha: 0.3)),
+                            ),
+                            child: Text(c,
                                 style: AppTypography.s12SemiBold(
-                                    color: AppColors.primary)),
-                          ),
-                        ],
-                      ]),
-                      const SizedBox(height: 3),
-                      Text((g['relation'] ?? '').toString().capitalize(),
-                          style: AppTypography.s12Regular(
-                              color: AppColors.textMuted)),
-                    ])),
-                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  if (g['phone'] != null)
-                    Text(g['phone'],
-                        style: AppTypography.s13Regular(
-                            color: AppColors.textSecondary)),
-                  if (g['alternatePhone'] != null)
-                    Text('${g['alternatePhone']} (Alt)',
-                        style: AppTypography.s12Regular(
-                            color: AppColors.textMuted)),
-                ]),
-              ]),
-            );
-          }),
-
-        const SizedBox(height: 16),
-
-        // Background info
-        if (bgFields.isNotEmpty) ...[
-          _SectionTitle('Background', isDark),
-          _InfoCard(
-              isDark: isDark,
-              children:
-                  bgFields.map((e) => _Row(e.key, e.value, isDark)).toList()),
-          const SizedBox(height: 16),
-        ],
-
-        // Medical
-        if (medConds.isNotEmpty) ...[
-          _SectionTitle('Medical Conditions', isDark),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.cardDark : Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: isDark ? AppColors.borderDark : AppColors.borderLight),
-              boxShadow: isDark ? [] : AppColors.shadowSm,
+                                    color: AppColors.warning)),
+                          ))
+                      .toList()),
             ),
-            child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: medConds
-                    .map((c) => Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.badgeWarningBg,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                                color:
-                                    AppColors.warning.withValues(alpha: 0.3)),
-                          ),
-                          child: Text(c,
-                              style: AppTypography.s12SemiBold(
-                                  color: AppColors.warning)),
-                        ))
-                    .toList()),
-          ),
-          const SizedBox(height: 16),
-        ],
+            const SizedBox(height: 16),
+          ],
 
-        // Remarks
-        if (s['remarks'] != null && s['remarks'].toString().isNotEmpty) ...[
-          _SectionTitle('Remarks', isDark),
-          _InfoCard(isDark: isDark, children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Text(s['remarks'],
-                  style: AppTypography.s14Regular(
-                      color: isDark ? Colors.white : AppColors.textSecondary)),
-            ),
-          ]),
-        ],
-      ]),
-    ),
+          if (s['remarks'] != null && s['remarks'].toString().isNotEmpty) ...[
+            _SectionTitle('Remarks', isDark),
+            _InfoCard(isDark: isDark, children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Text(s['remarks'],
+                    style: AppTypography.s14Regular(
+                        color: isDark ? Colors.white : AppColors.textSecondary)),
+              ),
+            ]),
+          ],
+        ]),
+      ),
     );
   }
 }
@@ -589,44 +623,19 @@ class _AttendanceTabState extends State<_AttendanceTab> {
   late int _month, _year;
 
   static const _months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec'
+    'Jan','Feb','Mar','Apr','May','Jun',
+    'Jul','Aug','Sep','Oct','Nov','Dec'
   ];
+
   static const _statusMeta = {
-    'present': {
-      'label': 'P',
-      'color': Color(0xFF10B981),
-      'bg': Color(0xFFDCFCE7)
-    },
-    'absent': {
-      'label': 'A',
-      'color': Color(0xFFEF4444),
-      'bg': Color(0xFFFEE2E2)
-    },
-    'late': {'label': 'L', 'color': Color(0xFFF59E0B), 'bg': Color(0xFFFEF3C7)},
-    'half_day': {
-      'label': 'H',
-      'color': Color(0xFF8B5CF6),
-      'bg': Color(0xFFF3E8FF)
-    },
-    'od': {'label': 'OD', 'color': Color(0xFF0891B2), 'bg': Color(0xFFCFFAFE)},
-    'cl': {'label': 'CL', 'color': Color(0xFF0284C7), 'bg': Color(0xFFDBEAFE)},
-    'sl': {'label': 'SL', 'color': Color(0xFF7C3AED), 'bg': Color(0xFFEDE9FE)},
-    'excused': {
-      'label': 'E',
-      'color': Color(0xFF6366F1),
-      'bg': Color(0xFFEDE9FE)
-    },
+    'present':  {'label': 'P',  'color': Color(0xFF10B981), 'bg': Color(0xFFDCFCE7)},
+    'absent':   {'label': 'A',  'color': Color(0xFFEF4444), 'bg': Color(0xFFFEE2E2)},
+    'late':     {'label': 'L',  'color': Color(0xFFF59E0B), 'bg': Color(0xFFFEF3C7)},
+    'half_day': {'label': 'H',  'color': Color(0xFF8B5CF6), 'bg': Color(0xFFF3E8FF)},
+    'od':       {'label': 'OD', 'color': Color(0xFF0891B2), 'bg': Color(0xFFCFFAFE)},
+    'cl':       {'label': 'CL', 'color': Color(0xFF0284C7), 'bg': Color(0xFFDBEAFE)},
+    'sl':       {'label': 'SL', 'color': Color(0xFF7C3AED), 'bg': Color(0xFFEDE9FE)},
+    'excused':  {'label': 'E',  'color': Color(0xFF6366F1), 'bg': Color(0xFFEDE9FE)},
   };
 
   @override
@@ -668,12 +677,7 @@ class _AttendanceTabState extends State<_AttendanceTab> {
 
   void _prevMonth() {
     setState(() {
-      if (_month == 1) {
-        _month = 12;
-        _year--;
-      } else {
-        _month--;
-      }
+      if (_month == 1) { _month = 12; _year--; } else { _month--; }
     });
     _loadRecords();
   }
@@ -682,12 +686,7 @@ class _AttendanceTabState extends State<_AttendanceTab> {
     final now = DateTime.now();
     if (_year > now.year || (_year == now.year && _month >= now.month)) return;
     setState(() {
-      if (_month == 12) {
-        _month = 1;
-        _year++;
-      } else {
-        _month++;
-      }
+      if (_month == 12) { _month = 1; _year++; } else { _month++; }
     });
     _loadRecords();
   }
@@ -700,24 +699,11 @@ class _AttendanceTabState extends State<_AttendanceTab> {
       final key = dateStr.substring(0, 10);
       map.putIfAbsent(key, () => []).add(r['status'] as String? ?? '');
     }
-    // Dominant status per day (absent > late > present etc.)
-    const priority = [
-      'absent',
-      'late',
-      'half_day',
-      'excused',
-      'od',
-      'cl',
-      'sl',
-      'present'
-    ];
+    const priority = ['absent','late','half_day','excused','od','cl','sl','present'];
     final result = <String, String?>{};
     map.forEach((key, statuses) {
       for (final p in priority) {
-        if (statuses.contains(p)) {
-          result[key] = p;
-          break;
-        }
+        if (statuses.contains(p)) { result[key] = p; break; }
       }
       result.putIfAbsent(key, () => statuses.first);
     });
@@ -729,21 +715,19 @@ class _AttendanceTabState extends State<_AttendanceTab> {
     final byDate = _byDate;
     final now = DateTime.now();
     final daysInMonth = DateTime(_year, _month + 1, 0).day;
-    final firstDow = DateTime(_year, _month, 1).weekday %
-        7; // Mon=0 in Flutter, Sun=0 in grid
-    final canNext =
-        _year < now.year || (_year == now.year && _month < now.month);
+    final firstDow = DateTime(_year, _month, 1).weekday % 7;
+    final canNext = _year < now.year || (_year == now.year && _month < now.month);
 
     // Monthly counts
-    int present = 0;
+    int mPresent = 0, mAbsent = 0, mLate = 0;
     for (final r in _records) {
       final st = r['status'] as String? ?? '';
-      if (st == 'present') {
-        present++;
-      }
+      if (st == 'present') { mPresent++; }
+      else if (st == 'absent') { mAbsent++; }
+      else if (st == 'late') { mLate++; }
     }
     final mTotal = _records.length;
-    final mPct = mTotal > 0 ? ((present / mTotal) * 100).round() : 0;
+    final mPct = mTotal > 0 ? ((mPresent / mTotal) * 100).round() : 0;
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -752,325 +736,321 @@ class _AttendanceTabState extends State<_AttendanceTab> {
       },
       color: AppColors.primary,
       child: SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Overall summary pills
-        if (_summary != null) ...[
-          Row(
-              children: [
-            _StatPill('Present', '${_summary['present']}',
-                AppColors.accentGreen, const Color(0xFFF0FDF4)),
-            const SizedBox(width: 8),
-            _StatPill('Absent', '${_summary['absent']}', AppColors.accentRed,
-                const Color(0xFFFEF2F2)),
-            const SizedBox(width: 8),
-            _StatPill(
-                'Overall',
-                '${_summary['percentage']}%',
-                (_summary['percentage'] as num? ?? 0) >= 75
-                    ? AppColors.accentGreen
-                    : (_summary['percentage'] as num? ?? 0) >= 50
-                        ? AppColors.accent
-                        : AppColors.accentRed,
-                (_summary['percentage'] as num? ?? 0) >= 75
-                    ? const Color(0xFFF0FDF4)
-                    : const Color(0xFFFEF2F2)),
-          ].expand((w) => [w]).toList()),
-          const SizedBox(height: 16),
-        ],
-
-        // Month navigator
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Row(children: [
-            IconButton(
-              onPressed: _prevMonth,
-              icon: const Icon(Icons.chevron_left),
-              iconSize: 22,
-              padding: EdgeInsets.zero,
-            ),
-            Text('${_months[_month - 1]} $_year',
-                style: AppTypography.s16Bold(
-                    color:
-                        widget.isDark ? Colors.white : AppColors.textPrimary)),
-            IconButton(
-              onPressed: canNext ? _nextMonth : null,
-              icon: Icon(Icons.chevron_right,
-                  color: canNext ? null : AppColors.textMuted),
-              iconSize: 22,
-              padding: EdgeInsets.zero,
-            ),
-          ]),
-          if (mTotal > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: mPct >= 75
-                    ? const Color(0xFFDCFCE7)
-                    : mPct >= 50
-                        ? const Color(0xFFFEF3C7)
-                        : const Color(0xFFFEE2E2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text('$mPct% this month',
-                  style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: mPct >= 75
-                          ? const Color(0xFF166534)
-                          : mPct >= 50
-                              ? const Color(0xFF92400E)
-                              : const Color(0xFFDC2626))),
-            ),
-        ]),
-        const SizedBox(height: 12),
-
-        // Calendar
-        Container(
-          decoration: BoxDecoration(
-            color: widget.isDark ? AppColors.cardDark : Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-                color: widget.isDark
-                    ? AppColors.borderDark
-                    : AppColors.borderLight),
-          ),
-          child: Column(children: [
-            // Day headers
-            Container(
-              decoration: BoxDecoration(
-                color: widget.isDark
-                    ? AppColors.borderDark.withValues(alpha: 0.3)
-                    : const Color(0xFFF8FAFC),
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(14)),
-              ),
-              child: Row(
-                  children: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-                      .map((d) => Expanded(
-                              child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Text(d,
-                                textAlign: TextAlign.center,
-                                style: AppTypography.s12SemiBold(
-                                    color: AppColors.textMuted)),
-                          )))
-                      .toList()),
-            ),
-            if (_loading)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: SkeletonShimmer(
-                  child: SkeletonBox(
-                      width: double.infinity, height: 200, radius: 8),
-                ),
-              )
-            else
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 7,
-                  childAspectRatio: 1.1,
-                ),
-                itemCount: firstDow + daysInMonth,
-                itemBuilder: (_, idx) {
-                  if (idx < firstDow) return const SizedBox.shrink();
-                  final day = idx - firstDow + 1;
-                  final dateKey =
-                      '$_year-${_month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
-                  final status = byDate[dateKey];
-                  final meta = status != null ? _statusMeta[status] : null;
-                  final isToday = dateKey ==
-                      DateTime.now().toIso8601String().substring(0, 10);
-                  return Container(
-                    margin: const EdgeInsets.all(1),
-                    decoration: BoxDecoration(
-                      color: meta != null
-                          ? (meta['bg'] as Color).withValues(alpha: 0.6)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(6),
-                      border: isToday
-                          ? Border.all(color: AppColors.primary, width: 1.5)
-                          : null,
-                    ),
-                    child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text('$day',
-                              style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  fontWeight: isToday
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                  color: isToday
-                                      ? AppColors.primary
-                                      : (widget.isDark
-                                          ? Colors.white70
-                                          : AppColors.textSecondary))),
-                          if (meta != null)
-                            Text(meta['label'] as String,
-                                style: GoogleFonts.inter(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700,
-                                    color: meta['color'] as Color)),
-                        ]),
-                  );
-                },
-              ),
-          ]),
-        ),
-
-        const SizedBox(height: 16),
-
-        // Legend
-        Wrap(
-            spacing: 10,
-            runSpacing: 6,
-            children: _statusMeta.entries
-                .map((e) => Row(mainAxisSize: MainAxisSize.min, children: [
-                      Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                              color: e.value['bg'] as Color,
-                              borderRadius: BorderRadius.circular(2),
-                              border: Border.all(
-                                  color: (e.value['color'] as Color)
-                                      .withValues(alpha: 0.5)))),
-                      const SizedBox(width: 4),
-                      Text(e.key.replaceAll('_', ' ').capitalize(),
-                          style: AppTypography.s12Regular(
-                              color: AppColors.textMuted)),
-                    ]))
-                .toList()),
-      ]),
-    ),
-    );
-  }
-}
-
-// ─── Homework Tab ─────────────────────────────────────────────────────────────
-
-class _HomeworkTab extends StatefulWidget {
-  final String studentId;
-  final bool isDark;
-  const _HomeworkTab({required this.studentId, required this.isDark});
-
-  @override
-  State<_HomeworkTab> createState() => _HomeworkTabState();
-}
-
-class _HomeworkTabState extends State<_HomeworkTab> {
-  List<dynamic> _hw = [];
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    try {
-      final res = await ApiClient.get('/homework',
-          params: {'studentId': widget.studentId, 'limit': '50'});
-      if (mounted) {
-        setState(() {
-          _hw = res.data['homeworks'] as List? ?? [];
-          _loading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) {
-      return const SkeletonList(showLeading: false);
-    }
-    return RefreshIndicator(
-      onRefresh: _load,
-      color: AppColors.primary,
-      child: _hw.isEmpty
-          ? ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: [
-                SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.3),
-                _EmptyState('No homework records found'),
-              ],
-            )
-          : ListView.builder(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      itemCount: _hw.length,
-      itemBuilder: (_, i) {
-        final h = _hw[i];
-        final subject =
-            h['subject']?['name'] as String? ?? h['subject'] as String? ?? '—';
-        final dueDate = h['dueDate'] as String?;
-        final dueFmt = dueDate != null ? _fmtDate(dueDate) : '—';
-        final status = h['status'] as String? ?? '';
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: widget.isDark ? AppColors.cardDark : Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-                color: widget.isDark
-                    ? AppColors.borderDark
-                    : AppColors.borderLight),
-            boxShadow: widget.isDark ? [] : AppColors.shadowSm,
-          ),
-          child: Row(children: [
-            Container(
-                width: 4,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: status == 'submitted'
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Overall summary — 5 stats matching web
+          if (_summary != null) ...[
+            Row(children: [
+              _StatPill('Total Days', '${_summary['total'] ?? 0}',
+                  AppColors.primary, const Color(0xFFEFF6FF)),
+              const SizedBox(width: 6),
+              _StatPill('Present', '${_summary['present'] ?? 0}',
+                  AppColors.accentGreen, const Color(0xFFF0FDF4)),
+              const SizedBox(width: 6),
+              _StatPill('Absent', '${_summary['absent'] ?? 0}',
+                  AppColors.accentRed, const Color(0xFFFEF2F2)),
+              const SizedBox(width: 6),
+              _StatPill('Late', '${_summary['late'] ?? 0}',
+                  AppColors.accent, const Color(0xFFFFFBEB)),
+              const SizedBox(width: 6),
+              _StatPill(
+                  'Overall',
+                  '${_summary['percentage'] ?? 0}%',
+                  (_summary['percentage'] as num? ?? 0) >= 75
                       ? AppColors.accentGreen
-                      : status == 'pending'
+                      : (_summary['percentage'] as num? ?? 0) >= 50
                           ? AppColors.accent
-                          : AppColors.textMuted,
-                  borderRadius: BorderRadius.circular(2),
-                )),
-            const SizedBox(width: 12),
-            Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(h['title'] as String? ?? '—',
-                      style: AppTypography.s14SemiBold(
-                          color: widget.isDark
-                              ? Colors.white
-                              : AppColors.textPrimary)),
-                  const SizedBox(height: 3),
-                  Text('$subject · Due: $dueFmt',
-                      style:
-                          AppTypography.s12Regular(color: AppColors.textMuted)),
-                ])),
-            if (status.isNotEmpty)
-              _Chip(status.capitalize(),
-                  bg: status == 'submitted'
-                      ? AppColors.badgeSuccessBg
-                      : AppColors.badgeWarningBg,
-                  fg: status == 'submitted'
-                      ? AppColors.accentGreen
-                      : AppColors.accent),
+                          : AppColors.accentRed,
+                  (_summary['percentage'] as num? ?? 0) >= 75
+                      ? const Color(0xFFF0FDF4)
+                      : const Color(0xFFFEF2F2)),
+            ]),
+            const SizedBox(height: 16),
+          ],
+
+          // Month navigator
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Row(children: [
+              IconButton(
+                onPressed: _prevMonth,
+                icon: const Icon(Icons.chevron_left),
+                iconSize: 22,
+                padding: EdgeInsets.zero,
+              ),
+              Text('${_months[_month - 1]} $_year',
+                  style: AppTypography.s16Bold(
+                      color: widget.isDark ? Colors.white : AppColors.textPrimary)),
+              IconButton(
+                onPressed: canNext ? _nextMonth : null,
+                icon: Icon(Icons.chevron_right,
+                    color: canNext ? null : AppColors.textMuted),
+                iconSize: 22,
+                padding: EdgeInsets.zero,
+              ),
+            ]),
+            // Monthly chips
+            Wrap(spacing: 4, children: [
+              if (mPresent > 0)
+                _MiniChip('P: $mPresent', const Color(0xFF10B981), const Color(0xFFDCFCE7)),
+              if (mAbsent > 0)
+                _MiniChip('A: $mAbsent', const Color(0xFFEF4444), const Color(0xFFFEE2E2)),
+              if (mLate > 0)
+                _MiniChip('L: $mLate', const Color(0xFFF59E0B), const Color(0xFFFEF3C7)),
+              if (mTotal > 0)
+                _MiniChip(
+                  '$mPct%',
+                  mPct >= 75
+                      ? const Color(0xFF166534)
+                      : mPct >= 50
+                          ? const Color(0xFF92400E)
+                          : const Color(0xFFDC2626),
+                  mPct >= 75
+                      ? const Color(0xFFDCFCE7)
+                      : mPct >= 50
+                          ? const Color(0xFFFEF3C7)
+                          : const Color(0xFFFEE2E2),
+                ),
+            ]),
           ]),
-        );
-      },
-    ),
+          const SizedBox(height: 12),
+
+          // Calendar
+          Container(
+            decoration: BoxDecoration(
+              color: widget.isDark ? AppColors.cardDark : Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: widget.isDark
+                      ? AppColors.borderDark
+                      : AppColors.borderLight),
+            ),
+            child: Column(children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: widget.isDark
+                      ? AppColors.borderDark.withValues(alpha: 0.3)
+                      : const Color(0xFFF8FAFC),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(14)),
+                ),
+                child: Row(
+                    children: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+                        .map((d) => Expanded(
+                                child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Text(d,
+                                  textAlign: TextAlign.center,
+                                  style: AppTypography.s12SemiBold(
+                                      color: AppColors.textMuted)),
+                            )))
+                        .toList()),
+              ),
+              if (_loading)
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: SkeletonShimmer(
+                    child: SkeletonBox(
+                        width: double.infinity, height: 200, radius: 8),
+                  ),
+                )
+              else
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 7,
+                    childAspectRatio: 1.1,
+                  ),
+                  itemCount: firstDow + daysInMonth,
+                  itemBuilder: (_, idx) {
+                    if (idx < firstDow) return const SizedBox.shrink();
+                    final day = idx - firstDow + 1;
+                    final dateKey =
+                        '$_year-${_month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
+                    final status = byDate[dateKey];
+                    final meta = status != null ? _statusMeta[status] : null;
+                    final isToday = dateKey ==
+                        DateTime.now().toIso8601String().substring(0, 10);
+                    return Container(
+                      margin: const EdgeInsets.all(1),
+                      decoration: BoxDecoration(
+                        color: meta != null
+                            ? (meta['bg'] as Color).withValues(alpha: 0.6)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                        border: isToday
+                            ? Border.all(
+                                color: AppColors.primary, width: 1.5)
+                            : null,
+                      ),
+                      child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                        Text('$day',
+                            style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: isToday
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: isToday
+                                    ? AppColors.primary
+                                    : (widget.isDark
+                                        ? Colors.white70
+                                        : AppColors.textSecondary))),
+                        if (meta != null)
+                          Text(meta['label'] as String,
+                              style: GoogleFonts.inter(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  color: meta['color'] as Color)),
+                      ]),
+                    );
+                  },
+                ),
+            ]),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Legend
+          Wrap(
+              spacing: 10,
+              runSpacing: 6,
+              children: _statusMeta.entries
+                  .map((e) => Row(mainAxisSize: MainAxisSize.min, children: [
+                        Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                                color: e.value['bg'] as Color,
+                                borderRadius: BorderRadius.circular(2),
+                                border: Border.all(
+                                    color: (e.value['color'] as Color)
+                                        .withValues(alpha: 0.5)))),
+                        const SizedBox(width: 4),
+                        Text(e.key.replaceAll('_', ' ').capitalize(),
+                            style: AppTypography.s12Regular(
+                                color: AppColors.textMuted)),
+                      ]))
+                  .toList()),
+
+          // Daily records list
+          if (_records.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('DAILY RECORDS',
+                    style: AppTypography.s12SemiBold(
+                        color: widget.isDark
+                            ? AppColors.textMuted
+                            : AppColors.textSecondary)),
+                Text('${_records.length} entries',
+                    style: AppTypography.s12Regular(
+                        color: AppColors.textMuted)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ..._records.map((r) {
+              final dateStr = r['date'] as String? ?? '';
+              final d = dateStr.isNotEmpty ? DateTime.tryParse(dateStr) : null;
+              final dateFmt =
+                  d != null ? DateFormat('dd MMM yyyy').format(d) : '—';
+              final dayFmt =
+                  d != null ? DateFormat('EEE').format(d) : '';
+              final st = r['status'] as String? ?? '';
+              final meta = _statusMeta[st];
+              final period = r['period'];
+              final subjectName = r['subject'] is Map
+                  ? r['subject']['name'] as String? ?? ''
+                  : '';
+              final markedByName = r['markedBy'] is Map
+                  ? r['markedBy']['name'] as String? ?? ''
+                  : '';
+              final remarks = r['remarks'] as String? ?? '';
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: widget.isDark
+                      ? AppColors.cardDark
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: widget.isDark
+                          ? AppColors.borderDark
+                          : AppColors.borderLight),
+                ),
+                child: Row(children: [
+                  if (meta != null)
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: (meta['bg'] as Color)
+                            .withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(meta['label'] as String,
+                          style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: meta['color'] as Color)),
+                    ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Row(children: [
+                        Text(dateFmt,
+                            style: AppTypography.s13SemiBold(
+                                color: widget.isDark
+                                    ? Colors.white
+                                    : AppColors.textPrimary)),
+                        if (dayFmt.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          Text(dayFmt,
+                              style: AppTypography.s12Regular(
+                                  color: AppColors.textMuted)),
+                        ],
+                      ]),
+                      if (period != null || subjectName.isNotEmpty)
+                        Text(
+                          [
+                            if (period != null) 'Period $period',
+                            if (subjectName.isNotEmpty) subjectName,
+                          ].join(' · '),
+                          style: AppTypography.s12Regular(
+                              color: AppColors.textMuted),
+                        ),
+                      if (markedByName.isNotEmpty)
+                        Text('By: $markedByName',
+                            style: AppTypography.s12Regular(
+                                color: AppColors.textMuted)),
+                      if (remarks.isNotEmpty)
+                        Text(remarks,
+                            style: AppTypography.s12Regular(
+                                    color: AppColors.textMuted)
+                                .copyWith(
+                                    fontStyle: FontStyle.italic)),
+                    ]),
+                  ),
+                ]),
+              );
+            }),
+          ],
+        ]),
+      ),
     );
   }
 }
 
-// ─── Exams Tab ────────────────────────────────────────────────────────────────
+// ─── Exam Results Tab ─────────────────────────────────────────────────────────
 
 class _ExamsTab extends StatefulWidget {
   final String studentId;
@@ -1083,6 +1063,7 @@ class _ExamsTab extends StatefulWidget {
 
 class _ExamsTabState extends State<_ExamsTab> {
   List<dynamic> _results = [];
+  String? _selectedId;
   bool _loading = true;
 
   @override
@@ -1097,8 +1078,11 @@ class _ExamsTabState extends State<_ExamsTab> {
       final res = await ApiClient.get('/exams/results',
           params: {'studentId': widget.studentId});
       if (mounted) {
+        final list = res.data['results'] as List? ?? [];
         setState(() {
-          _results = res.data['results'] as List? ?? [];
+          _results = list;
+          _selectedId =
+              list.isNotEmpty ? list[0]['_id'] as String? : null;
           _loading = false;
         });
       }
@@ -1109,9 +1093,8 @@ class _ExamsTabState extends State<_ExamsTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const SkeletonList(showLeading: false);
-    }
+    if (_loading) return const SkeletonList(showLeading: false);
+
     return RefreshIndicator(
       onRefresh: _load,
       color: AppColors.primary,
@@ -1119,67 +1102,560 @@ class _ExamsTabState extends State<_ExamsTab> {
           ? ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
-                SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.3),
+                SizedBox(height: MediaQuery.of(context).size.height * 0.3),
                 _EmptyState('No exam results found'),
               ],
             )
-          : ListView.builder(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      itemCount: _results.length,
-      itemBuilder: (_, i) {
-        final r = _results[i];
-        final subject = r['subject']?['name'] as String? ?? '—';
-        final marks = r['marks'] ?? r['marksObtained'];
-        final total = r['totalMarks'] ?? r['maxMarks'];
-        final pct = (marks != null && total != null && total != 0)
-            ? ((marks / total) * 100).round()
-            : null;
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: widget.isDark ? AppColors.cardDark : Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-                color: widget.isDark
-                    ? AppColors.borderDark
-                    : AppColors.borderLight),
-            boxShadow: widget.isDark ? [] : AppColors.shadowSm,
-          ),
-          child: Row(children: [
-            Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(subject,
-                      style: AppTypography.s14SemiBold(
+          : SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                // Exam selector pills
+                if (_results.length > 1) ...[
+                  Wrap(spacing: 8, runSpacing: 8, children: _results.map((r) {
+                    final id = r['_id'] as String?;
+                    final examName =
+                        r['exam'] is Map ? r['exam']['name'] as String? ?? 'Exam' : 'Exam';
+                    final isActive = id == _selectedId;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedId = id),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isActive
+                              ? AppColors.primary
+                              : (widget.isDark
+                                  ? AppColors.cardDark
+                                  : Colors.white),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: isActive
+                                  ? AppColors.primary
+                                  : AppColors.borderLight,
+                              width: 1.5),
+                        ),
+                        child: Text(examName,
+                            style: AppTypography.s13SemiBold(
+                                color: isActive
+                                    ? Colors.white
+                                    : AppColors.textSecondary)),
+                      ),
+                    );
+                  }).toList()),
+                  const SizedBox(height: 16),
+                ],
+
+                // Selected exam detail
+                Builder(builder: (_) {
+                  final result = _results.firstWhere(
+                      (r) => r['_id'] == _selectedId,
+                      orElse: () => _results.isNotEmpty ? _results[0] : null);
+                  if (result == null) return const SizedBox.shrink();
+
+                  final exam = result['exam'];
+                  final examName = exam is Map
+                      ? exam['name'] as String? ?? 'Exam'
+                      : 'Exam';
+                  final examType = exam is Map ? exam['type'] as String? : null;
+                  final isPublished = result['isPublished'] as bool? ?? false;
+                  final academicYear = result['academicYear'] as String?;
+                  final totalObtained = result['totalMarksObtained'];
+                  final totalMax = result['totalMaxMarks'];
+                  final percentage = result['percentage'];
+                  final grade = result['grade'] as String?;
+                  final rank = result['rank'];
+                  final marks = result['marks'] as List? ?? [];
+
+                  final failCount = marks
+                      .where((m) =>
+                          !(m['isAbsent'] as bool? ?? false) &&
+                          (m['totalMarks'] as num? ?? 0) <
+                              (m['passingMarks'] as num? ?? 0))
+                      .length;
+                  final absentCount =
+                      marks.where((m) => m['isAbsent'] as bool? ?? false).length;
+                  final overallPass =
+                      failCount == 0 && absentCount == 0 && marks.isNotEmpty;
+
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: widget.isDark ? AppColors.cardDark : Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
                           color: widget.isDark
-                              ? Colors.white
-                              : AppColors.textPrimary)),
-                  if (r['examName'] != null)
-                    Text(r['examName'],
-                        style: AppTypography.s12Regular(
-                            color: AppColors.textMuted)),
-                ])),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              if (marks != null && total != null)
-                Text('$marks / $total',
-                    style: AppTypography.s14SemiBold(color: AppColors.primary)),
-              if (pct != null)
-                Text('$pct%',
+                              ? AppColors.borderDark
+                              : AppColors.borderLight),
+                      boxShadow: widget.isDark ? [] : AppColors.shadowSm,
+                    ),
+                    child: Column(children: [
+                      // Exam header
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: widget.isDark
+                              ? AppColors.borderDark.withValues(alpha: 0.3)
+                              : const Color(0xFFF8FAFC),
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(14)),
+                          border: Border(
+                              bottom: BorderSide(
+                                  color: widget.isDark
+                                      ? AppColors.borderDark
+                                      : AppColors.borderLight)),
+                        ),
+                        child: Row(children: [
+                          Expanded(
+                              child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                            Wrap(spacing: 6, children: [
+                              Text(examName,
+                                  style: AppTypography.s14SemiBold(
+                                      color: widget.isDark
+                                          ? Colors.white
+                                          : AppColors.textPrimary)),
+                              if (examType != null)
+                                _Chip(examType,
+                                    bg: AppColors.badgeInfoBg,
+                                    fg: AppColors.primary),
+                              _Chip(
+                                  isPublished ? 'Published' : 'Pending',
+                                  bg: isPublished
+                                      ? AppColors.badgeSuccessBg
+                                      : const Color(0xFFF1F5F9),
+                                  fg: isPublished
+                                      ? AppColors.accentGreen
+                                      : AppColors.textMuted),
+                            ]),
+                            if (academicYear != null) ...[
+                              const SizedBox(height: 3),
+                              Text('Academic Year: $academicYear',
+                                  style: AppTypography.s12Regular(
+                                      color: AppColors.textMuted)),
+                            ],
+                          ])),
+                        ]),
+                      ),
+
+                      // Summary strip
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(children: [
+                          _ExamStat(
+                            'Total Marks',
+                            totalObtained != null && totalMax != null
+                                ? '$totalObtained / $totalMax'
+                                : '—',
+                          ),
+                          _ExamStat(
+                            'Percentage',
+                            percentage != null ? '$percentage%' : '—',
+                          ),
+                          _ExamStat('Grade', grade ?? '—'),
+                          _ExamStat(
+                              'Rank', rank != null ? '#$rank' : '—'),
+                          _ExamStat(
+                            'Result',
+                            marks.isEmpty
+                                ? '—'
+                                : overallPass
+                                    ? 'PASS'
+                                    : 'FAIL',
+                            color: marks.isEmpty
+                                ? null
+                                : overallPass
+                                    ? AppColors.accentGreen
+                                    : AppColors.accentRed,
+                          ),
+                        ]),
+                      ),
+
+                      // Subject marks
+                      if (marks.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Center(
+                            child: Text('Marks not entered yet.',
+                                style: AppTypography.s13Regular(
+                                    color: AppColors.textMuted)),
+                          ),
+                        )
+                      else
+                        ...marks.asMap().entries.map((entry) {
+                          final m = entry.value;
+                          final subjectName = m['subject'] is Map
+                              ? m['subject']['name'] as String? ?? '—'
+                              : '—';
+                          final isAbsent = m['isAbsent'] as bool? ?? false;
+                          final theory = m['theoryMarks'];
+                          final practical = m['practicalMarks'];
+                          final total = m['totalMarks'];
+                          final maxM = m['maxMarks'];
+                          final passing = m['passingMarks'] as num? ?? 0;
+                          final g = m['grade'] as String?;
+                          final pct = (maxM != null && maxM != 0 && total != null)
+                              ? ((total / maxM) * 100).round()
+                              : null;
+                          final passed = !isAbsent && (total as num? ?? 0) >= passing;
+
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                top: BorderSide(
+                                    color: widget.isDark
+                                        ? AppColors.borderDark
+                                        : const Color(0xFFF1F5F9)),
+                              ),
+                            ),
+                            child: Row(children: [
+                              Expanded(
+                                  child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                Text(subjectName,
+                                    style: AppTypography.s13SemiBold(
+                                        color: widget.isDark
+                                            ? Colors.white
+                                            : AppColors.textPrimary)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  [
+                                    if (theory != null && !isAbsent)
+                                      'T: $theory',
+                                    if (practical != null && !isAbsent)
+                                      'P: $practical',
+                                    if (maxM != null)
+                                      'Max: $maxM',
+                                    if (g != null) 'Grade: $g',
+                                  ].join('  '),
+                                  style: AppTypography.s12Regular(
+                                      color: AppColors.textMuted),
+                                ),
+                              ])),
+                              Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.end,
+                                  children: [
+                                if (isAbsent)
+                                  _Chip('Absent',
+                                      bg: const Color(0xFFF1F5F9),
+                                      fg: AppColors.textMuted)
+                                else ...[
+                                  Text(
+                                    total != null && maxM != null
+                                        ? '$total / $maxM'
+                                        : '—',
+                                    style: AppTypography.s13SemiBold(
+                                        color: AppColors.primary),
+                                  ),
+                                  if (pct != null)
+                                    Text('$pct%',
+                                        style:
+                                            AppTypography.s12SemiBold(
+                                                color: pct >= 75
+                                                    ? AppColors.accentGreen
+                                                    : pct >= 40
+                                                        ? AppColors.accent
+                                                        : AppColors
+                                                            .accentRed)),
+                                ],
+                                const SizedBox(height: 4),
+                                _Chip(
+                                    isAbsent
+                                        ? 'Absent'
+                                        : passed
+                                            ? 'Pass'
+                                            : 'Fail',
+                                    bg: isAbsent
+                                        ? const Color(0xFFF1F5F9)
+                                        : passed
+                                            ? AppColors.badgeSuccessBg
+                                            : AppColors.badgeDangerBg,
+                                    fg: isAbsent
+                                        ? AppColors.textMuted
+                                        : passed
+                                            ? AppColors.accentGreen
+                                            : AppColors.accentRed),
+                              ]),
+                            ]),
+                          );
+                        }),
+                    ]),
+                  );
+                }),
+              ]),
+            ),
+    );
+  }
+}
+
+// ─── Home Works Tab ───────────────────────────────────────────────────────────
+
+class _HomeworkTab extends StatefulWidget {
+  final String studentId;
+  final bool isDark;
+  const _HomeworkTab({required this.studentId, required this.isDark});
+
+  @override
+  State<_HomeworkTab> createState() => _HomeworkTabState();
+}
+
+class _HomeworkTabState extends State<_HomeworkTab> {
+  List<dynamic> _hw = [];
+  bool _loading = true;
+  String _filter = 'all';
+
+  static const _statusMeta = {
+    'completed':   {'label': 'Completed',   'color': Color(0xFF10B981), 'bg': Color(0xFFD1FAE5)},
+    'in_progress': {'label': 'In Progress', 'color': Color(0xFFF59E0B), 'bg': Color(0xFFFEF3C7)},
+    'overdue':     {'label': 'Overdue',     'color': Color(0xFFEF4444), 'bg': Color(0xFFFEE2E2)},
+    'pending':     {'label': 'Pending',     'color': Color(0xFF64748B), 'bg': Color(0xFFF1F5F9)},
+  };
+
+  String _deriveStatus(dynamic hw) {
+    final sub = hw['submission'];
+    if (sub is Map) {
+      if (sub['status'] == 'completed') return 'completed';
+      if (sub['status'] == 'in_progress') return 'in_progress';
+    }
+    final dueStr = hw['dueDate'] as String?;
+    if (dueStr != null) {
+      final due = DateTime.tryParse(dueStr);
+      if (due != null && due.isBefore(DateTime.now())) return 'overdue';
+    }
+    return 'pending';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final res = await ApiClient.get('/homework/student-summary',
+          params: {'studentId': widget.studentId});
+      if (mounted) {
+        setState(() {
+          _hw = res.data['homework'] as List? ?? [];
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const SkeletonList(showLeading: false);
+
+    final counts = <String, int>{'all': _hw.length};
+    for (final hw in _hw) {
+      final s = _deriveStatus(hw);
+      counts[s] = (counts[s] ?? 0) + 1;
+    }
+
+    final filtered = _filter == 'all'
+        ? _hw
+        : _hw.where((hw) => _deriveStatus(hw) == _filter).toList();
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: AppColors.primary,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Filter chips
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final f in [
+              {'key': 'all',         'label': 'All'},
+              {'key': 'pending',     'label': 'Pending'},
+              {'key': 'in_progress', 'label': 'In Progress'},
+              {'key': 'completed',   'label': 'Completed'},
+              {'key': 'overdue',     'label': 'Overdue'},
+            ])
+              GestureDetector(
+                onTap: () => setState(() => _filter = f['key']!),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: _filter == f['key']
+                        ? AppColors.primary.withValues(alpha: 0.1)
+                        : (widget.isDark
+                            ? AppColors.cardDark
+                            : Colors.white),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                        color: _filter == f['key']
+                            ? AppColors.primary
+                            : AppColors.borderLight),
+                  ),
+                  child: Text(
+                    '${f['label']} (${counts[f['key']] ?? 0})',
                     style: AppTypography.s12SemiBold(
-                        color: pct >= 75
-                            ? AppColors.accentGreen
-                            : pct >= 40
-                                ? AppColors.accent
-                                : AppColors.accentRed)),
-            ]),
+                        color: _filter == f['key']
+                            ? AppColors.primary
+                            : AppColors.textSecondary),
+                  ),
+                ),
+              ),
           ]),
-        );
-      },
-    ),
+          const SizedBox(height: 16),
+
+          if (filtered.isEmpty)
+            _EmptyState('No homeworks found')
+          else
+            ...filtered.map((hw) {
+              final status = _deriveStatus(hw);
+              final meta = _statusMeta[status]!;
+              final subject = hw['subject'] is Map
+                  ? hw['subject']['name'] as String? ?? ''
+                  : '';
+              final description = hw['description'] as String? ?? '';
+              final dueStr = hw['dueDate'] as String?;
+              final assignedStr = hw['assignedDate'] as String?;
+              final dueFmt = dueStr != null ? _fmtDate(dueStr) : '—';
+              final assignedFmt =
+                  assignedStr != null ? _fmtDate(assignedStr) : null;
+              final isOverdue = status == 'overdue';
+              final createdBy = hw['createdBy'] is Map
+                  ? hw['createdBy']['name'] as String? ?? ''
+                  : '';
+              final sub = hw['submission'];
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color:
+                      widget.isDark ? AppColors.cardDark : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: widget.isDark
+                          ? AppColors.borderDark
+                          : AppColors.borderLight),
+                  boxShadow: widget.isDark ? [] : AppColors.shadowSm,
+                ),
+                child: Column(children: [
+                  Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Expanded(
+                          child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                        Wrap(spacing: 6, children: [
+                          Text(hw['title'] as String? ?? '—',
+                              style: AppTypography.s14SemiBold(
+                                  color: widget.isDark
+                                      ? Colors.white
+                                      : AppColors.textPrimary)),
+                          if (subject.isNotEmpty)
+                            _Chip(subject,
+                                bg: AppColors.primary
+                                    .withValues(alpha: 0.08),
+                                fg: AppColors.primary),
+                        ]),
+                        if (description.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(description,
+                              style: AppTypography.s13Regular(
+                                  color: AppColors.textSecondary),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis),
+                        ],
+                        const SizedBox(height: 6),
+                        Wrap(spacing: 12, children: [
+                          if (assignedFmt != null)
+                            Text('Assigned: $assignedFmt',
+                                style: AppTypography.s12Regular(
+                                    color: AppColors.textMuted)),
+                          Text('Due: $dueFmt',
+                              style: AppTypography.s12Regular(
+                                  color: isOverdue
+                                      ? AppColors.accentRed
+                                      : AppColors.textMuted)
+                                  .copyWith(
+                                      fontWeight: isOverdue
+                                          ? FontWeight.w600
+                                          : null)),
+                          if (createdBy.isNotEmpty)
+                            Text('By: $createdBy',
+                                style: AppTypography.s12Regular(
+                                    color: AppColors.textMuted)),
+                        ]),
+                      ])),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: meta['bg'] as Color,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(meta['label'] as String,
+                            style: AppTypography.s12SemiBold(
+                                color: meta['color'] as Color)),
+                      ),
+                    ]),
+                  ),
+                  // Submission info
+                  if (sub is Map) ...[
+                    Container(
+                      decoration: BoxDecoration(
+                        color: widget.isDark
+                            ? AppColors.borderDark
+                                .withValues(alpha: 0.2)
+                            : const Color(0xFFFAFAFA),
+                        borderRadius: const BorderRadius.vertical(
+                            bottom: Radius.circular(12)),
+                        border: Border(
+                          top: BorderSide(
+                              color: widget.isDark
+                                  ? AppColors.borderDark
+                                  : AppColors.borderLight),
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                        if (sub['note'] != null &&
+                            (sub['note'] as String).isNotEmpty)
+                          Text('"${sub['note']}"',
+                              style: AppTypography.s13Regular(
+                                      color: AppColors.textSecondary)
+                                  .copyWith(
+                                      fontStyle: FontStyle.italic)),
+                        if (sub['submittedAt'] != null)
+                          Text(
+                              'Submitted: ${_fmtDate(sub['submittedAt'])}',
+                              style: AppTypography.s12Regular(
+                                  color: AppColors.textMuted)),
+                      ]),
+                    ),
+                  ],
+                ]),
+              );
+            }),
+        ]),
+      ),
     );
   }
 }
@@ -1196,8 +1672,7 @@ class _FeesTab extends StatefulWidget {
 }
 
 class _FeesTabState extends State<_FeesTab> {
-  dynamic _feeSummary;
-  List<dynamic> _transactions = [];
+  List<dynamic> _feeRecords = [];
   bool _loading = true;
 
   @override
@@ -1209,11 +1684,11 @@ class _FeesTabState extends State<_FeesTab> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final res = await ApiClient.get('/fees/student/${widget.studentId}');
+      final res = await ApiClient.get('/fees',
+          params: {'studentId': widget.studentId, 'limit': '50'});
       if (mounted) {
         setState(() {
-          _feeSummary = res.data['summary'];
-          _transactions = res.data['transactions'] as List? ?? [];
+          _feeRecords = res.data['fees'] as List? ?? [];
           _loading = false;
         });
       }
@@ -1224,88 +1699,330 @@ class _FeesTabState extends State<_FeesTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const SkeletonList(showLeading: false);
-    }
+    if (_loading) return const SkeletonList(showLeading: false);
+
+    final totalAmount = _feeRecords.fold<num>(
+        0, (s, f) => s + ((f['netAmount'] ?? f['totalAmount'] ?? 0) as num));
+    final totalPaid = _feeRecords.fold<num>(
+        0, (s, f) => s + ((f['paidAmount'] ?? 0) as num));
+    final totalPending = _feeRecords.fold<num>(
+        0, (s, f) => s + ((f['pendingAmount'] ?? 0) as num));
 
     return RefreshIndicator(
       onRefresh: _load,
       color: AppColors.primary,
       child: SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        if (_feeSummary != null) ...[
-          Row(children: [
-            Expanded(
-                child: _FeeStatCard(
-                    'Total Fees',
-                    '₹${_feeSummary['total'] ?? 0}',
-                    AppColors.primary,
-                    AppColors.badgeInfoBg)),
-            const SizedBox(width: 8),
-            Expanded(
-                child: _FeeStatCard('Paid', '₹${_feeSummary['paid'] ?? 0}',
-                    AppColors.accentGreen, AppColors.badgeSuccessBg)),
-            const SizedBox(width: 8),
-            Expanded(
-                child: _FeeStatCard('Due', '₹${_feeSummary['due'] ?? 0}',
-                    AppColors.accentRed, AppColors.badgeDangerBg)),
-          ]),
-          const SizedBox(height: 20),
-        ],
-        _SectionTitle('Payment History', widget.isDark),
-        if (_transactions.isEmpty)
-          _EmptyState('No payment records found')
-        else
-          ..._transactions.map((t) {
-            final date = t['date'] as String?;
-            final dateFmt = date != null ? _fmtDate(date) : '—';
-            return Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: widget.isDark ? AppColors.cardDark : Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                    color: widget.isDark
-                        ? AppColors.borderDark
-                        : AppColors.borderLight),
-                boxShadow: widget.isDark ? [] : AppColors.shadowSm,
-              ),
-              child: Row(children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.badgeSuccessBg,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.receipt_outlined,
-                      color: AppColors.accentGreen, size: 20),
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Summary strip
+          if (_feeRecords.isNotEmpty) ...[
+            Row(children: [
+              Expanded(
+                  child: _FeeStatCard('Total Amount',
+                      '₹${totalAmount.toStringAsFixed(0)}',
+                      AppColors.primary, AppColors.badgeInfoBg)),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: _FeeStatCard('Total Paid',
+                      '₹${totalPaid.toStringAsFixed(0)}',
+                      AppColors.accentGreen, AppColors.badgeSuccessBg)),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: _FeeStatCard(
+                      'Pending',
+                      '₹${totalPending.toStringAsFixed(0)}',
+                      totalPending > 0
+                          ? AppColors.accentRed
+                          : AppColors.accentGreen,
+                      totalPending > 0
+                          ? AppColors.badgeDangerBg
+                          : AppColors.badgeSuccessBg)),
+            ]),
+            const SizedBox(height: 20),
+          ],
+
+          if (_feeRecords.isEmpty)
+            _EmptyState('No fee records found')
+          else
+            ..._feeRecords.map((fee) {
+              final academicYear = fee['academicYear'] as String?;
+              final feeStatus = fee['status'] as String? ?? '';
+              final terms = fee['terms'] as List? ?? [];
+              final payments = fee['payments'] as List? ?? [];
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: widget.isDark ? AppColors.cardDark : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: widget.isDark
+                          ? AppColors.borderDark
+                          : AppColors.borderLight),
+                  boxShadow: widget.isDark ? [] : AppColors.shadowSm,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      Text(t['description'] ?? t['feeType'] ?? 'Payment',
-                          style: AppTypography.s14SemiBold(
+                child: Column(children: [
+                  // Record header
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: widget.isDark
+                          ? AppColors.borderDark.withValues(alpha: 0.3)
+                          : const Color(0xFFF8FAFC),
+                      borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(14)),
+                      border: Border(
+                          bottom: BorderSide(
                               color: widget.isDark
-                                  ? Colors.white
-                                  : AppColors.textPrimary)),
-                      Text(dateFmt,
-                          style: AppTypography.s12Regular(
-                              color: AppColors.textMuted)),
-                    ])),
-                Text('₹${t['amount'] ?? 0}',
-                    style: AppTypography.s14SemiBold(
-                        color: AppColors.accentGreen)),
-              ]),
-            );
-          }),
-      ]),
-    ),
+                                  ? AppColors.borderDark
+                                  : AppColors.borderLight)),
+                    ),
+                    child: Row(children: [
+                      Expanded(
+                          child: Text(
+                              'Academic Year: ${academicYear ?? '—'}',
+                              style: AppTypography.s14SemiBold(
+                                  color: widget.isDark
+                                      ? Colors.white
+                                      : AppColors.textPrimary))),
+                      if (feeStatus.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: feeStatus == 'paid'
+                                ? AppColors.badgeSuccessBg
+                                : feeStatus == 'partial'
+                                    ? const Color(0xFFFEF9C3)
+                                    : AppColors.badgeDangerBg,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                              feeStatus[0].toUpperCase() +
+                                  feeStatus.substring(1),
+                              style: AppTypography.s12SemiBold(
+                                  color: feeStatus == 'paid'
+                                      ? AppColors.accentGreen
+                                      : feeStatus == 'partial'
+                                          ? const Color(0xFF92400E)
+                                          : AppColors.accentRed)),
+                        ),
+                    ]),
+                  ),
+
+                  // Terms breakdown
+                  if (terms.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+                      child: Row(children: [
+                        Expanded(
+                            flex: 3,
+                            child: Text('Category',
+                                style: AppTypography.s11Regular(
+                                    color: AppColors.textMuted)
+                                    .copyWith(fontWeight: FontWeight.w600))),
+                        Expanded(
+                            flex: 2,
+                            child: Text('Net',
+                                textAlign: TextAlign.right,
+                                style: AppTypography.s11Regular(
+                                    color: AppColors.textMuted)
+                                    .copyWith(fontWeight: FontWeight.w600))),
+                        Expanded(
+                            flex: 2,
+                            child: Text('Paid',
+                                textAlign: TextAlign.right,
+                                style: AppTypography.s11Regular(
+                                    color: AppColors.textMuted)
+                                    .copyWith(fontWeight: FontWeight.w600))),
+                        Expanded(
+                            flex: 2,
+                            child: Text('Pending',
+                                textAlign: TextAlign.right,
+                                style: AppTypography.s11Regular(
+                                    color: AppColors.textMuted)
+                                    .copyWith(fontWeight: FontWeight.w600))),
+                      ]),
+                    ),
+                    ...terms.map((t) {
+                      final net = (t['netAmount'] as num? ?? 0);
+                      final paid = (t['paidAmount'] as num? ?? 0);
+                      final pending = (t['pendingAmount'] as num? ?? 0);
+                      final tStatus = t['status'] as String? ?? '';
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          border: Border(
+                              top: BorderSide(
+                                  color: widget.isDark
+                                      ? AppColors.borderDark
+                                      : const Color(0xFFF1F5F9))),
+                        ),
+                        child: Row(children: [
+                          Expanded(
+                              flex: 3,
+                              child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                Text(t['name'] as String? ?? '—',
+                                    style: AppTypography.s13SemiBold(
+                                        color: widget.isDark
+                                            ? Colors.white
+                                            : AppColors.textPrimary)),
+                                if (tStatus.isNotEmpty)
+                                  Text(
+                                      tStatus[0].toUpperCase() +
+                                          tStatus.substring(1),
+                                      style: AppTypography.s11Regular(
+                                          color: tStatus == 'paid'
+                                              ? AppColors.accentGreen
+                                              : tStatus == 'partial'
+                                                  ? AppColors.accent
+                                                  : AppColors.accentRed)),
+                              ])),
+                          Expanded(
+                              flex: 2,
+                              child: Text('₹$net',
+                                  textAlign: TextAlign.right,
+                                  style: AppTypography.s13Regular(
+                                      color: widget.isDark
+                                          ? Colors.white70
+                                          : AppColors.textSecondary))),
+                          Expanded(
+                              flex: 2,
+                              child: Text('₹$paid',
+                                  textAlign: TextAlign.right,
+                                  style: AppTypography.s13Regular(
+                                      color: AppColors.accentGreen))),
+                          Expanded(
+                              flex: 2,
+                              child: Text('₹$pending',
+                                  textAlign: TextAlign.right,
+                                  style: AppTypography.s13Regular(
+                                      color: pending > 0
+                                          ? AppColors.accentRed
+                                          : AppColors.accentGreen))),
+                        ]),
+                      );
+                    }),
+
+                    // Totals row
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: widget.isDark
+                            ? AppColors.borderDark.withValues(alpha: 0.2)
+                            : const Color(0xFFF8FAFC),
+                        border: Border(
+                            top: BorderSide(
+                                color: widget.isDark
+                                    ? AppColors.borderDark
+                                    : AppColors.borderLight,
+                                width: 1.5)),
+                      ),
+                      child: Row(children: [
+                        const Expanded(
+                            flex: 3,
+                            child: Text('Total',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13))),
+                        Expanded(
+                            flex: 2,
+                            child: Text(
+                                '₹${fee['netAmount'] ?? fee['totalAmount'] ?? 0}',
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13))),
+                        Expanded(
+                            flex: 2,
+                            child: Text(
+                                '₹${fee['paidAmount'] ?? 0}',
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: Color(0xFF10B981)))),
+                        Expanded(
+                            flex: 2,
+                            child: Text(
+                                '₹${fee['pendingAmount'] ?? 0}',
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: (fee['pendingAmount'] as num? ?? 0) > 0
+                                        ? AppColors.accentRed
+                                        : AppColors.accentGreen))),
+                      ]),
+                    ),
+                  ],
+
+                  // Payment history
+                  if (payments.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+                      decoration: BoxDecoration(
+                        border: Border(
+                            top: BorderSide(
+                                color: widget.isDark
+                                    ? AppColors.borderDark
+                                    : AppColors.borderLight)),
+                      ),
+                      child: Text(
+                          'PAYMENT HISTORY (${payments.length})',
+                          style: AppTypography.s11Regular(
+                                  color: AppColors.textMuted)
+                              .copyWith(fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.5)),
+                    ),
+                    ...payments.map((p) {
+                      final paidAt = p['paidAt'] as String?;
+                      final dateFmt =
+                          paidAt != null ? _fmtDate(paidAt) : '—';
+                      final method =
+                          (p['method'] as String? ?? '').replaceAll('_', ' ');
+                      final termName = p['termName'] as String?;
+                      final amount = p['amount'] as num? ?? 0;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
+                        child: Row(children: [
+                          Expanded(
+                              child: Text(
+                                  [
+                                    if (termName != null &&
+                                        termName.isNotEmpty)
+                                      termName,
+                                    if (method.isNotEmpty) method,
+                                  ].join(' · '),
+                                  style: AppTypography.s13Regular(
+                                      color: widget.isDark
+                                          ? Colors.white70
+                                          : AppColors.textSecondary))),
+                          Text(dateFmt,
+                              style: AppTypography.s12Regular(
+                                  color: AppColors.textMuted)),
+                          const SizedBox(width: 12),
+                          Text('+₹$amount',
+                              style: AppTypography.s13SemiBold(
+                                  color: AppColors.accentGreen)),
+                        ]),
+                      );
+                    }),
+                    const SizedBox(height: 6),
+                  ],
+                ]),
+              );
+            }),
+        ]),
+      ),
     );
   }
 }
@@ -1358,7 +2075,8 @@ class _Row extends StatelessWidget {
           SizedBox(
               width: 120,
               child: Text(label,
-                  style: AppTypography.s13Regular(color: AppColors.textMuted))),
+                  style:
+                      AppTypography.s13Regular(color: AppColors.textMuted))),
           Expanded(
               child: Text(value?.toString() ?? '—',
                   style: AppTypography.s13SemiBold(
@@ -1422,7 +2140,7 @@ class _StatPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Expanded(
           child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(10),
@@ -1430,11 +2148,51 @@ class _StatPill extends StatelessWidget {
         child: Column(children: [
           Text(value,
               style: GoogleFonts.inter(
-                  fontSize: 20, fontWeight: FontWeight.w700, color: color)),
+                  fontSize: 16, fontWeight: FontWeight.w700, color: color)),
           Text(label,
-              style: AppTypography.s11Regular(color: AppColors.textMuted)),
+              style: AppTypography.s11Regular(color: AppColors.textMuted),
+              textAlign: TextAlign.center),
         ]),
       ));
+}
+
+class _MiniChip extends StatelessWidget {
+  final String text;
+  final Color color, bg;
+  const _MiniChip(this.text, this.color, this.bg);
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+            color: bg, borderRadius: BorderRadius.circular(20)),
+        child: Text(text,
+            style: GoogleFonts.inter(
+                fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+      );
+}
+
+class _ExamStat extends StatelessWidget {
+  final String label, value;
+  final Color? color;
+  const _ExamStat(this.label, this.value, {this.color});
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+        child: Column(children: [
+          Text(value,
+              style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: color ?? AppColors.textPrimary),
+              textAlign: TextAlign.center),
+          Text(label,
+              style:
+                  AppTypography.s11Regular(color: AppColors.textMuted),
+              textAlign: TextAlign.center),
+        ]),
+      );
 }
 
 class _FeeStatCard extends StatelessWidget {
@@ -1444,7 +2202,8 @@ class _FeeStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+        padding:
+            const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(14),
@@ -1453,7 +2212,7 @@ class _FeeStatCard extends StatelessWidget {
         child: Column(children: [
           Text(value,
               style: GoogleFonts.inter(
-                  fontSize: 18, fontWeight: FontWeight.w700, color: color)),
+                  fontSize: 16, fontWeight: FontWeight.w700, color: color)),
           const SizedBox(height: 3),
           Text(label,
               style: AppTypography.s12Regular(color: AppColors.textMuted),
