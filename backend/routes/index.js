@@ -1144,7 +1144,7 @@ router.get('/transport/:id/students', protect, async (req, res) => {
   try {
     const students = await Student.find({
       school: req.user.school, transportRoute: req.params.id, status: { $ne: 'dropped' }
-    }).populate('currentClass', 'name section').select('name admissionNumber phone currentClass gender photo rollNumber').sort({ name: 1 });
+    }).populate('currentClass', 'name section').select('name admissionNumber phone currentClass gender photo rollNumber busStop').sort({ name: 1 });
     res.json({ success: true, students });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
