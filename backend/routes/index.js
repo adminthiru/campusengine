@@ -112,7 +112,8 @@ router.put('/auth/notifications/:notifId/read', protect, authCtrl.markNotificati
 router.get('/notifications', protect, async (req, res) => {
   try {
     const u = await User.findById(req.user._id).select('notifications');
-    const notifications = (u?.notifications || []).slice().reverse(); // newest first
+    // Stored newest-first (unshift), so return as-is.
+    const notifications = (u?.notifications || []);
     res.json({ success: true, notifications, unread: notifications.filter(n => !n.read).length });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -459,13 +460,41 @@ router.post('/parent/student-leave', protect, authorize('parent'), async (req, r
   try {
     if (!req.user.parentId) return res.status(400).json({ success: false, message: 'No parent profile' });
     const { studentId, fromDate, toDate, days, reason } = req.body;
-    const student = await Student.findOne({ _id: studentId, school: req.user.school, $or: [{ primaryGuardian: req.user.parentId }, { guardians: req.user.parentId }] });
+    const student = await Student.findOne({ _id: studentId, school: req.user.school, $or: [{ primaryGuardian: req.user.parentId }, { guardians: req.user.parentId }] })
+      .populate('currentClass', 'name section');
     if (!student) return res.status(403).json({ success: false, message: 'Student not linked to this parent' });
     const leave = await StudentLeave.create({
       school: req.user.school, student: studentId, parent: req.user.parentId,
       fromDate, toDate, days: Number(days), reason
     });
     await leave.populate('student', 'name admissionNumber');
+
+    // Notify the school's admins with an actionable (approve/reject) alert.
+    try {
+      const { notifyUsers } = require('../services/notificationService');
+      const admins = await User.find({
+        school: req.user.school,
+        role: { $in: ['admin', 'correspondent', 'principal'] },
+        isActive: { $ne: false },
+      });
+      if (admins.length) {
+        const fmt = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+        const dateLabel = String(fromDate) === String(toDate) ? fmt(fromDate) : `${fmt(fromDate)} – ${fmt(toDate)}`;
+        const cls = student.currentClass
+          ? ` (${student.currentClass.name}${student.currentClass.section ? ' ' + student.currentClass.section : ''})`
+          : '';
+        await notifyUsers(admins, {
+          title: 'Leave Request',
+          body: `${req.user.name || 'A parent'} requested leave for ${student.name}${cls} on ${dateLabel}.${reason ? ` Reason: ${reason}` : ''}`,
+          type: 'info',
+          action: 'student_leave',
+          refId: leave._id,
+          actionStatus: 'pending',
+          data: { kind: 'student_leave', leaveId: String(leave._id) },
+        });
+      }
+    } catch (e) { console.error('[student-leave notify admins]', e.message); }
+
     res.status(201).json({ success: true, leave });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -581,6 +610,16 @@ router.put('/student-leaves/:id', protect, authorize('admin', 'correspondent', '
         }
       } catch (e) { console.error('[student-leave notify]', e.message); }
     }
+
+    // Resolve the actionable bell notification on every admin so the inline
+    // Approve/Reject buttons become a status label everywhere it was shown.
+    try {
+      await User.updateMany(
+        { school: req.user.school, 'notifications.refId': leave._id },
+        { $set: { 'notifications.$[n].actionStatus': status } },
+        { arrayFilters: [{ 'n.refId': leave._id }] }
+      );
+    } catch (e) { console.error('[student-leave notif status sync]', e.message); }
 
     res.json({ success: true, leave });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }

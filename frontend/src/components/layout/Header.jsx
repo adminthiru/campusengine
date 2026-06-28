@@ -10,6 +10,7 @@ import { useAuth } from '../../store/AuthContext';
 import { useYear } from '../../store/YearContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import toast from 'react-hot-toast';
 import api from '../../utils/api';
 
 // Path segment → readable label for the header breadcrumb.
@@ -43,7 +44,7 @@ const CrumbLabel = ({ seg, label }) => {
 };
 
 export default function Header({ onMenuClick, sidebarCollapsed }) {
-  const { user, logout, updateUser } = useAuth();
+  const { user, logout } = useAuth();
   const { selectedYear, setSelectedYear, availableYears, isCurrent } = useYear();
   const navigate = useNavigate();
   const location = useLocation();
@@ -64,10 +65,28 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
   const canSwitchYear = ['admin', 'correspondent', 'principal', 'accountant'].includes(user?.role) && availableYears.length > 0;
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [notifs, setNotifs] = useState(user?.notifications || []);
+  const [actingId, setActingId] = useState(null);
   const notifRef = useRef();
   const profileRef = useRef();
 
-  const unread = user?.notifications?.filter(n => !n.read).length || 0;
+  const unread = notifs.filter(n => !n.read).length;
+
+  const fetchNotifs = async () => {
+    try {
+      const res = await api.get('/notifications');
+      if (Array.isArray(res?.notifications)) setNotifs(res.notifications);
+    } catch { /* keep current */ }
+  };
+
+  // Poll so admins receive leave requests (and other alerts) without a reload.
+  useEffect(() => {
+    fetchNotifs();
+    const t = setInterval(fetchNotifs, 20000);
+    return () => clearInterval(t);
+  }, []);
+  // Refresh on open + on tab focus.
+  useEffect(() => { if (notifOpen) fetchNotifs(); }, [notifOpen]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -80,8 +99,24 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
   }, []);
 
   const markRead = async (id) => {
-    await api.put(`/auth/notifications/${id}/read`);
-    updateUser({ notifications: user.notifications.map(n => n._id === id ? { ...n, read: true } : n) });
+    setNotifs(prev => prev.map(n => n._id === id ? { ...n, read: true } : n));
+    try { await api.put(`/auth/notifications/${id}/read`); } catch { /* ignore */ }
+  };
+
+  // Approve/reject a leave request straight from the notification.
+  const actOnLeave = async (e, n, status) => {
+    e.stopPropagation();
+    if (actingId) return;
+    setActingId(n._id);
+    try {
+      await api.put(`/student-leaves/${n.refId}`, { status });
+      toast.success(`Leave ${status === 'approved' ? 'approved' : 'rejected'}`);
+      await fetchNotifs();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || err?.message || 'Action failed');
+    } finally {
+      setActingId(null);
+    }
   };
 
   const toggleLanguage = () => {
@@ -192,14 +227,16 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
                   <span className="text-14-bold">Notifications</span>
                   {unread > 0 && <span className="badge badge-info">{unread} new</span>}
                 </div>
-                <div style={{ maxHeight: 320, overflowY: 'auto' }}>
-                  {user?.notifications?.length === 0 && (
+                <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+                  {notifs.length === 0 && (
                     <div className="empty-state" style={{ padding: 30 }}>
                       <Bell size={28} style={{ marginBottom: 8, color: 'var(--text-muted)' }} />
                       <p className="text-14-regular">No notifications</p>
                     </div>
                   )}
-                  {(user?.notifications || []).slice(0, 20).map(n => (
+                  {notifs.slice(0, 20).map(n => {
+                    const isLeave = n.action === 'student_leave';
+                    return (
                     <div
                       key={n._id}
                       onClick={() => markRead(n._id)}
@@ -213,15 +250,43 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
                         width: 8, height: 8, borderRadius: '50%', marginTop: 5, flexShrink: 0,
                         background: n.read ? 'transparent' : 'var(--primary)'
                       }} />
-                      <div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="text-14-semibold" style={{ color: 'var(--text-primary)' }}>{n.title}</div>
                         <div className="text-12-regular" style={{ color: 'var(--text-secondary)', marginTop: 2 }}>{n.message}</div>
                         <div className="text-12-regular" style={{ color: 'var(--text-muted)', marginTop: 4 }}>
                           {new Date(n.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                         </div>
+                        {/* Inline approve/reject for leave requests */}
+                        {isLeave && n.actionStatus === 'pending' && (
+                          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                            <button
+                              className="btn btn-success btn-sm"
+                              disabled={actingId === n._id}
+                              onClick={(e) => actOnLeave(e, n, 'approved')}
+                              style={{ padding: '4px 12px', fontSize: 12 }}
+                            >
+                              <Check size={13} /> Approve
+                            </button>
+                            <button
+                              className="btn btn-danger btn-sm"
+                              disabled={actingId === n._id}
+                              onClick={(e) => actOnLeave(e, n, 'rejected')}
+                              style={{ padding: '4px 12px', fontSize: 12 }}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                        {isLeave && n.actionStatus === 'approved' && (
+                          <span className="badge badge-success" style={{ marginTop: 8, display: 'inline-block' }}>Approved</span>
+                        )}
+                        {isLeave && n.actionStatus === 'rejected' && (
+                          <span className="badge badge-danger" style={{ marginTop: 8, display: 'inline-block' }}>Rejected</span>
+                        )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

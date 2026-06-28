@@ -6,9 +6,11 @@ const Employee = require('../models/Employee');
 const { getMessaging } = require('../config/firebase');
 
 // ── Low level: persist an in-app notification on each user ───────────────────────
-async function persistInApp(users, { title, body, type }) {
+async function persistInApp(users, { title, body, type, action, refId, actionStatus }) {
   await Promise.all(users.map(u => {
-    u.notifications.unshift({ title, message: body, type, createdAt: new Date() });
+    u.notifications.unshift({
+      title, message: body, type, action, refId, actionStatus, createdAt: new Date(),
+    });
     if (u.notifications.length > 100) u.notifications = u.notifications.slice(0, 100);
     return u.save();
   }));
@@ -56,9 +58,9 @@ async function pushToUsers(users, { title, body, data = {} }) {
 }
 
 // ── Mid level: persist in-app + push to a deduped set of user docs ───────────────
-async function notifyUsers(users, { title, body, type = 'info', data = {} }) {
+async function notifyUsers(users, { title, body, type = 'info', data = {}, action, refId, actionStatus }) {
   if (!users.length) return { users: 0, sent: 0 };
-  await persistInApp(users, { title, body, type });
+  await persistInApp(users, { title, body, type, action, refId, actionStatus });
   const pushRes = await pushToUsers(users, { title, body, data });
   return { users: users.length, ...pushRes };
 }

@@ -35,6 +35,12 @@ const userSchema = new mongoose.Schema({
     message: String,
     type: { type: String, enum: ['info', 'warning', 'success', 'error'] },
     read: { type: Boolean, default: false },
+    // Actionable notifications (e.g. a leave request the admin can approve/reject
+    // straight from the bell). action = kind, refId = the related document,
+    // actionStatus = pending | approved | rejected (drives the inline buttons).
+    action: { type: String },
+    refId: { type: mongoose.Schema.Types.ObjectId },
+    actionStatus: { type: String },
     createdAt: { type: Date, default: Date.now }
   }],
   // Registered FCM device tokens for push notifications (web/mobile).
