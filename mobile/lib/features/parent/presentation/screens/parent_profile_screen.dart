@@ -86,16 +86,11 @@ class ParentProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // ── Contact Info ─────────────────────────────────────────────────
-          _SectionLabel('Contact Information', isDark),
+          // ── School Contact ───────────────────────────────────────────────
+          _SectionLabel('School Contact', isDark),
           const SizedBox(height: 10),
-          _InfoCard(isDark: isDark, children: [
-            _InfoRow('Name', user?.name ?? '—', isDark),
-            _Divider(isDark),
-            _InfoRow('Email', user?.email ?? '—', isDark),
-            _Divider(isDark),
-            _InfoRow('Phone', user?.phone ?? '—', isDark),
-          ]),
+          _SchoolContactCard(
+              isDark: isDark, fallbackName: user?.school?.name ?? ''),
           const SizedBox(height: 20),
 
           // ── Children ─────────────────────────────────────────────────────
@@ -502,6 +497,58 @@ class _InfoCard extends StatelessWidget {
         ),
         child: Column(children: children),
       );
+}
+
+// Shows the school's contact details (name, phone, email) from the admin
+// School Profile. Name is seeded from the auth payload; phone/email are
+// fetched from GET /school (accessible to any authenticated user).
+class _SchoolContactCard extends StatefulWidget {
+  final bool isDark;
+  final String fallbackName;
+  const _SchoolContactCard(
+      {required this.isDark, required this.fallbackName});
+  @override
+  State<_SchoolContactCard> createState() => _SchoolContactCardState();
+}
+
+class _SchoolContactCardState extends State<_SchoolContactCard> {
+  String _name = '';
+  String _phone = '';
+  String _email = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _name = widget.fallbackName;
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await ApiClient.get('/school');
+      final s = res.data['school'];
+      if (s is Map && mounted) {
+        setState(() {
+          _name = (s['name'] ?? _name).toString();
+          _phone = (s['phone'] ?? '').toString();
+          _email = (s['email'] ?? '').toString();
+        });
+      }
+    } catch (_) {/* keep fallback name */}
+  }
+
+  String _dash(String v) => v.trim().isEmpty ? '—' : v;
+
+  @override
+  Widget build(BuildContext context) {
+    return _InfoCard(isDark: widget.isDark, children: [
+      _InfoRow('School', _dash(_name), widget.isDark),
+      _Divider(widget.isDark),
+      _InfoRow('Phone', _dash(_phone), widget.isDark),
+      _Divider(widget.isDark),
+      _InfoRow('Email', _dash(_email), widget.isDark),
+    ]);
+  }
 }
 
 class _InfoRow extends StatelessWidget {
