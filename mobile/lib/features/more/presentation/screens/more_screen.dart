@@ -306,7 +306,9 @@ class MoreScreen extends StatelessWidget {
                         },
                         child: const Text('Log Out',
                             style: TextStyle(
-                                fontWeight: FontWeight.w600, inherit: false)),
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                inherit: false)),
                       ),
                     ),
                   ],
