@@ -153,7 +153,9 @@ const getTimetable = async (req, res) => {
       return res.json({ success: true, timetables: teacherTT });
     }
 
-    timetable = await Timetable.findOne({ school: req.user.school, class: classId, academicYear, isActive: true })
+    const query = { school: req.user.school, class: classId, isActive: true };
+    if (academicYear) query.academicYear = academicYear;
+    timetable = await Timetable.findOne(query).sort({ createdAt: -1 })
       .populate('class', 'name section')
       .populate('schedule.periods.subject', 'name code color')
       .populate('schedule.periods.teacher', 'name photo');

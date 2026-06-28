@@ -21,7 +21,29 @@ class _StudentTimetableScreenState extends State<StudentTimetableScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _load();
+      // If the student profile hasn't loaded yet when this screen opens,
+      // listen for when it does and trigger _load() again.
+      context.read<StudentProfileProvider>().addListener(_onProfileChanged);
+    });
+  }
+
+  @override
+  void dispose() {
+    context.read<StudentProfileProvider>().removeListener(_onProfileChanged);
+    super.dispose();
+  }
+
+  // Called whenever StudentProfileProvider notifies — retry loading the
+  // timetable once classId becomes available (handles the race where the
+  // profile finishes fetching after this screen already opened).
+  void _onProfileChanged() {
+    if (!mounted) return;
+    final classId = context.read<StudentProfileProvider>().profile?.classId;
+    if (classId != null && _timetable.isEmpty && !_loading) {
+      _load();
+    }
   }
 
   Future<void> _load() async {
