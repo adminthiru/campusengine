@@ -141,7 +141,7 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
               const SizedBox(width: 8),
               _Chip('$absent', 'Absent', AppColors.accentRed, isDark),
               const SizedBox(width: 8),
-              _Chip('$late', 'Late', AppColors.warning, isDark),
+              _Chip('$half', 'Half Day', AppColors.accentOrange, isDark),
             ]),
             const SizedBox(height: 16),
 
@@ -180,7 +180,7 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
                           crossAxisCount: 7,
                           mainAxisSpacing: 6,
                           crossAxisSpacing: 6,
-                          childAspectRatio: 1,
+                          childAspectRatio: 0.88,
                         ),
                         itemCount: 35,
                         itemBuilder: (_, __) =>
@@ -196,7 +196,7 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
                         crossAxisCount: 7,
                         mainAxisSpacing: 6,
                         crossAxisSpacing: 6,
-                        childAspectRatio: 1,
+                        childAspectRatio: 0.88,
                       ),
                       itemCount: daysInMonth + (firstWeekday - 1),
                       itemBuilder: (_, i) {
@@ -255,9 +255,7 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
               children: [
                 _Legend('P', 'Present', AppColors.accentGreen),
                 _Legend('A', 'Absent', AppColors.accentRed),
-                _Legend('L', 'Late', AppColors.warning),
                 _Legend('H', 'Half Day', AppColors.accentOrange),
-                _Legend('E', 'Excused', AppColors.primary),
               ],
             ),
           ],
