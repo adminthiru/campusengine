@@ -436,6 +436,11 @@ class ExamsProvider extends ChangeNotifier {
     if (!canEnterMarks) return false;
     // Optimistic while profile is still loading — show all entries
     if (_permissions == null) return true;
+    // Class teacher can enter marks for all subjects in their class
+    if (_isClassTeacher && _classTeacherInfo != null) {
+      if (entry.classId == _classTeacherInfo!.classInfo.id) return true;
+    }
+    // Subject teacher can enter marks for their assigned subject-class pairs
     if (_isSubjectTeacher) {
       for (final a in _subjectAssignments) {
         if (entry.classId == a.classInfo.id &&

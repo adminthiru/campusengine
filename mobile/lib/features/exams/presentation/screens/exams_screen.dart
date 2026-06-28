@@ -2541,7 +2541,7 @@ class _ResultsTile extends StatelessWidget {
             ),
             const SizedBox(width: 14),
             Expanded(
-              child: Text('Class $className',
+              child: Text(className,
                   style: AppTypography.s14SemiBold(
                       color: isDark ? Colors.white : AppColors.textPrimary)),
             ),
