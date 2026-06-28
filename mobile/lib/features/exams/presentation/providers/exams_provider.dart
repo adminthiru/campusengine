@@ -443,39 +443,36 @@ class ExamsProvider extends ChangeNotifier {
     if (!canEnterMarks) return false;
     // Optimistic while profile is still loading — show all entries
     if (_permissions == null) return true;
-    // Class teacher → can enter marks for every subject in their own class.
-    if (_isClassTeacher &&
-        _classTeacherInfo != null &&
-        entry.classId == _classTeacherInfo!.classInfo.id) {
-      return true;
+    // Priority 1 — teacher has owned subjects (e.g. Physics teacher).
+    // Show ONLY their subjects across every class in the exam, regardless
+    // of whether they are also the class teacher. This ensures a Physics
+    // teacher who is also class-teacher for 7A sees:
+    //   Physics · Class 7A, Physics · Class 10A …  (not all 7A subjects).
+    if (ownedSubjectIds.isNotEmpty) {
+      return entry.subjectId != null &&
+          ownedSubjectIds.contains(entry.subjectId);
     }
-    // Subject teacher → can enter marks for THEIR subject in any class the
-    // exam schedules it. A Physics teacher sees every class taking Physics,
-    // not only the one class their profile happens to be linked to.
-    if (entry.subjectId != null && ownedSubjectIds.contains(entry.subjectId)) {
-      return true;
+    // Priority 2 — pure class teacher (no explicit subject assignments).
+    // Show every subject scheduled for their class.
+    if (_isClassTeacher && _classTeacherInfo != null) {
+      return entry.classId == _classTeacherInfo!.classInfo.id;
     }
     return false;
   }
 
   bool canViewResultsForClass(ExamInfo exam, String classId) {
     if (_permissions == null) return true;
-    // Class teacher → full results for their own class.
-    if (_isClassTeacher &&
-        _classTeacherInfo != null &&
-        _classTeacherInfo!.classInfo.id == classId) {
-      return true;
-    }
-    // Subject teacher → results for any class where they own a scheduled
-    // subject in this exam (mirrors the marks-entry access above).
+    // Teacher with owned subjects — can view results for any class where
+    // their subject is scheduled in this exam.
     if (ownedSubjectIds.isNotEmpty) {
-      for (final s in exam.schedule) {
-        if (s.classId == classId &&
-            s.subjectId != null &&
-            ownedSubjectIds.contains(s.subjectId)) {
-          return true;
-        }
-      }
+      return exam.schedule.any((s) =>
+          s.classId == classId &&
+          s.subjectId != null &&
+          ownedSubjectIds.contains(s.subjectId));
+    }
+    // Pure class teacher — view results for their own class only.
+    if (_isClassTeacher && _classTeacherInfo != null) {
+      return _classTeacherInfo!.classInfo.id == classId;
     }
     return false;
   }
