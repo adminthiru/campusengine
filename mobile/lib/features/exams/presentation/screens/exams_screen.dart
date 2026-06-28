@@ -1580,7 +1580,7 @@ class _ScheduleDraftCardState extends State<_ScheduleDraftCard> {
 
 // ── Marks Entry View ──────────────────────────────────────────────────────────
 
-class _MarksEntryView extends StatelessWidget {
+class _MarksEntryView extends StatefulWidget {
   final ExamInfo exam;
   final ExamScheduleEntry schedule;
   final VoidCallback onBack;
@@ -1590,6 +1590,13 @@ class _MarksEntryView extends StatelessWidget {
     required this.schedule,
     required this.onBack,
   });
+
+  @override
+  State<_MarksEntryView> createState() => _MarksEntryViewState();
+}
+
+class _MarksEntryViewState extends State<_MarksEntryView> {
+  bool _isEditing = false;
 
   void _snack(BuildContext context, String msg, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1602,6 +1609,7 @@ class _MarksEntryView extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.watch<ExamsProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final canEdit = !widget.exam.isResultPublished;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
@@ -1615,19 +1623,19 @@ class _MarksEntryView extends StatelessWidget {
                   icon: Icon(Icons.arrow_back_ios_new,
                       size: 20,
                       color: isDark ? Colors.white : AppColors.textPrimary),
-                  onPressed: onBack,
+                  onPressed: widget.onBack,
                 ),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(schedule.subjectName ?? 'Subject',
+                      Text(widget.schedule.subjectName ?? 'Subject',
                           style: AppTypography.s16Bold(
                               color: isDark
                                   ? Colors.white
                                   : AppColors.textPrimary)),
                       Text(
-                        '${exam.name} · ${schedule.classFullName}',
+                        '${widget.exam.name} · ${widget.schedule.classFullName}',
                         style: AppTypography.s12Regular(
                             color: isDark
                                 ? AppColors.textMuted
@@ -1644,7 +1652,7 @@ class _MarksEntryView extends StatelessWidget {
                     color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text('Max: ${schedule.maxMarks}',
+                  child: Text('Max: ${widget.schedule.maxMarks}',
                       style: AppTypography.s11Bold(color: AppColors.primary)),
                 ),
               ],
@@ -1679,7 +1687,7 @@ class _MarksEntryView extends StatelessWidget {
                                         ? AppColors.textMuted
                                         : AppColors.textSecondary)))
                         : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                             itemCount: p.students.length,
                             separatorBuilder: (_, __) =>
                                 const SizedBox(height: 8),
@@ -1691,8 +1699,9 @@ class _MarksEntryView extends StatelessWidget {
                                 index: i + 1,
                                 student: student,
                                 entry: entry,
-                                maxMarks: schedule.maxMarks,
+                                maxMarks: widget.schedule.maxMarks,
                                 isDark: isDark,
+                                isReadOnly: !_isEditing,
                                 onChanged: (updated) => p.updateMark(
                                   student.id,
                                   theory: updated.theoryMarks,
@@ -1700,43 +1709,75 @@ class _MarksEntryView extends StatelessWidget {
                                   absent: updated.isAbsent,
                                   remarks: updated.remarks,
                                 ),
-                                onUploadPdf: (path, name) async {
-                                  final success = await p.uploadAnswerPaper(
-                                    examId: exam.id,
-                                    classId: schedule.classId ?? '',
-                                    studentId: student.id,
-                                    subjectId: schedule.subjectId ?? '',
-                                    filePath: path,
-                                    fileName: name,
-                                  );
-                                  if (!success && context.mounted && p.error != null) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text(p.error!)),
-                                    );
-                                  }
-                                },
+                                onUploadPdf: _isEditing
+                                    ? (path, name) async {
+                                        final success =
+                                            await p.uploadAnswerPaper(
+                                          examId: widget.exam.id,
+                                          classId:
+                                              widget.schedule.classId ?? '',
+                                          studentId: student.id,
+                                          subjectId:
+                                              widget.schedule.subjectId ?? '',
+                                          filePath: path,
+                                          fileName: name,
+                                        );
+                                        if (!success &&
+                                            context.mounted &&
+                                            p.error != null) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(content: Text(p.error!)),
+                                          );
+                                        }
+                                      }
+                                    : null,
                               );
                             },
                           ),
           ),
+          if (!_isEditing && !p.isLoadingStudents && p.students.isNotEmpty && canEdit)
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: () => setState(() => _isEditing = true),
+                    icon: const Icon(Icons.edit_outlined, color: Colors.white, size: 18),
+                    label: const Text('Edit Marks',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
-      floatingActionButton: p.students.isEmpty
-          ? null
-          : FloatingActionButton.extended(
+      floatingActionButton: _isEditing && p.students.isNotEmpty
+          ? FloatingActionButton.extended(
               onPressed: p.isSaving
                   ? null
                   : () async {
-                      final classId = schedule.classId;
-                      final subjectId = schedule.subjectId;
+                      final classId = widget.schedule.classId;
+                      final subjectId = widget.schedule.subjectId;
                       if (classId == null || subjectId == null) return;
                       final ok = await p.saveMarks(
-                        exam.id,
+                        widget.exam.id,
                         classId,
                         subjectId,
                       );
                       if (context.mounted) {
                         if (ok) {
+                          setState(() => _isEditing = false);
                           _snack(context, 'Marks saved successfully!');
                         } else {
                           _snack(context, p.error ?? 'Failed to save marks',
@@ -1761,7 +1802,8 @@ class _MarksEntryView extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     fontSize: 14),
               ),
-            ),
+            )
+          : null,
     );
   }
 }
@@ -1774,6 +1816,7 @@ class _StudentMarkCard extends StatefulWidget {
   final ExamMarkEntry entry;
   final int maxMarks;
   final bool isDark;
+  final bool isReadOnly;
   final Function(ExamMarkEntry) onChanged;
   final Future<void> Function(String path, String name)? onUploadPdf;
 
@@ -1783,6 +1826,7 @@ class _StudentMarkCard extends StatefulWidget {
     required this.entry,
     required this.maxMarks,
     required this.isDark,
+    this.isReadOnly = false,
     required this.onChanged,
     this.onUploadPdf,
   });
@@ -1902,12 +1946,14 @@ class _StudentMarkCardState extends State<_StudentMarkCard> {
                   Checkbox(
                     value: _isAbsent,
                     activeColor: AppColors.error,
-                    onChanged: (v) {
-                      if (v != null) {
-                        setState(() => _isAbsent = v);
-                        _notify();
-                      }
-                    },
+                    onChanged: widget.isReadOnly
+                        ? null
+                        : (v) {
+                            if (v != null) {
+                              setState(() => _isAbsent = v);
+                              _notify();
+                            }
+                          },
                     visualDensity: VisualDensity.compact,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
@@ -1925,131 +1971,262 @@ class _StudentMarkCardState extends State<_StudentMarkCard> {
           ),
           if (!_isAbsent) ...[
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _MarksField(
-                    controller: _theoryCtrl,
-                    label: 'Theory Marks',
-                    hint: '0–${widget.maxMarks}',
-                    isDark: isDark,
-                    onChanged: (_) => _notify(),
+            if (widget.isReadOnly) ...[
+              // Read-only: show marks as static labelled values
+              Row(
+                children: [
+                  Expanded(
+                    child: _ReadOnlyField(
+                      label: 'Theory Marks',
+                      value: widget.entry.theoryMarks > 0
+                          ? widget.entry.theoryMarks.toStringAsFixed(0)
+                          : '–',
+                      isDark: isDark,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _MarksField(
-                    controller: _practicalCtrl,
-                    label: 'Practical',
-                    hint: '0',
-                    isDark: isDark,
-                    onChanged: (_) => _notify(),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _remarksCtrl,
-              style: AppTypography.s12Regular(
-                  color: isDark ? Colors.white : AppColors.textPrimary),
-              decoration: InputDecoration(
-                hintText: 'Remarks (optional)',
-                hintStyle: AppTypography.s12Regular(color: AppColors.textMuted),
-                isDense: true,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                filled: true,
-                fillColor: isDark ? AppColors.bgDark : const Color(0xFFF8FAFC),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(
-                      color: isDark
-                          ? AppColors.borderDark
-                          : AppColors.borderLight),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(
-                      color: isDark
-                          ? AppColors.borderDark
-                          : AppColors.borderLight),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide:
-                      const BorderSide(color: AppColors.primary, width: 1.5),
-                ),
-              ),
-              onChanged: (_) => _notify(),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: widget.entry.answerPaperFileName != null
-                      ? Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isDark ? AppColors.bgDark : const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.picture_as_pdf, color: AppColors.primary, size: 18),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  widget.entry.answerPaperFileName!,
-                                  style: AppTypography.s12Medium(
-                                      color: isDark ? Colors.white : AppColors.textPrimary),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (_isUploadingPdf)
-                                const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                              else
-                                InkWell(
-                                  onTap: _pickAndUploadPdf,
-                                  child: const Icon(Icons.edit_outlined, size: 16, color: AppColors.textSecondary),
-                                ),
-                            ],
-                          ),
-                        )
-                      : OutlinedButton.icon(
-                          onPressed: _isUploadingPdf ? null : _pickAndUploadPdf,
-                          icon: _isUploadingPdf
-                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                              : const Icon(Icons.upload_file, size: 16),
-                          label: Text(_isUploadingPdf ? 'Uploading...' : 'Upload Answer PDF'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: isDark ? Colors.white : AppColors.textPrimary,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            textStyle: AppTypography.s12Medium(),
-                            side: BorderSide(color: isDark ? AppColors.borderDark : AppColors.borderLight),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                ),
-                if (widget.entry.answerPaperUrl != null) ...[
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.open_in_new, size: 20),
-                    color: AppColors.primary,
-                    tooltip: 'View PDF',
-                    onPressed: () async {
-                      final url =
-                          Uri.parse(ApiClient.fileUrl(widget.entry.answerPaperUrl!));
-                      if (await canLaunchUrl(url)) {
-                        await launchUrl(url, mode: LaunchMode.externalApplication);
-                      }
-                    },
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _ReadOnlyField(
+                      label: 'Practical',
+                      value: widget.entry.practicalMarks > 0
+                          ? widget.entry.practicalMarks.toStringAsFixed(0)
+                          : '–',
+                      isDark: isDark,
+                    ),
                   ),
                 ],
+              ),
+              if (widget.entry.remarks.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? AppColors.bgDark
+                        : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: isDark
+                            ? AppColors.borderDark
+                            : AppColors.borderLight),
+                  ),
+                  child: Text('Remarks: ${widget.entry.remarks}',
+                      style: AppTypography.s12Regular(
+                          color: isDark
+                              ? AppColors.textMuted
+                              : AppColors.textSecondary)),
+                ),
               ],
-            ),
+              if (widget.entry.answerPaperUrl != null) ...[
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: () async {
+                    final url = Uri.parse(
+                        ApiClient.fileUrl(widget.entry.answerPaperUrl!));
+                    if (await canLaunchUrl(url)) {
+                      await launchUrl(url,
+                          mode: LaunchMode.externalApplication);
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? AppColors.bgDark
+                          : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: isDark
+                              ? AppColors.borderDark
+                              : AppColors.borderLight),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.picture_as_pdf,
+                            color: AppColors.primary, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            widget.entry.answerPaperFileName ??
+                                'Answer Paper',
+                            style: AppTypography.s12Medium(
+                                color: isDark
+                                    ? Colors.white
+                                    : AppColors.textPrimary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const Icon(Icons.open_in_new,
+                            size: 16, color: AppColors.primary),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ] else ...[
+              // Edit mode: active text fields
+              Row(
+                children: [
+                  Expanded(
+                    child: _MarksField(
+                      controller: _theoryCtrl,
+                      label: 'Theory Marks',
+                      hint: '0–${widget.maxMarks}',
+                      isDark: isDark,
+                      onChanged: (_) => _notify(),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _MarksField(
+                      controller: _practicalCtrl,
+                      label: 'Practical',
+                      hint: '0',
+                      isDark: isDark,
+                      onChanged: (_) => _notify(),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _remarksCtrl,
+                style: AppTypography.s12Regular(
+                    color: isDark ? Colors.white : AppColors.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'Remarks (optional)',
+                  hintStyle:
+                      AppTypography.s12Regular(color: AppColors.textMuted),
+                  isDense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  filled: true,
+                  fillColor:
+                      isDark ? AppColors.bgDark : const Color(0xFFF8FAFC),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                        color: isDark
+                            ? AppColors.borderDark
+                            : AppColors.borderLight),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                        color: isDark
+                            ? AppColors.borderDark
+                            : AppColors.borderLight),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(
+                        color: AppColors.primary, width: 1.5),
+                  ),
+                ),
+                onChanged: (_) => _notify(),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: widget.entry.answerPaperFileName != null
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? AppColors.bgDark
+                                  : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: isDark
+                                      ? AppColors.borderDark
+                                      : AppColors.borderLight),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.picture_as_pdf,
+                                    color: AppColors.primary, size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    widget.entry.answerPaperFileName!,
+                                    style: AppTypography.s12Medium(
+                                        color: isDark
+                                            ? Colors.white
+                                            : AppColors.textPrimary),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (_isUploadingPdf)
+                                  const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2))
+                                else
+                                  InkWell(
+                                    onTap: _pickAndUploadPdf,
+                                    child: const Icon(Icons.edit_outlined,
+                                        size: 16,
+                                        color: AppColors.textSecondary),
+                                  ),
+                              ],
+                            ),
+                          )
+                        : OutlinedButton.icon(
+                            onPressed:
+                                _isUploadingPdf ? null : _pickAndUploadPdf,
+                            icon: _isUploadingPdf
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2))
+                                : const Icon(Icons.upload_file, size: 16),
+                            label: Text(_isUploadingPdf
+                                ? 'Uploading...'
+                                : 'Upload Answer PDF'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: isDark
+                                  ? Colors.white
+                                  : AppColors.textPrimary,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              textStyle: AppTypography.s12Medium(),
+                              side: BorderSide(
+                                  color: isDark
+                                      ? AppColors.borderDark
+                                      : AppColors.borderLight),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                  ),
+                  if (widget.entry.answerPaperUrl != null) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.open_in_new, size: 20),
+                      color: AppColors.primary,
+                      tooltip: 'View PDF',
+                      onPressed: () async {
+                        final url = Uri.parse(
+                            ApiClient.fileUrl(widget.entry.answerPaperUrl!));
+                        if (await canLaunchUrl(url)) {
+                          await launchUrl(url,
+                              mode: LaunchMode.externalApplication);
+                        }
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ],
           ] else ...[
             const SizedBox(height: 12),
             Container(
@@ -2131,6 +2308,44 @@ class _MarksField extends StatelessWidget {
         ),
       ),
       onChanged: onChanged,
+    );
+  }
+}
+
+class _ReadOnlyField extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isDark;
+
+  const _ReadOnlyField({
+    required this.label,
+    required this.value,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.bgDark : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+            color: isDark ? AppColors.borderDark : AppColors.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: AppTypography.s11Regular(
+                  color:
+                      isDark ? AppColors.textMuted : AppColors.textSecondary)),
+          const SizedBox(height: 2),
+          Text(value,
+              style: AppTypography.s14SemiBold(
+                  color: isDark ? Colors.white : AppColors.textPrimary)),
+        ],
+      ),
     );
   }
 }
@@ -2281,11 +2496,9 @@ class _ScheduleEntryCard extends StatelessWidget {
                             : AppColors.textSecondary)),
               ],
             ),
-            if (canEnter) ...[
-              const SizedBox(width: 8),
-              const Icon(Icons.chevron_right,
-                  size: 18, color: AppColors.textSecondary),
-            ],
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right,
+                size: 18, color: AppColors.textSecondary),
           ],
         ),
       ),

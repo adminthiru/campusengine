@@ -452,6 +452,11 @@ class ExamsProvider extends ChangeNotifier {
     if (_isClassTeacher && _classTeacherInfo != null) {
       if (_classTeacherInfo!.classInfo.id == classId) return true;
     }
+    if (_isSubjectTeacher) {
+      for (final a in _subjectAssignments) {
+        if (a.classInfo.id == classId) return true;
+      }
+    }
     return false;
   }
 
