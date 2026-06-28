@@ -18,8 +18,14 @@ class HomeworkProvider extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  bool _isLoading = false;
+  bool _isLoading = true; // skeleton visible from frame 1
   bool get isLoading => _isLoading;
+
+  // Called once from ChangeNotifierProvider.create — chains profile → data
+  Future<void> initialize() async {
+    await fetchProfile();
+    if (!_disposed) fetchHomework();
+  }
 
   bool _isSaving = false;
   bool get isSaving => _isSaving;

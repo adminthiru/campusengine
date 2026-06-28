@@ -17,7 +17,7 @@ class ExamsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => ExamsProvider()..fetchProfile().then((_) {}),
+      create: (_) => ExamsProvider()..initialize(),
       child: const _ExamsScreenContent(),
     );
   }
@@ -39,16 +39,6 @@ class _ExamsScreenContentState extends State<_ExamsScreenContent> {
   ExamInfo? _selectedExam;
   ExamScheduleEntry? _selectedSchedule;
   String? _resultsClassId;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final p = context.read<ExamsProvider>();
-      await p.fetchProfile();
-      if (mounted) p.fetchExams();
-    });
-  }
 
   void _openDetail(ExamInfo exam) => setState(() {
         _selectedExam = exam;

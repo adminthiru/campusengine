@@ -15,7 +15,7 @@ class HomeworkScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => HomeworkProvider(),
+      create: (_) => HomeworkProvider()..initialize(),
       child: const _HomeworkScreenContent(),
     );
   }
@@ -30,19 +30,6 @@ class _HomeworkScreenContent extends StatefulWidget {
 
 class _HomeworkScreenContentState extends State<_HomeworkScreenContent> {
   String? _viewHwId;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final p = context.read<HomeworkProvider>();
-      p.fetchProfile().then((_) {
-        if (!mounted) return;
-        p.fetchHomework();
-      });
-    });
-  }
 
   @override
   Widget build(BuildContext context) {

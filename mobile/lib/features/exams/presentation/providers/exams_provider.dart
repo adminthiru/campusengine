@@ -270,8 +270,22 @@ class ExamStudentResult {
 
 class ExamsProvider extends ChangeNotifier {
   // ── Loading states ──────────────────────────────────────────────────────────
-  bool _isLoading = false;
+  bool _isLoading = true; // skeleton visible from frame 1
   bool get isLoading => _isLoading;
+
+  // Called once from ChangeNotifierProvider.create — chains profile → data
+  Future<void> initialize() async {
+    await fetchProfile();
+    if (!_disposed) fetchExams();
+  }
+
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
 
   bool _isSaving = false;
   bool get isSaving => _isSaving;
