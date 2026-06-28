@@ -147,6 +147,22 @@ class _ExamScheduleTab extends StatelessWidget {
     }
   }
 
+  // Show a time with AM/PM, handling both 24h ("20:00") and "h:mm A" strings.
+  static String _fmtTime(dynamic raw) {
+    final t = (raw ?? '').toString().trim();
+    if (t.isEmpty) return '';
+    final m = RegExp(r'^(\d{1,2}):(\d{2})\s*(AM|PM)?$', caseSensitive: false)
+        .firstMatch(t);
+    if (m == null) return t;
+    final ap = m.group(3)?.toUpperCase();
+    final min = m.group(2)!;
+    if (ap != null) return '${int.parse(m.group(1)!)}:$min $ap';
+    final h = int.parse(m.group(1)!);
+    final period = h >= 12 ? 'PM' : 'AM';
+    final h12 = h % 12 == 0 ? 12 : h % 12;
+    return '$h12:$min $period';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading) {
@@ -258,8 +274,8 @@ class _ExamScheduleTab extends StatelessWidget {
                       ? (s['subject']['name'] ?? '').toString()
                       : (s['subject']?.toString() ?? '');
                   final sDate = _shortDate(s['date']);
-                  final start = (s['startTime'] ?? '').toString();
-                  final end = (s['endTime'] ?? '').toString();
+                  final start = _fmtTime(s['startTime']);
+                  final end = _fmtTime(s['endTime']);
                   final time =
                       [start, end].where((t) => t.isNotEmpty).join(' – ');
                   final meta = [
