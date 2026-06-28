@@ -234,6 +234,20 @@ class _InfoTab extends StatelessWidget {
     final driver = transport != null ? _str(transport['driverName']).trim() : '';
     final driverPhone =
         transport != null ? _str(transport['driverPhone']).trim() : '';
+    final conductor =
+        transport != null ? _str(transport['conductorName']).trim() : '';
+    final conductorPhone =
+        transport != null ? _str(transport['conductorPhone']).trim() : '';
+    final busLabel = transport == null
+        ? ''
+        : [
+            if (_str(transport['routeNumber']).trim().isNotEmpty)
+              '#${_str(transport['routeNumber']).trim()}',
+            if (_str(transport['vehicleNumber']).trim().isNotEmpty)
+              _str(transport['vehicleNumber']).trim(),
+            if (_str(transport['routeName']).trim().isNotEmpty)
+              _str(transport['routeName']).trim(),
+          ].join(' · ');
 
     final med = s['medicalInfo'] is Map ? s['medicalInfo'] as Map : const {};
     final conditions = (med['conditions'] is List)
@@ -298,22 +312,18 @@ class _InfoTab extends StatelessWidget {
         if (transport != null || busStop.isNotEmpty) ...[
           _section('Transport'),
           _card(isDark, [
-            if (transport != null)
-              _row(
-                  'Route',
-                  [
-                    if (_str(transport['routeNumber']).trim().isNotEmpty)
-                      '#${_str(transport['routeNumber']).trim()}',
-                    if (_str(transport['vehicleNumber']).trim().isNotEmpty)
-                      _str(transport['vehicleNumber']).trim(),
-                    if (_str(transport['routeName']).trim().isNotEmpty)
-                      _str(transport['routeName']).trim(),
-                  ].join(' · '),
-                  isDark),
+            if (busLabel.isNotEmpty) _row('Bus Assigned', busLabel, isDark),
             if (busStop.isNotEmpty) _row('Bus Stop', busStop, isDark),
             if (driver.isNotEmpty)
               _row('Driver',
                   driverPhone.isNotEmpty ? '$driver · $driverPhone' : driver,
+                  isDark),
+            if (conductor.isNotEmpty)
+              _row(
+                  'Conductor',
+                  conductorPhone.isNotEmpty
+                      ? '$conductor · $conductorPhone'
+                      : conductor,
                   isDark),
           ]),
           const SizedBox(height: 16),
