@@ -228,6 +228,13 @@ class _InfoTab extends StatelessWidget {
         .where((v) => v != null && v.toString().trim().isNotEmpty)
         .join(', ');
 
+    final transport = s['transportRoute'] is Map ? s['transportRoute'] as Map : null;
+    final busStop =
+        (s['busStop'] is String) ? (s['busStop'] as String).trim() : '';
+    final driver = transport != null ? _str(transport['driverName']).trim() : '';
+    final driverPhone =
+        transport != null ? _str(transport['driverPhone']).trim() : '';
+
     final med = s['medicalInfo'] is Map ? s['medicalInfo'] as Map : const {};
     final conditions = (med['conditions'] is List)
         ? (med['conditions'] as List)
@@ -319,6 +326,30 @@ class _InfoTab extends StatelessWidget {
                                 : AppColors.textSecondary))),
               ]),
             ),
+          ]),
+          const SizedBox(height: 16),
+        ],
+
+        if (transport != null || busStop.isNotEmpty) ...[
+          _section('Transport'),
+          _card(isDark, [
+            if (transport != null)
+              _row(
+                  'Route',
+                  [
+                    if (_str(transport['routeNumber']).trim().isNotEmpty)
+                      '#${_str(transport['routeNumber']).trim()}',
+                    if (_str(transport['vehicleNumber']).trim().isNotEmpty)
+                      _str(transport['vehicleNumber']).trim(),
+                    if (_str(transport['routeName']).trim().isNotEmpty)
+                      _str(transport['routeName']).trim(),
+                  ].join(' · '),
+                  isDark),
+            if (busStop.isNotEmpty) _row('Bus Stop', busStop, isDark),
+            if (driver.isNotEmpty)
+              _row('Driver',
+                  driverPhone.isNotEmpty ? '$driver · $driverPhone' : driver,
+                  isDark),
           ]),
           const SizedBox(height: 16),
         ],

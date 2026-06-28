@@ -448,7 +448,8 @@ router.get('/parent/my-children', protect, authorize('parent'), async (req, res)
       .populate('currentClass', 'name section')
       .populate('guardians', 'name relation phone alternatePhone email occupation')
       .populate('primaryGuardian', 'name relation phone alternatePhone email occupation')
-      .select('name admissionNumber rollNumber photo email phone alternativeMobile gender dateOfBirth bloodGroup caste category nationality religion motherTongue previousSchool identificationMark aadharNumber remarks address currentClass section academicYear admissionDate guardians primaryGuardian isHosteller medicalInfo status');
+      .populate('transportRoute', 'routeName routeNumber vehicleNumber vehicleType driverName driverPhone')
+      .select('name admissionNumber rollNumber photo email phone alternativeMobile gender dateOfBirth bloodGroup caste category nationality religion motherTongue previousSchool identificationMark aadharNumber remarks address currentClass section academicYear admissionDate guardians primaryGuardian transportRoute busStop isHosteller medicalInfo status');
     res.json({ success: true, children: students });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });

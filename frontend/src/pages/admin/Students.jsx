@@ -91,6 +91,7 @@ export default function Students() {
   const transports = (transportData?.routes || []).filter(r => r.isActive);
 
   const [selectedTransport, setSelectedTransport] = useState('');
+  const [busStop, setBusStop] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['students', page, search, classFilter],
@@ -197,6 +198,7 @@ export default function Students() {
       medicalInfo: { conditions: data.medicalIssue ? data.medicalIssue.split(',').map(s => s.trim()).filter(Boolean) : [] },
       remarks: data.remarks,
       transportRoute: selectedTransport || undefined,
+      busStop: busStop.trim() || undefined,
     };
   };
 
@@ -223,6 +225,7 @@ export default function Students() {
     setParentForm(null);
     setProfilePreview(null);
     setSelectedTransport('');
+    setBusStop('');
     reset({});
   };
 
@@ -230,6 +233,7 @@ export default function Students() {
     setEditStudent(null);
     setFormTab('personal');
     setSelectedTransport('');
+    setBusStop('');
     setParents([]);
     setParentForm(null);
     setProfilePreview(null);
@@ -275,6 +279,7 @@ export default function Students() {
     setStudentStatus(stu.status || 'active');
     setProfilePreview(stu.photo || null);
     setSelectedTransport(stu.transportRoute?._id || stu.transportRoute || '');
+    setBusStop(stu.busStop || '');
     setParentForm(null);
     setShowModal(true);
   };
@@ -328,6 +333,7 @@ export default function Students() {
           imgInputRef={imgInputRef}
           studentStatus={studentStatus} setStudentStatus={setStudentStatus} control={control} setValue={setValue}
           transports={transports} selectedTransport={selectedTransport} setSelectedTransport={setSelectedTransport}
+          busStop={busStop} setBusStop={setBusStop}
         />
       </>
     );
@@ -463,6 +469,7 @@ export default function Students() {
         imgInputRef={imgInputRef}
         studentStatus={studentStatus} setStudentStatus={setStudentStatus} control={control}
         transports={transports} selectedTransport={selectedTransport} setSelectedTransport={setSelectedTransport}
+        busStop={busStop} setBusStop={setBusStop}
         onDeleteStudent={(id) => { setDeleteId(id); closeModal(); }}
       />
 
@@ -495,7 +502,7 @@ function AddEditModal({
   parents, setParents, parentForm, setParentForm, parentDraft, setParentDraft,
   profilePreview, setProfilePreview, imgInputRef,
   studentStatus, setStudentStatus, control, setValue,
-  transports, selectedTransport, setSelectedTransport
+  transports, selectedTransport, setSelectedTransport, busStop, setBusStop
 }) {
   // useWatch subscribes to field changes inside this component and re-renders reactively
   const watched = useWatch({
@@ -779,6 +786,20 @@ function AddEditModal({
                   ]}
                 />
               </div>
+              <div className="form-group">
+                <label className="form-label">Bus Stop</label>
+                <input className="form-control" list="busStopOptions"
+                  value={busStop} onChange={e => setBusStop(e.target.value)}
+                  placeholder={selectedTransport ? 'Select or type bus stop' : 'Assign a route first'}
+                  disabled={!selectedTransport} />
+                <datalist id="busStopOptions">
+                  {((transports || []).find(t => t._id === selectedTransport)?.stops || [])
+                    .filter(s => s?.name)
+                    .map((s, i) => <option key={i} value={s.name} />)}
+                </datalist>
+              </div>
+            </FormRow>
+            <FormRow>
               <div className="form-group">
                 <label className="form-label" style={{ display: 'block', marginBottom: 8 }}>Status <span style={{ color: '#ef4444' }}>*</span></label>
                 <div style={{ display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', width: 'fit-content' }}>
@@ -1235,6 +1256,11 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
                     }}>
                       🚌 {student.transportRoute.routeNumber ? `#${student.transportRoute.routeNumber} · ` : ''}{student.transportRoute.vehicleNumber || student.transportRoute.routeName}
                     </span>
+                    {student.busStop && (
+                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Bus Stop: </span>{student.busStop}
+                      </div>
+                    )}
                   </div>
                 )}
 
