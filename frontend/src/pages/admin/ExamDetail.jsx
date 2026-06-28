@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Upload, Save, Send, CheckCircle, Edit2, EyeOff, FileDown, Search, CalendarDays, Ticket, X } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
-import { Select as AntSelect, DatePicker } from 'antd';
+import { Select as AntSelect, DatePicker, TimePicker } from 'antd';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
@@ -11,6 +11,21 @@ import { PageLoader, StatusBadge, Modal, FormRow, SearchInput } from '../../comp
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 const MEDAL_BORDER = ['#fbbf24', '#94a3b8', '#fb923c'];
+
+// Parse a stored time string ("10:00 AM" or legacy 24h "13:30") into a dayjs
+// value for the AntD TimePicker; returns null when empty/unparseable.
+function parseTimeToDayjs(t) {
+  if (!t) return null;
+  const m = /^\s*(\d{1,2}):(\d{2})\s*(AM|PM)?\s*$/i.exec(String(t));
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const ap = m[3] ? m[3].toUpperCase() : null;
+  if (ap === 'PM' && h < 12) h += 12;
+  if (ap === 'AM' && h === 12) h = 0;
+  if (h > 23 || min > 59) return null;
+  return dayjs().hour(h).minute(min).second(0).millisecond(0);
+}
 
 export default function ExamDetail() {
   const { id } = useParams();
@@ -824,7 +839,7 @@ export default function ExamDetail() {
       })()}
 
       {/* Schedule Modal */}
-      <Modal open={showScheduleModal} onClose={() => setShowScheduleModal(false)}
+      <Modal open={showScheduleModal} onClose={() => setShowScheduleModal(false)} size="lg"
         title={`Set Exam Dates — ${exam?.classes?.find(c => c._id === activeClassId)?.name || ''} ${exam?.classes?.find(c => c._id === activeClassId)?.section || ''}`}
         footer={<>
           <button className="btn btn-secondary" onClick={() => setShowScheduleModal(false)}>Cancel</button>
@@ -835,7 +850,7 @@ export default function ExamDetail() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           {/* Column headers */}
           <div style={{
-            display: 'grid', gridTemplateColumns: '36px 1fr 140px 90px 90px 90px',
+            display: 'grid', gridTemplateColumns: '36px 1fr 150px 130px 130px 110px',
             gap: 8, padding: '6px 0', borderBottom: '2px solid var(--border)',
             marginBottom: 4
           }}>
@@ -859,7 +874,7 @@ export default function ExamDetail() {
               }));
               return (
                 <div key={s._id} style={{
-                  display: 'grid', gridTemplateColumns: '36px 1fr 140px 90px 90px 90px',
+                  display: 'grid', gridTemplateColumns: '36px 1fr 150px 130px 130px 110px',
                   gap: 8, alignItems: 'center', padding: '6px 8px', borderRadius: 8,
                   background: included ? '#f8fafc' : '#f1f5f9',
                   border: `1px solid ${included ? 'var(--border)' : '#cbd5e1'}`,
@@ -884,12 +899,30 @@ export default function ExamDetail() {
                     value={scheduleState[s._id]?.date ? dayjs(scheduleState[s._id].date) : null}
                     onChange={(d) => setField('date', d ? d.format('YYYY-MM-DD') : '')}
                     getPopupContainer={() => document.body} />
-                  <input type="time" className="form-control" disabled={!included} style={{ fontSize: 12, padding: '5px 8px' }}
-                    value={scheduleState[s._id]?.startTime || ''}
-                    onChange={e => setField('startTime', e.target.value)} />
-                  <input type="time" className="form-control" disabled={!included} style={{ fontSize: 12, padding: '5px 8px' }}
-                    value={scheduleState[s._id]?.endTime || ''}
-                    onChange={e => setField('endTime', e.target.value)} />
+                  <TimePicker
+                    size="small"
+                    disabled={!included}
+                    style={{ width: '100%' }}
+                    use12Hours
+                    format="h:mm A"
+                    minuteStep={5}
+                    needConfirm={false}
+                    placeholder="Start"
+                    value={parseTimeToDayjs(scheduleState[s._id]?.startTime)}
+                    onChange={(d) => setField('startTime', d ? d.format('h:mm A') : '')}
+                    getPopupContainer={() => document.body} />
+                  <TimePicker
+                    size="small"
+                    disabled={!included}
+                    style={{ width: '100%' }}
+                    use12Hours
+                    format="h:mm A"
+                    minuteStep={5}
+                    needConfirm={false}
+                    placeholder="End"
+                    value={parseTimeToDayjs(scheduleState[s._id]?.endTime)}
+                    onChange={(d) => setField('endTime', d ? d.format('h:mm A') : '')}
+                    getPopupContainer={() => document.body} />
                   <input type="text" className="form-control" disabled={!included} placeholder="Room" style={{ fontSize: 12, padding: '5px 8px' }}
                     value={scheduleState[s._id]?.room || ''}
                     onChange={e => setField('room', e.target.value)} />
