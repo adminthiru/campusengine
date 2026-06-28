@@ -160,39 +160,6 @@ class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // ── Quick Actions ────────────────────────────────────────
-                  Text('Quick Actions',
-                      style: AppTypography.s14SemiBold(
-                          color:
-                              isDark ? Colors.white : AppColors.textPrimary)),
-                  const SizedBox(height: 10),
-                  Row(children: [
-                    _ActionCard(
-                      icon: Icons.people_outlined,
-                      label: 'My Children',
-                      color: AppColors.primary,
-                      isDark: isDark,
-                      onTap: () => context.go('/parent/children'),
-                    ),
-                    const SizedBox(width: 10),
-                    _ActionCard(
-                      icon: Icons.event_note_outlined,
-                      label: 'Leave',
-                      color: AppColors.warning,
-                      isDark: isDark,
-                      onTap: () => context.go('/parent/leave'),
-                    ),
-                    const SizedBox(width: 10),
-                    _ActionCard(
-                      icon: Icons.person_outlined,
-                      label: 'Profile',
-                      color: AppColors.accentPurple,
-                      isDark: isDark,
-                      onTap: () => context.go('/parent/profile'),
-                    ),
-                  ]),
-                  const SizedBox(height: 20),
-
                   // ── Children Cards ───────────────────────────────────────
                   if (children.isEmpty)
                     Center(
@@ -232,51 +199,6 @@ class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
     if (h < 17) return 'Afternoon';
     return 'Evening';
   }
-}
-
-class _ActionCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final bool isDark;
-  final VoidCallback onTap;
-  const _ActionCard(
-      {required this.icon,
-      required this.label,
-      required this.color,
-      required this.isDark,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => Expanded(
-        child: GestureDetector(
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.cardDark : Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: isDark ? AppColors.borderDark : AppColors.borderLight),
-            ),
-            child: Column(children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.1),
-                    shape: BoxShape.circle),
-                child: Icon(icon, color: color, size: 22),
-              ),
-              const SizedBox(height: 8),
-              Text(label,
-                  style: AppTypography.s12SemiBold(
-                      color: isDark ? Colors.white : AppColors.textPrimary),
-                  textAlign: TextAlign.center),
-            ]),
-          ),
-        ),
-      );
 }
 
 class _ChildCard extends StatelessWidget {
