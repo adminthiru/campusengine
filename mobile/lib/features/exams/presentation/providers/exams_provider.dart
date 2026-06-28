@@ -432,34 +432,49 @@ class ExamsProvider extends ChangeNotifier {
     return result;
   }
 
+  /// Subject IDs this teacher owns (e.g. a Physics teacher → {physicsId}).
+  /// Derived from their subject-teacher assignments across all classes.
+  Set<String> get ownedSubjectIds => _subjectAssignments
+      .map((a) => a.subject.id)
+      .where((id) => id.isNotEmpty)
+      .toSet();
+
   bool canEnterMarksForEntry(ExamScheduleEntry entry) {
     if (!canEnterMarks) return false;
     // Optimistic while profile is still loading — show all entries
     if (_permissions == null) return true;
-    // Class teacher can enter marks for all subjects in their class
-    if (_isClassTeacher && _classTeacherInfo != null) {
-      if (entry.classId == _classTeacherInfo!.classInfo.id) return true;
+    // Class teacher → can enter marks for every subject in their own class.
+    if (_isClassTeacher &&
+        _classTeacherInfo != null &&
+        entry.classId == _classTeacherInfo!.classInfo.id) {
+      return true;
     }
-    // Subject teacher can enter marks for their assigned subject-class pairs
-    if (_isSubjectTeacher) {
-      for (final a in _subjectAssignments) {
-        if (entry.classId == a.classInfo.id &&
-            entry.subjectId == a.subject.id) {
-          return true;
-        }
-      }
+    // Subject teacher → can enter marks for THEIR subject in any class the
+    // exam schedules it. A Physics teacher sees every class taking Physics,
+    // not only the one class their profile happens to be linked to.
+    if (entry.subjectId != null && ownedSubjectIds.contains(entry.subjectId)) {
+      return true;
     }
     return false;
   }
 
-  bool canViewResultsForClass(String classId) {
+  bool canViewResultsForClass(ExamInfo exam, String classId) {
     if (_permissions == null) return true;
-    if (_isClassTeacher && _classTeacherInfo != null) {
-      if (_classTeacherInfo!.classInfo.id == classId) return true;
+    // Class teacher → full results for their own class.
+    if (_isClassTeacher &&
+        _classTeacherInfo != null &&
+        _classTeacherInfo!.classInfo.id == classId) {
+      return true;
     }
-    if (_isSubjectTeacher) {
-      for (final a in _subjectAssignments) {
-        if (a.classInfo.id == classId) return true;
+    // Subject teacher → results for any class where they own a scheduled
+    // subject in this exam (mirrors the marks-entry access above).
+    if (ownedSubjectIds.isNotEmpty) {
+      for (final s in exam.schedule) {
+        if (s.classId == classId &&
+            s.subjectId != null &&
+            ownedSubjectIds.contains(s.subjectId)) {
+          return true;
+        }
       }
     }
     return false;

@@ -490,7 +490,7 @@ class _ExamDetailView extends StatelessWidget {
     final classIds = exam.schedule
         .map((s) => s.classId)
         .whereType<String>()
-        .where((id) => p.canViewResultsForClass(id))
+        .where((id) => p.canViewResultsForClass(exam, id))
         .toSet()
         .toList();
 
