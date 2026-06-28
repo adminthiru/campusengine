@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Bus, Plus, Edit2, Trash2, Users, Phone, Hash, User } from 'lucide-react';
+import { Bus, Plus, Edit2, Trash2, Users, Phone, Hash, User, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Select as AntSelect } from 'antd';
 import api from '../../utils/api';
@@ -54,6 +54,23 @@ export default function Transport() {
   const allSelected = vehicles.length > 0 && vehicles.every(v => selected.includes(v._id));
   const toggleAll = (checked) => setSelected(checked ? vehicles.map(v => v._id) : []);
   const toggleOne = (id, checked) => setSelected(p => checked ? [...p, id] : p.filter(i => i !== id));
+
+  // Download the vehicle's student list (bus + driver/conductor + students) as PDF.
+  const downloadStudentList = async (v) => {
+    try {
+      const res = await fetch(`/api/transport/${v._id}/students-pdf`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `transport-${v.routeNumber || v.routeName || 'route'}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { toast.error('Failed to download student list'); }
+  };
 
   const totalStudents = vehicles.reduce((s, v) => s + (v.studentCount || 0), 0);
   const busCount = vehicles.filter(v => v.vehicleType === 'bus').length;
@@ -150,10 +167,16 @@ export default function Transport() {
                       </span>
                     </td>
                     <td onClick={e => e.stopPropagation()}>
-                      <button className="btn btn-secondary btn-sm btn-icon"
-                        onClick={() => { setEditVehicle(v); setShowModal(true); }} title="Edit">
-                        <Edit2 size={14} />
-                      </button>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="btn btn-secondary btn-sm btn-icon"
+                          onClick={() => downloadStudentList(v)} title="Download student list (PDF)">
+                          <Download size={14} />
+                        </button>
+                        <button className="btn btn-secondary btn-sm btn-icon"
+                          onClick={() => { setEditVehicle(v); setShowModal(true); }} title="Edit">
+                          <Edit2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

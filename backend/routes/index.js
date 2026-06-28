@@ -1148,6 +1148,81 @@ router.get('/transport/:id/students', protect, async (req, res) => {
     res.json({ success: true, students });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
+
+// Download the vehicle's student list as a PDF (bus + driver/conductor + students).
+router.get('/transport/:id/students-pdf', protect, async (req, res) => {
+  try {
+    const { Transport } = require('../models/Expense');
+    const route = await Transport.findOne({ _id: req.params.id, school: req.user.school });
+    if (!route) return res.status(404).json({ success: false, message: 'Vehicle not found' });
+    const students = await Student.find({
+      school: req.user.school, transportRoute: req.params.id, status: { $ne: 'dropped' }
+    }).populate('currentClass', 'name section')
+      .select('name rollNumber admissionNumber phone currentClass busStop')
+      .sort({ name: 1 });
+    const school = await School.findById(req.user.school).select('name');
+
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ margin: 40, size: 'A4' });
+    const buffers = [];
+    doc.on('data', b => buffers.push(b));
+    doc.on('end', () => {
+      const pdf = Buffer.concat(buffers);
+      const safe = String(route.routeNumber || route.routeName || 'route').replace(/[^a-z0-9]/gi, '');
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=Transport_${safe}.pdf`);
+      res.send(pdf);
+    });
+
+    doc.fontSize(16).font('Helvetica-Bold').fillColor('#111').text(school?.name || 'School', { align: 'center' });
+    doc.fontSize(12).font('Helvetica').fillColor('#444').text('Transport — Student List', { align: 'center' });
+    doc.moveDown(0.8);
+
+    const routeLabel = [route.routeNumber ? `#${route.routeNumber}` : '', route.routeName].filter(Boolean).join(' · ');
+    const info = [
+      ['Bus / Route', routeLabel || '—'],
+      ['Vehicle No', route.vehicleNumber || '—'],
+      ['Type', route.vehicleType || 'bus'],
+      ['Driver', [route.driverName, route.driverPhone].filter(Boolean).join(' · ') || '—'],
+      ['Conductor', [route.conductorName, route.conductorPhone].filter(Boolean).join(' · ') || '—'],
+      ['Students', `${students.length}${route.capacity ? ` / ${route.capacity}` : ''}`],
+    ];
+    doc.fontSize(10).fillColor('#333');
+    info.forEach(([k, v]) => {
+      doc.font('Helvetica-Bold').text(`${k}: `, { continued: true }).font('Helvetica').text(String(v));
+    });
+    doc.moveDown(0.8);
+
+    const headers = ['#', 'Roll No', 'Name', 'Class', 'Bus Stop', 'Phone'];
+    const widths = [28, 60, 150, 70, 105, 90];
+    const startX = 40;
+    const tableW = widths.reduce((a, b) => a + b, 0);
+    let y = doc.y;
+    doc.fillColor('#1e3a5f').rect(startX, y, tableW, 20).fill();
+    doc.fillColor('white').fontSize(9).font('Helvetica-Bold');
+    let x = startX;
+    headers.forEach((h, i) => { doc.text(h, x + 4, y + 6, { width: widths[i] - 8 }); x += widths[i]; });
+    y += 20;
+
+    doc.font('Helvetica').fontSize(9);
+    if (!students.length) {
+      doc.fillColor('#777').text('No students assigned to this vehicle.', startX + 4, y + 6);
+    }
+    students.forEach((s, idx) => {
+      if (y > 780) { doc.addPage(); y = 40; }
+      if (idx % 2 === 0) { doc.fillColor('#f5f5f5').rect(startX, y, tableW, 18).fill(); }
+      doc.fillColor('#333');
+      const cls = s.currentClass ? `${s.currentClass.name}${s.currentClass.section ? ' ' + s.currentClass.section : ''}` : '—';
+      const cells = [idx + 1, s.rollNumber || '—', s.name || '—', cls, s.busStop || '—', s.phone || '—'];
+      x = startX;
+      cells.forEach((v, i) => { doc.text(String(v), x + 4, y + 5, { width: widths[i] - 8 }); x += widths[i]; });
+      y += 18;
+    });
+
+    doc.end();
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // Assign students to this vehicle/route — sets each student's transportRoute
 // (the authoritative link), which is what the Students module reads/edits too.
 router.post('/transport/:id/students', protect, authorize('admin', 'correspondent'), async (req, res) => {
