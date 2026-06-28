@@ -38,8 +38,25 @@ class AttendanceScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ProfileProvider already holds the teacher profile loaded at login.
+    // Read classInfo from it directly — no duplicate /teacher/my-profile fetch.
+    final classInfo = context
+        .read<ProfileProvider>()
+        .profile
+        ?.classTeacher
+        ?.classInfo;
+
     return ChangeNotifierProvider(
-      create: (_) => AttendanceProvider()..fetchClasses(),
+      create: (_) {
+        final provider = AttendanceProvider();
+        if (classInfo != null) {
+          provider.initWithKnownClass(classInfo);
+          provider.fetchStudents();
+        } else {
+          provider.fetchClasses();
+        }
+        return provider;
+      },
       child: const _AttendanceScreenContent(),
     );
   }

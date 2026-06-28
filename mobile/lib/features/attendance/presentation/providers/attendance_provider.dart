@@ -88,6 +88,15 @@ class AttendanceProvider extends ChangeNotifier {
     _notify();
   }
 
+  // Fast init: use class info already loaded in ProfileProvider — no extra API call.
+  void initWithKnownClass(ClassInfo classInfo) {
+    _classes = [classInfo];
+    _selectedClassId = classInfo.id;
+    _isLoadingClasses = false;
+    // No notify — fetchStudents() is called immediately after by the screen.
+  }
+
+  // Fallback when profile isn't cached yet (edge case).
   Future<void> fetchClasses() async {
     _isLoadingClasses = true;
     _error = null;
@@ -96,16 +105,12 @@ class AttendanceProvider extends ChangeNotifier {
     try {
       final res = await ApiClient.get('/teacher/my-profile');
       final profile = TeacherProfile.fromJson(res.data);
-
       _classes = [];
       if (profile.classTeacher != null) {
         _classes.add(profile.classTeacher!.classInfo);
         _selectedClassId = profile.classTeacher!.classInfo.id;
       }
-
-      if (_selectedClassId != null) {
-        await fetchStudents();
-      }
+      if (_selectedClassId != null) await fetchStudents();
     } catch (e) {
       _error = 'Failed to load classes: ${ApiClient.errorMessage(e)}';
     } finally {
@@ -118,37 +123,69 @@ class AttendanceProvider extends ChangeNotifier {
     if (_selectedClassId == null) return;
 
     _isLoadingStudents = true;
-    _error = null;
     _students = [];
     _attendanceMap = {};
     _isSaved = false;
+    _error = null;
     _notify();
 
     try {
-      final response = await ApiClient.get('/students', params: {
+      final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+
+      // Launch both requests simultaneously — no sequential waiting.
+      final studentsFuture = ApiClient.get('/students', params: {
         'classId': _selectedClassId,
         'limit': 200,
       });
-      final List data = response.data['students'] ?? [];
-      _students = data.map((json) => Student.fromJson(json)).toList();
+      final attendanceFuture = ApiClient.get('/attendance', params: {
+        'type': 'student',
+        'classId': _selectedClassId,
+        'date': dateStr,
+      });
 
-      // Default to present
-      for (var student in _students) {
-        _attendanceMap[student.id] = {'status': 'present', 'remarks': ''};
+      // Students are required; resolve them first.
+      final studentsRes = await studentsFuture;
+      final List data = studentsRes.data['students'] ?? [];
+      _students = data.map((json) => Student.fromJson(json)).toList();
+      for (final s in _students) {
+        _attendanceMap[s.id] = {'status': 'present', 'remarks': ''};
       }
 
-      await fetchExistingAttendance();
+      // Attendance is optional (may not exist for today yet).
+      try {
+        final attendanceRes = await attendanceFuture;
+        _applyAttendanceResponse(attendanceRes.data);
+      } catch (_) {
+        // No saved attendance for this date — defaults stand.
+      }
     } catch (e) {
-      _error = 'Failed to load students: ${ApiClient.errorMessage(e)}';
+      _error = 'Failed to load: ${ApiClient.errorMessage(e)}';
     } finally {
       _isLoadingStudents = false;
-      _notify();
+      _notify(); // Single notify after all state is ready.
+    }
+  }
+
+  void _applyAttendanceResponse(dynamic data) {
+    final attendanceList = data['attendance'] as List?;
+    if (attendanceList == null || attendanceList.isEmpty) return;
+    final records = attendanceList.first['records'] as List?;
+    if (records == null || records.isEmpty) return;
+    _isSaved = true;
+    for (final r in records) {
+      final studentData = r['student'];
+      final studentId = studentData is Map ? studentData['_id'] : studentData;
+      if (studentId != null) {
+        _attendanceMap[studentId.toString()] = {
+          'status': r['status'] ?? 'present',
+          'remarks': r['remarks'] ?? '',
+        };
+      }
     }
   }
 
   Future<void> fetchExistingAttendance() async {
     if (_selectedClassId == null) return;
-
     try {
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
       final response = await ApiClient.get('/attendance', params: {
@@ -156,29 +193,7 @@ class AttendanceProvider extends ChangeNotifier {
         'classId': _selectedClassId,
         'date': dateStr,
       });
-
-      final attendanceList = response.data['attendance'] as List?;
-      bool alreadySaved = false;
-      if (attendanceList != null && attendanceList.isNotEmpty) {
-        final existingRecord = attendanceList.first;
-        final records = existingRecord['records'] as List?;
-        if (records != null && records.isNotEmpty) {
-          alreadySaved = true;
-          for (var r in records) {
-            final studentData = r['student'];
-            final studentId =
-                studentData is Map ? studentData['_id'] : studentData;
-
-            if (studentId != null) {
-              _attendanceMap[studentId.toString()] = {
-                'status': r['status'] ?? 'present',
-                'remarks': r['remarks'] ?? '',
-              };
-            }
-          }
-        }
-      }
-      _isSaved = alreadySaved;
+      _applyAttendanceResponse(response.data);
     } catch (e) {
       debugPrint('No existing attendance or error: $e');
     }
