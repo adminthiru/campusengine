@@ -924,7 +924,8 @@ export default function Attendance() {
                 <tr>
                   <th>#</th>
                   <th>Name</th>
-                  <th>{tab === 'student' ? 'Admission No' : 'Employee ID'}</th>
+                  <th>{tab === 'student' ? 'Roll No' : 'Employee ID'}</th>
+                  {tab === 'student' && <th>Class &amp; Sec</th>}
                   {tab === 'employee' && <th>Designation</th>}
                   <th>Status</th>
                   {editMode && <th>Mark</th>}
@@ -934,7 +935,7 @@ export default function Attendance() {
               <tbody>
                 {people.length === 0 && (
                   <tr>
-                    <td colSpan={5 + (editMode ? 1 : 0) + (tab === 'employee' ? 1 : 0)} style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
+                    <td colSpan={5 + (editMode ? 1 : 0) + (tab === 'employee' || tab === 'student' ? 1 : 0)} style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
                       No records found
                     </td>
                   </tr>
@@ -952,8 +953,15 @@ export default function Attendance() {
                         </div>
                       </td>
                       <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                        {tab === 'student' ? person.admissionNumber : person.employeeId}
+                        {tab === 'student' ? (person.rollNumber || '—') : person.employeeId}
                       </td>
+                      {tab === 'student' && (
+                        <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                          {person.currentClass
+                            ? `${person.currentClass.name}${person.currentClass.section ? ` ${person.currentClass.section}` : ''}`
+                            : '—'}
+                        </td>
+                      )}
                       {tab === 'employee' && (
                         <td style={{ fontSize: 13, color: 'var(--text-secondary)', textTransform: 'capitalize' }}>
                           {person.role || '—'}{person.department ? ` · ${person.department}` : ''}
