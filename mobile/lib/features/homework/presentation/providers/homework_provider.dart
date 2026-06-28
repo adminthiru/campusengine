@@ -32,9 +32,19 @@ class HomeworkProvider extends ChangeNotifier {
 
   List<ClassInfo> _classes = [];
   List<ClassInfo> get classes => _classes;
-  
+
   List<SubjectInfo> _subjects = [];
   List<SubjectInfo> get subjects => _subjects;
+
+  // classId → subjects the teacher is allowed to assign homework for in that class
+  final Map<String, List<SubjectInfo>> _classSubjectMap = {};
+
+  /// Subjects the teacher can assign homework for in the given class.
+  /// Falls back to the flat _subjects list if no class-specific mapping exists.
+  List<SubjectInfo> subjectsForClass(String classId) {
+    if (classId.isEmpty) return _subjects;
+    return _classSubjectMap[classId] ?? _subjects;
+  }
 
   TeacherPermissions? _permissions;
   TeacherPermissions? get permissions => _permissions;
@@ -53,36 +63,48 @@ class HomeworkProvider extends ChangeNotifier {
     try {
       final res = await ApiClient.get('/teacher/my-profile');
       final profile = TeacherProfile.fromJson(res.data);
-      
+
       _permissions = profile.permissions;
       _isClassTeacher = profile.isClassTeacher;
       _isSubjectTeacher = profile.isSubjectTeacher;
 
       final classMap = <String, ClassInfo>{};
       final subjMap = <String, SubjectInfo>{};
-      
-      if (profile.classTeacher != null) {
-        classMap[profile.classTeacher!.classInfo.id] = profile.classTeacher!.classInfo;
-        for (var s in profile.classTeacher!.classInfo.subjects) {
-          subjMap[s.id] = s;
-        }
-      }
-      
-      for (var st in profile.subjectTeacher) {
+      _classSubjectMap.clear();
+
+      // Step 1 — Subject teacher assignments (highest priority).
+      // Build classId → [subjects this teacher teaches in that class].
+      for (final st in profile.subjectTeacher) {
         classMap[st.classInfo.id] = st.classInfo;
         subjMap[st.subject.id] = st.subject;
+        _classSubjectMap
+            .putIfAbsent(st.classInfo.id, () => [])
+            .add(st.subject);
       }
-      
+
+      // Step 2 — Class teacher assignment.
+      // Only add all class subjects for this class if the teacher has NO
+      // specific subject-teacher entry for it (pure class-teacher role).
+      if (profile.classTeacher != null) {
+        final ci = profile.classTeacher!.classInfo;
+        classMap[ci.id] = ci;
+        if (!_classSubjectMap.containsKey(ci.id)) {
+          // Pure class teacher — can assign homework for every class subject.
+          _classSubjectMap[ci.id] = ci.subjects;
+          for (final s in ci.subjects) { subjMap[s.id] = s; }
+        }
+      }
+
       _classes = classMap.values.toList();
       _subjects = subjMap.values.toList();
-      
-      // Fallback: fetch all subjects if list is empty
+
+      // Fallback: if still no subjects, fetch school-wide list.
       if (_subjects.isEmpty) {
         final subRes = await ApiClient.get(ApiEndpoints.subjects);
         final List sList = subRes.data['subjects'] ?? [];
         _subjects = sList.map((j) => SubjectInfo.fromJson(j)).toList();
       }
-      
+
       _notify();
     } catch (e) {
       debugPrint('Error fetching profile: $e');

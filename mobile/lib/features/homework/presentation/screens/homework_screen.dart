@@ -1721,6 +1721,7 @@ class _AddEditScreenState extends State<_AddEditScreen> {
                       onChanged: (v) {
                         setState(() {
                           _classId = v ?? '';
+                          _subjectId = null; // reset subject when class changes
                           if (_assignedTo == 'selected') {
                             _loadStudents(_classId);
                           }
@@ -1736,7 +1737,7 @@ class _AddEditScreenState extends State<_AddEditScreen> {
                       value: _subjectId,
                       hint: 'Select subject',
                       isDark: isDark,
-                      items: p.subjects
+                      items: p.subjectsForClass(_classId)
                           .map((s) => DropdownMenuItem(
                               value: s.id, child: Text(s.name)))
                           .toList(),
