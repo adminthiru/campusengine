@@ -320,7 +320,9 @@ class _OverviewTab extends StatelessWidget {
                     color: isDark ? AppColors.borderDark : AppColors.borderLight),
                 boxShadow: isDark ? [] : AppColors.shadowSm,
               ),
-              child: Row(children: [
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 CircleAvatar(
                   radius: 22,
                   backgroundColor: AppColors.primary,
@@ -336,6 +338,8 @@ class _OverviewTab extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                   Text(primaryG['name'] ?? '—',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTypography.s14SemiBold(
                           color: isDark ? Colors.white : AppColors.textPrimary)),
                   const SizedBox(height: 3),
@@ -357,9 +361,11 @@ class _OverviewTab extends StatelessWidget {
                       Icon(Icons.phone_outlined,
                           size: 13, color: AppColors.textMuted),
                       const SizedBox(width: 4),
-                      Text(s['phone'],
-                          style: AppTypography.s13Regular(
-                              color: AppColors.textSecondary)),
+                      Flexible(
+                        child: Text(s['phone'],
+                            style: AppTypography.s13Regular(
+                                color: AppColors.textSecondary)),
+                      ),
                     ]),
                   ],
                   if (s['alternativeMobile'] != null &&
@@ -369,9 +375,11 @@ class _OverviewTab extends StatelessWidget {
                       Icon(Icons.phone_outlined,
                           size: 13, color: AppColors.textMuted),
                       const SizedBox(width: 4),
-                      Text('${s['alternativeMobile']} (Alt)',
-                          style: AppTypography.s12Regular(
-                              color: AppColors.textSecondary)),
+                      Flexible(
+                        child: Text('${s['alternativeMobile']} (Alt)',
+                            style: AppTypography.s12Regular(
+                                color: AppColors.textSecondary)),
+                      ),
                     ]),
                   ],
                 ])),
@@ -481,7 +489,9 @@ class _MoreInfoTab extends StatelessWidget {
                           isDark ? AppColors.borderDark : AppColors.borderLight),
                   boxShadow: isDark ? [] : AppColors.shadowSm,
                 ),
-                child: Row(children: [
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                   CircleAvatar(
                     radius: 22,
                     backgroundColor:
@@ -498,11 +508,15 @@ class _MoreInfoTab extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                     Row(children: [
-                      Text(g['name'] ?? '—',
-                          style: AppTypography.s14SemiBold(
-                              color: isDark
-                                  ? Colors.white
-                                  : AppColors.textPrimary)),
+                      Flexible(
+                        child: Text(g['name'] ?? '—',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.s14SemiBold(
+                                color: isDark
+                                    ? Colors.white
+                                    : AppColors.textPrimary)),
+                      ),
                       if (i == 0) ...[
                         const SizedBox(width: 6),
                         Container(
@@ -521,23 +535,48 @@ class _MoreInfoTab extends StatelessWidget {
                     Text((g['relation'] ?? '').toString().capitalize(),
                         style: AppTypography.s12Regular(
                             color: AppColors.textMuted)),
+                    if (g['phone'] != null) ...[
+                      const SizedBox(height: 4),
+                      Row(children: [
+                        Icon(Icons.phone_outlined,
+                            size: 13, color: AppColors.textMuted),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(g['phone'],
+                              style: AppTypography.s13Regular(
+                                  color: AppColors.textSecondary)),
+                        ),
+                      ]),
+                    ],
+                    if (altPhone != null) ...[
+                      const SizedBox(height: 2),
+                      Row(children: [
+                        Icon(Icons.phone_outlined,
+                            size: 13, color: AppColors.textMuted),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text('$altPhone (Alt)',
+                              style: AppTypography.s12Regular(
+                                  color: AppColors.textMuted)),
+                        ),
+                      ]),
+                    ],
+                    if (email != null && email.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Row(children: [
+                        Icon(Icons.email_outlined,
+                            size: 13, color: AppColors.textMuted),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(email,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.s12Regular(
+                                  color: AppColors.textMuted)),
+                        ),
+                      ]),
+                    ],
                   ])),
-                  Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                    if (g['phone'] != null)
-                      Text(g['phone'],
-                          style: AppTypography.s13Regular(
-                              color: AppColors.textSecondary)),
-                    if (altPhone != null)
-                      Text('$altPhone (Alt)',
-                          style: AppTypography.s12Regular(
-                              color: AppColors.textMuted)),
-                    if (email != null && email.isNotEmpty)
-                      Text(email,
-                          style: AppTypography.s12Regular(
-                              color: AppColors.textMuted)),
-                  ]),
                 ]),
               );
             }),
