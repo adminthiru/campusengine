@@ -215,10 +215,52 @@ const getStudentAttendanceSummary = async (req, res) => {
   try {
     const { studentId, month, year, classId } = req.query;
     const schoolId = req.user.school;
-    const query = { school: schoolId, type: 'student', 'records.student': studentId };
-    if (month && year) {
-      query.date = { $gte: new Date(year, month - 1, 1), $lt: new Date(year, month, 1) };
+
+    const schoolDoc = await School.findById(schoolId).select('workingDays academicYear');
+    const swd = schoolDoc?.workingDays || {};
+
+    // Resolve the Saturday schedule from the explicit class, else the student's class.
+    let satSchedule = 'school_default';
+    let resolvedClassId = classId;
+    if (!resolvedClassId && studentId) {
+      const stu = await Student.findById(studentId).select('currentClass');
+      resolvedClassId = stu?.currentClass?.toString();
     }
+    if (resolvedClassId) {
+      const classDoc = await Class.findById(resolvedClassId).select('saturdaySchedule');
+      satSchedule = classDoc?.saturdaySchedule || 'school_default';
+    }
+
+    const now = new Date();
+    const curY = now.getFullYear(), curM = now.getMonth() + 1, curD = now.getDate();
+
+    // Determine the attendance window and the set of months whose calendar
+    // working days form the denominator. With an explicit month/year we use
+    // that month; otherwise we span the active academic year up to today.
+    let dateFilter = null;
+    const monthsToCount = [];
+    if (month && year) {
+      const y = Number(year), m = Number(month);
+      dateFilter = { $gte: new Date(y, m - 1, 1), $lt: new Date(y, m, 1) };
+      monthsToCount.push({ y, m, upToDay: (y === curY && m === curM) ? curD : null });
+    } else {
+      const startMonth = schoolDoc?.academicYear?.startMonth || 6;
+      const endMonth = schoolDoc?.academicYear?.endMonth || 3;
+      const ayStartYear = curM >= startMonth ? curY : curY - 1;
+      const ayEndYear = endMonth < startMonth ? ayStartYear + 1 : ayStartYear;
+      const startIdx = ayStartYear * 12 + (startMonth - 1);
+      const ayEndIdx = ayEndYear * 12 + (endMonth - 1);
+      const lastIdx = Math.min(curY * 12 + (curM - 1), ayEndIdx);
+      dateFilter = { $gte: new Date(ayStartYear, startMonth - 1, 1) };
+      for (let idx = startIdx; idx <= lastIdx; idx++) {
+        const y = Math.floor(idx / 12);
+        const m = (idx % 12) + 1;
+        monthsToCount.push({ y, m, upToDay: (y === curY && m === curM) ? curD : null });
+      }
+    }
+
+    const query = { school: schoolId, type: 'student', 'records.student': studentId };
+    if (dateFilter) query.date = dateFilter;
     const records = await Attendance.find(query);
     let present = 0, absent = 0, late = 0, half_day = 0;
     records.forEach(a => {
@@ -231,21 +273,19 @@ const getStudentAttendanceSummary = async (req, res) => {
       }
     });
 
-    // Calculate actual working days for the month
-    let workingDays = null;
-    if (month && year) {
-      const schoolDoc = await School.findById(schoolId).select('workingDays');
-      let satSchedule = 'school_default';
-      if (classId) {
-        const classDoc = await Class.findById(classId).select('saturdaySchedule');
-        satSchedule = classDoc?.saturdaySchedule || 'school_default';
-      }
-      const result = await getWorkingDaysForMonth(schoolId, Number(year), Number(month), schoolDoc?.workingDays || {}, satSchedule);
-      workingDays = result.workingDays;
+    // Total days = calendar working days (from the calendar/holidays module),
+    // not just the days that happen to have been marked.
+    let workingDays = 0;
+    for (const { y, m, upToDay } of monthsToCount) {
+      const r = await getWorkingDaysForMonth(schoolId, y, m, swd, satSchedule, upToDay);
+      workingDays += r.workingDays;
     }
 
-    const total = present + absent + late + half_day;
-    const percentage = workingDays ? Math.round(((present + half_day * 0.5) / workingDays) * 100) : (total ? Math.round((present / total) * 100) : 0);
+    const total = workingDays;
+    let percentage = workingDays
+      ? Math.round(((present + half_day * 0.5) / workingDays) * 100)
+      : 0;
+    if (percentage > 100) percentage = 100;
     res.json({ success: true, summary: { present, absent, late, half_day, total, workingDays, percentage } });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
