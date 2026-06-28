@@ -363,7 +363,7 @@ function VehicleDetailModal({ vehicle: v, onClose, onEdit }) {
                 <tr>
                   <th>#</th>
                   <th>Name</th>
-                  <th>Admission No.</th>
+                  <th>Roll No.</th>
                   <th>Class</th>
                   <th>Bus Stop</th>
                   <th>Phone</th>
@@ -375,7 +375,7 @@ function VehicleDetailModal({ vehicle: v, onClose, onEdit }) {
                   <tr key={s._id}>
                     <td className="text-14-regular" style={{ color: 'var(--text-muted)', width: 40 }}>{i + 1}</td>
                     <td className="text-14-medium">{s.name}</td>
-                    <td className="text-14-regular" style={{ color: 'var(--text-secondary)' }}>{s.admissionNumber || '—'}</td>
+                    <td className="text-14-regular" style={{ color: 'var(--text-secondary)' }}>{s.rollNumber || '—'}</td>
                     <td className="text-14-regular" style={{ color: 'var(--text-secondary)' }}>
                       {s.currentClass ? `${s.currentClass.name}${s.currentClass.section ? ' ' + s.currentClass.section : ''}` : '—'}
                     </td>
