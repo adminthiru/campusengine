@@ -1270,7 +1270,8 @@ class _FeesTabState extends State<_FeesTab> {
         padding: const EdgeInsets.all(16),
         children: [
           Row(children: [
-            _summaryCard('Total', '₹$totalDue', AppColors.textPrimary),
+            _summaryCard('Total', '₹$totalDue',
+                isDark ? Colors.white : AppColors.textPrimary),
             const SizedBox(width: 12),
             _summaryCard('Paid', '₹$totalPaid', AppColors.accentGreen),
             const SizedBox(width: 12),
