@@ -39,6 +39,10 @@ class HomeworkProvider extends ChangeNotifier {
   // classId → subjects the teacher is allowed to assign homework for in that class
   final Map<String, List<SubjectInfo>> _classSubjectMap = {};
 
+  // Subject IDs the teacher is explicitly assigned to teach (from subjectTeacher entries).
+  // Empty means pure class teacher → no subject filter applied to the list.
+  Set<String> _ownedSubjectIds = {};
+
   /// Subjects the teacher can assign homework for in the given class.
   /// Falls back to the flat _subjects list if no class-specific mapping exists.
   List<SubjectInfo> subjectsForClass(String classId) {
@@ -71,12 +75,14 @@ class HomeworkProvider extends ChangeNotifier {
       final classMap = <String, ClassInfo>{};
       final subjMap = <String, SubjectInfo>{};
       _classSubjectMap.clear();
+      _ownedSubjectIds = {};
 
       // Step 1 — Subject teacher assignments (highest priority).
       // Build classId → [subjects this teacher teaches in that class].
       for (final st in profile.subjectTeacher) {
         classMap[st.classInfo.id] = st.classInfo;
         subjMap[st.subject.id] = st.subject;
+        _ownedSubjectIds.add(st.subject.id);
         _classSubjectMap
             .putIfAbsent(st.classInfo.id, () => [])
             .add(st.subject);
@@ -131,7 +137,16 @@ class HomeworkProvider extends ChangeNotifier {
           .map((j) => Homework.fromJson(j))
           .where((hw) => hw.id.isEmpty || seen.add(hw.id))
           .toList();
-      debugPrint('Parsed ${_homeworkList.length} homework items');
+
+      // Filter to teacher's own subjects when they have explicit assignments.
+      // Pure class teachers (_ownedSubjectIds empty) see all homework for their class.
+      if (_ownedSubjectIds.isNotEmpty) {
+        _homeworkList = _homeworkList.where((hw) {
+          final sid = hw.subject?.id ?? '';
+          return sid.isEmpty || _ownedSubjectIds.contains(sid);
+        }).toList();
+      }
+      debugPrint('Parsed ${_homeworkList.length} homework items (subject filter: ${_ownedSubjectIds.isNotEmpty}).');
     } catch (e) {
       debugPrint('fetchHomework ERROR: $e');
       _error = ApiClient.errorMessage(e);
