@@ -295,6 +295,30 @@ class _InfoTab extends StatelessWidget {
         ]),
         const SizedBox(height: 16),
 
+        if (transport != null || busStop.isNotEmpty) ...[
+          _section('Transport'),
+          _card(isDark, [
+            if (transport != null)
+              _row(
+                  'Route',
+                  [
+                    if (_str(transport['routeNumber']).trim().isNotEmpty)
+                      '#${_str(transport['routeNumber']).trim()}',
+                    if (_str(transport['vehicleNumber']).trim().isNotEmpty)
+                      _str(transport['vehicleNumber']).trim(),
+                    if (_str(transport['routeName']).trim().isNotEmpty)
+                      _str(transport['routeName']).trim(),
+                  ].join(' · '),
+                  isDark),
+            if (busStop.isNotEmpty) _row('Bus Stop', busStop, isDark),
+            if (driver.isNotEmpty)
+              _row('Driver',
+                  driverPhone.isNotEmpty ? '$driver · $driverPhone' : driver,
+                  isDark),
+          ]),
+          const SizedBox(height: 16),
+        ],
+
         if (primaryG != null) ...[
           _section('Primary Guardian'),
           _guardianCard(primaryG, true, isDark),
@@ -326,30 +350,6 @@ class _InfoTab extends StatelessWidget {
                                 : AppColors.textSecondary))),
               ]),
             ),
-          ]),
-          const SizedBox(height: 16),
-        ],
-
-        if (transport != null || busStop.isNotEmpty) ...[
-          _section('Transport'),
-          _card(isDark, [
-            if (transport != null)
-              _row(
-                  'Route',
-                  [
-                    if (_str(transport['routeNumber']).trim().isNotEmpty)
-                      '#${_str(transport['routeNumber']).trim()}',
-                    if (_str(transport['vehicleNumber']).trim().isNotEmpty)
-                      _str(transport['vehicleNumber']).trim(),
-                    if (_str(transport['routeName']).trim().isNotEmpty)
-                      _str(transport['routeName']).trim(),
-                  ].join(' · '),
-                  isDark),
-            if (busStop.isNotEmpty) _row('Bus Stop', busStop, isDark),
-            if (driver.isNotEmpty)
-              _row('Driver',
-                  driverPhone.isNotEmpty ? '$driver · $driverPhone' : driver,
-                  isDark),
           ]),
           const SizedBox(height: 16),
         ],
