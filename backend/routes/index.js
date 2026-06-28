@@ -845,9 +845,41 @@ router.get('/attendance/employee-records', protect, checkSubscription, async (re
 // Employee attendance summary (all-time stats)
 router.get('/attendance/employee-summary', protect, checkSubscription, async (req, res) => {
   try {
-    const { employeeId } = req.query;
+    const { employeeId, month, year } = req.query;
     if (!employeeId) return res.status(400).json({ success: false, message: 'employeeId required' });
-    const docs = await Attendance.find({ school: req.user.school, type: 'employee', 'records.employee': employeeId });
+    const { getWorkingDaysForMonth } = require('../utils/holidays');
+
+    const schoolDoc = await School.findById(req.user.school).select('workingDays academicYear');
+    const swd = schoolDoc?.workingDays || {};
+
+    const now = new Date();
+    const curY = now.getFullYear(), curM = now.getMonth() + 1;
+
+    // Build the attendance window + the set of months whose calendar working
+    // days form the denominator (full month each, matching the calendar module).
+    let dateFilter = null;
+    const monthsToCount = [];
+    if (month && year) {
+      const y = Number(year), m = Number(month);
+      dateFilter = { $gte: new Date(y, m - 1, 1), $lt: new Date(y, m, 1) };
+      monthsToCount.push({ y, m });
+    } else {
+      const startMonth = schoolDoc?.academicYear?.startMonth || 6;
+      const endMonth = schoolDoc?.academicYear?.endMonth || 3;
+      const ayStartYear = curM >= startMonth ? curY : curY - 1;
+      const ayEndYear = endMonth < startMonth ? ayStartYear + 1 : ayStartYear;
+      const startIdx = ayStartYear * 12 + (startMonth - 1);
+      const ayEndIdx = ayEndYear * 12 + (endMonth - 1);
+      const lastIdx = Math.min(curY * 12 + (curM - 1), ayEndIdx);
+      dateFilter = { $gte: new Date(ayStartYear, startMonth - 1, 1) };
+      for (let idx = startIdx; idx <= lastIdx; idx++) {
+        monthsToCount.push({ y: Math.floor(idx / 12), m: (idx % 12) + 1 });
+      }
+    }
+
+    const q = { school: req.user.school, type: 'employee', 'records.employee': employeeId };
+    if (dateFilter) q.date = dateFilter;
+    const docs = await Attendance.find(q);
     let present = 0, absent = 0, late = 0, halfDay = 0, od = 0, cl = 0, sl = 0;
     docs.forEach(doc => {
       const rec = doc.records.find(r => r.employee?.toString() === employeeId);
@@ -860,8 +892,22 @@ router.get('/attendance/employee-summary', protect, checkSubscription, async (re
       else if (rec.status === 'cl') cl++;
       else if (rec.status === 'sl') sl++;
     });
-    const total = present + absent + late + halfDay + od + cl + sl;
-    res.json({ success: true, summary: { present, absent, late, halfDay, od, cl, sl, total, percentage: total ? Math.round((present / total) * 100) : 0 } });
+
+    // Total days = calendar working days (employees follow the school default
+    // Saturday schedule), not just the days that happen to have been marked.
+    let workingDays = 0;
+    for (const { y, m } of monthsToCount) {
+      const r = await getWorkingDaysForMonth(req.user.school, y, m, swd, 'school_default');
+      workingDays += r.workingDays;
+    }
+
+    const total = workingDays;
+    // OD counts as a working/present day for staff.
+    let percentage = workingDays
+      ? Math.round(((present + od + halfDay * 0.5) / workingDays) * 100)
+      : 0;
+    if (percentage > 100) percentage = 100;
+    res.json({ success: true, summary: { present, absent, late, halfDay, od, cl, sl, total, workingDays, percentage } });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
