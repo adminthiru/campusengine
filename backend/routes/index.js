@@ -540,9 +540,10 @@ router.put('/student-leaves/:id', protect, authorize('admin', 'correspondent', '
                 date: dayStart, markedBy: req.user._id, academicYear: stu.academicYear, records: [],
               });
             }
+            const leaveRemark = (leave.reason && leave.reason.trim()) ? leave.reason.trim() : 'On approved leave';
             const rec = att.records.find(r => String(r.student) === sid);
-            if (rec) { rec.status = 'absent'; rec.remarks = 'On approved leave'; }
-            else { att.records.push({ student: leave.student._id, status: 'absent', remarks: 'On approved leave' }); }
+            if (rec) { rec.status = 'absent'; rec.remarks = leaveRemark; }
+            else { att.records.push({ student: leave.student._id, status: 'absent', remarks: leaveRemark }); }
             await att.save();
             cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1);
           }
