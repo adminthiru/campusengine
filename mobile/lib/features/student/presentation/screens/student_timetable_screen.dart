@@ -34,8 +34,21 @@ class _StudentTimetableScreenState extends State<StudentTimetableScreen> {
     try {
       final res =
           await ApiClient.get('/timetable', params: {'classId': classId});
+      // Backend returns { timetable: { schedule: [{ day:"monday", periods:[…] }] } }
+      // Convert the schedule array into a day-keyed map so the UI can look up
+      // periods by day name directly (e.g. _timetable["monday"]).
+      final raw = res.data['timetable'] as Map<String, dynamic>? ?? {};
+      final schedule = raw['schedule'] as List<dynamic>? ?? [];
+      final Map<String, List<dynamic>> dayMap = {};
+      for (final entry in schedule) {
+        if (entry is! Map) continue;
+        final day = (entry['day'] as String? ?? '').toLowerCase();
+        if (day.isNotEmpty) {
+          dayMap[day] = entry['periods'] as List<dynamic>? ?? [];
+        }
+      }
       setState(() {
-        _timetable = res.data['timetable'] as Map<String, dynamic>? ?? {};
+        _timetable = dayMap;
         _loading = false;
       });
     } catch (_) {
@@ -168,7 +181,7 @@ class _PeriodCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final periodNo = period['period'] as int? ?? 0;
+    final periodNo = period['periodNumber'] as int? ?? 0;
     final subject = period['subject'] as Map<String, dynamic>?;
     final subName = subject?['name'] as String? ?? 'Free Period';
     final colorHex = subject?['color'] as String? ?? '#1A56E8';
