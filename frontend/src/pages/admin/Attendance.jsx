@@ -925,6 +925,7 @@ export default function Attendance() {
                   <th>#</th>
                   <th>Name</th>
                   <th>{tab === 'student' ? 'Admission No' : 'Employee ID'}</th>
+                  {tab === 'employee' && <th>Designation</th>}
                   <th>Status</th>
                   {editMode && <th>Mark</th>}
                   <th>Remarks</th>
@@ -933,7 +934,7 @@ export default function Attendance() {
               <tbody>
                 {people.length === 0 && (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
+                    <td colSpan={5 + (editMode ? 1 : 0) + (tab === 'employee' ? 1 : 0)} style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
                       No records found
                     </td>
                   </tr>
@@ -953,6 +954,11 @@ export default function Attendance() {
                       <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                         {tab === 'student' ? person.admissionNumber : person.employeeId}
                       </td>
+                      {tab === 'employee' && (
+                        <td style={{ fontSize: 13, color: 'var(--text-secondary)', textTransform: 'capitalize' }}>
+                          {person.role || '—'}{person.department ? ` · ${person.department}` : ''}
+                        </td>
+                      )}
                       <td>
                         {sc ? (
                           <span style={{
