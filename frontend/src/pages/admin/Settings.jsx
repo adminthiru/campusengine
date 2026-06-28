@@ -1327,11 +1327,31 @@ function AppLoginsSettings() {
 
 function AppLoginCreateModal({ type, cfg, onClose, onCreated }) {
   const [personId, setPersonId] = useState('');
-  const { data } = useQuery({ queryKey: ['applogin-people', type], queryFn: () => api.get(cfg.endpoint) });
-  // Only people without an existing login. For parents, `/parents` already returns
-  // just the primary guardians (the main parent from the add-student form), one
-  // entry per parent — so a parent with several children appears only once.
+  const [classId, setClassId]   = useState('');
+
+  // Classes list — only needed for the student flow
+  const { data: classesData } = useQuery({
+    queryKey: ['classes'],
+    queryFn: () => api.get('/classes'),
+    enabled: type === 'student',
+  });
+  const classes = classesData?.classes || [];
+
+  // For students: wait until a class is chosen, then fetch that class's students.
+  // For other types: use the original endpoint immediately.
+  const endpoint = type === 'student'
+    ? (classId ? `/students?classId=${classId}&limit=500` : null)
+    : cfg.endpoint;
+
+  const { data } = useQuery({
+    queryKey: ['applogin-people', type, classId],
+    queryFn: () => api.get(endpoint),
+    enabled: type === 'student' ? !!classId : true,
+  });
+  // Only people without an existing login.
   const people = (data?.[cfg.respKey] || []).filter(p => !p.user);
+
+  const handleClassChange = (val) => { setClassId(val ?? ''); setPersonId(''); };
 
   const create = useMutation({
     mutationFn: () => api.post('/app-logins', { type, personId }),
@@ -1339,18 +1359,36 @@ function AppLoginCreateModal({ type, cfg, onClose, onCreated }) {
     onError: (e) => toast.error(e?.response?.data?.message || 'Create failed'),
   });
 
-  const submit = () => { if (!personId) return toast.error(`Select a ${type}`); create.mutate(); };
+  const submit = () => {
+    if (type === 'student' && !classId) return toast.error('Select a class first');
+    if (!personId) return toast.error(`Select a ${type}`);
+    create.mutate();
+  };
 
   return (
     <Modal open onClose={onClose} size="md"
       title={`Create ${cfg.label.replace(/s$/, '')} Login`}
       footer={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={create.isPending}>{create.isPending ? 'Creating…' : 'Create Login'}</button></>}>
+
+      {/* Class picker — student flow only */}
+      {type === 'student' && (
+        <div className="form-group">
+          <label className="form-label">Select Class <span style={{ color: '#ef4444' }}>*</span></label>
+          <AntSelect showSearch style={{ width: '100%' }} value={classId || undefined} onChange={handleClassChange}
+            placeholder="Choose a class…" optionFilterProp="label" getPopupContainer={() => document.body}
+            options={classes.map(c => ({ value: c._id, label: `${c.name}${c.section ? ' ' + c.section : ''}` }))} />
+        </div>
+      )}
+
       <div className="form-group">
         <label className="form-label">Select {cfg.label.replace(/s$/, '')} <span style={{ color: '#ef4444' }}>*</span></label>
         <AntSelect showSearch style={{ width: '100%' }} value={personId || undefined} onChange={setPersonId}
-          placeholder={`Search ${type} by name…`} optionFilterProp="label" getPopupContainer={() => document.body}
+          placeholder={type === 'student' && !classId ? 'Select a class first…' : `Search ${type} by name…`}
+          disabled={type === 'student' && !classId}
+          optionFilterProp="label" getPopupContainer={() => document.body}
           options={people.map(p => ({ value: p._id, label: cfg.optionLabel(p) }))} />
       </div>
+
       <div style={{ fontSize: 12, color: 'var(--text-muted)', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
         Login ID will be the {cfg.idLabel.toLowerCase()}. A temporary password is generated and shown once; the user changes it on first login and lands in their {type} portal.
       </div>
