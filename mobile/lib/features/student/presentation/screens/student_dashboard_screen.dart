@@ -240,7 +240,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           // ── Recent Homework ───────────────────────────────────────────────
           if (perms.studentCan('viewHomework') && _homework.isNotEmpty) ...[
             _SectionHeader(
-              title: 'Pending Homework',
+              title: 'Homework',
               onSeeAll: () => context.go('/student/homework'),
               isDark: isDark,
             ),
