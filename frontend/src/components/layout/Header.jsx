@@ -66,16 +66,53 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifs, setNotifs] = useState(user?.notifications || []);
+  const [pendingLeaves, setPendingLeaves] = useState([]);
   const [actingId, setActingId] = useState(null);
   const notifRef = useRef();
   const profileRef = useRef();
 
-  const unread = notifs.filter(n => !n.read).length;
+  const isLeaveApprover = ['admin', 'correspondent', 'principal'].includes(user?.role);
+
+  // Synthesize a notification-shaped item for a pending leave so it shows in the
+  // bell even when no stored notification exists (e.g. leaves created before the
+  // notification feature, or if a push failed to persist).
+  const leaveToItem = (lv) => {
+    const fmtD = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const dateLabel = String(lv.fromDate) === String(lv.toDate) ? fmtD(lv.fromDate) : `${fmtD(lv.fromDate)} – ${fmtD(lv.toDate)}`;
+    const who = lv.parent?.name || 'A parent';
+    return {
+      _id: `leave-${lv._id}`,
+      synthetic: true,
+      title: 'Leave Request',
+      message: `${who} requested leave for ${lv.student?.name || 'a student'} on ${dateLabel}.${lv.reason ? ` Reason: ${lv.reason}` : ''}`,
+      createdAt: lv.createdAt,
+      read: false,
+      action: 'student_leave',
+      refId: lv._id,
+      actionStatus: 'pending',
+    };
+  };
+
+  // Stored notifications + any pending leaves not already represented by a
+  // stored leave notification (deduped by leave id), newest first.
+  const storedLeaveRefIds = new Set(
+    notifs.filter(n => n.action === 'student_leave' && n.refId).map(n => String(n.refId))
+  );
+  const items = [
+    ...notifs,
+    ...pendingLeaves.filter(lv => !storedLeaveRefIds.has(String(lv._id))).map(leaveToItem),
+  ].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+  const unread = items.filter(n => !n.read).length;
 
   const fetchNotifs = async () => {
     try {
-      const res = await api.get('/notifications');
-      if (Array.isArray(res?.notifications)) setNotifs(res.notifications);
+      const [nRes, lRes] = await Promise.all([
+        api.get('/notifications'),
+        isLeaveApprover ? api.get('/student-leaves?status=pending').catch(() => null) : Promise.resolve(null),
+      ]);
+      if (Array.isArray(nRes?.notifications)) setNotifs(nRes.notifications);
+      if (lRes && Array.isArray(lRes.leaves)) setPendingLeaves(lRes.leaves);
     } catch { /* keep current */ }
   };
 
@@ -85,7 +122,7 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
     const t = setInterval(fetchNotifs, 20000);
     return () => clearInterval(t);
   }, []);
-  // Refresh on open + on tab focus.
+  // Refresh on open.
   useEffect(() => { if (notifOpen) fetchNotifs(); }, [notifOpen]);
 
   // Close dropdowns on outside click
@@ -99,6 +136,7 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
   }, []);
 
   const markRead = async (id) => {
+    if (String(id).startsWith('leave-')) return; // synthetic item, nothing to mark
     setNotifs(prev => prev.map(n => n._id === id ? { ...n, read: true } : n));
     try { await api.put(`/auth/notifications/${id}/read`); } catch { /* ignore */ }
   };
@@ -228,13 +266,13 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
                   {unread > 0 && <span className="badge badge-info">{unread} new</span>}
                 </div>
                 <div style={{ maxHeight: 360, overflowY: 'auto' }}>
-                  {notifs.length === 0 && (
+                  {items.length === 0 && (
                     <div className="empty-state" style={{ padding: 30 }}>
                       <Bell size={28} style={{ marginBottom: 8, color: 'var(--text-muted)' }} />
                       <p className="text-14-regular">No notifications</p>
                     </div>
                   )}
-                  {notifs.slice(0, 20).map(n => {
+                  {items.slice(0, 20).map(n => {
                     const isLeave = n.action === 'student_leave';
                     return (
                     <div
