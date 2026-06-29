@@ -63,6 +63,8 @@ export default function Students() {
   const [deleteId, setDeleteId] = useState(null);
   const [promoteModal, setPromoteModal] = useState(false);
   const [promoteResult, setPromoteResult] = useState(null);
+  const [transferModal, setTransferModal] = useState(false);
+  const [rejoinModal, setRejoinModal] = useState(null); // student object
   const [selected, setSelected] = useState([]);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [formTab, setFormTab] = useState('personal');
@@ -316,6 +318,8 @@ export default function Students() {
           onDelete={(id) => { setDeleteId(id); setViewStudent(null); }}
           onDownload={downloadAdmissionLetter}
           onEdit={(stu) => { openEdit(stu); setViewStudent(null); }}
+          onRejoin={(stu) => setRejoinModal(stu)}
+          onTransfer={(stu) => { setSelected([stu._id]); setTransferModal(true); }}
         />
         <ConfirmDialog
           open={!!deleteId} onClose={() => setDeleteId(null)}
@@ -351,11 +355,30 @@ export default function Students() {
           <p className="page-subtitle">{total} students enrolled</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {selected.length > 0 && (
-            <button className="btn btn-secondary" onClick={() => setPromoteModal(true)}>
-              <GraduationCap size={16} /> Promote ({selected.length})
-            </button>
-          )}
+          {selected.length > 0 && (() => {
+            const selectedStudents = students.filter(s => selected.includes(s._id));
+            const allTransferred = selectedStudents.length > 0 && selectedStudents.every(s => s.status === 'transferred');
+            const noneTransferred = selectedStudents.every(s => s.status !== 'transferred');
+            return (
+              <>
+                {noneTransferred && (
+                  <button className="btn btn-secondary" onClick={() => setPromoteModal(true)}>
+                    <GraduationCap size={16} /> Promote ({selected.length})
+                  </button>
+                )}
+                {noneTransferred && (
+                  <button className="btn btn-secondary" onClick={() => setTransferModal(true)} style={{ color: '#b45309' }}>
+                    <ArrowLeft size={16} style={{ transform: 'rotate(180deg)' }} /> Transfer ({selected.length})
+                  </button>
+                )}
+                {allTransferred && selected.length === 1 && (
+                  <button className="btn btn-secondary" onClick={() => setRejoinModal(selectedStudents[0])} style={{ color: '#16a34a' }}>
+                    <GraduationCap size={16} /> Rejoin School
+                  </button>
+                )}
+              </>
+            );
+          })()}
           <button className="btn btn-secondary" onClick={() => setShowBulkModal(true)}>
             <Upload size={14} /> Bulk Upload
           </button>
@@ -440,6 +463,7 @@ export default function Students() {
                     {col('dob')                && <td style={{ fontSize: 13 }}>{stu.dateOfBirth ? format(new Date(stu.dateOfBirth), 'dd MMM yyyy') : '—'}</td>}
                     {col('promotionStatus')    && <td style={{ whiteSpace: 'nowrap' }}>{(() => {
                       if (stu.status === 'transferred') return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Transferred</span>;
+                      if (stu.rejoinHistory?.length > 0) return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: '#fef9c3', color: '#854d0e', border: '1px solid #fde047', whiteSpace: 'nowrap' }}>Rejoined</span>;
                       if (stu.promotionHistory?.length > 0) return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0', whiteSpace: 'nowrap' }}>Promoted</span>;
                       return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe', whiteSpace: 'nowrap' }}>Joined This Year</span>;
                     })()}</td>}
@@ -495,6 +519,20 @@ export default function Students() {
       )}
       {promoteResult && (
         <PromotionSuccessModal result={promoteResult} onClose={() => setPromoteResult(null)} />
+      )}
+      {transferModal && (
+        <TransferModal
+          selected={selected} students={students} classes={classes}
+          onClose={() => setTransferModal(false)}
+          onSuccess={() => { qc.invalidateQueries(['students']); setSelected([]); setTransferModal(false); }}
+        />
+      )}
+      {rejoinModal && (
+        <RejoinModal
+          student={rejoinModal} classes={classes}
+          onClose={() => setRejoinModal(null)}
+          onSuccess={() => { qc.invalidateQueries(['students']); setSelected([]); setRejoinModal(null); }}
+        />
       )}
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)}
@@ -1084,7 +1122,7 @@ function ParentFormInline({ draft, setDraft, onSave, onCancel }) {
 }
 
 // ── Student Detail Page ───────────────────────────────────────────────────────
-function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
+function StudentDetail({ student, onBack, onDelete, onDownload, onEdit, onRejoin, onTransfer }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [zoomImage, setZoomImage] = useState(false);
   const { startMonth, endMonth, isCurrent } = useYear();
@@ -1211,24 +1249,52 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
           <button className="btn btn-secondary btn-sm" onClick={() => onEdit(student)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Edit size={14} /> Edit
           </button>
-          {student.promotionHistory?.length > 0 && (
-            <button className="btn btn-secondary btn-sm" onClick={async () => {
-              try {
-                const res = await fetch(`/api/students/${student._id}/promotion-card`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-                if (!res.ok) throw new Error('Failed');
-                const blob = await res.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url; a.download = `PromotionCard_${student.admissionNumber || student._id}.pdf`;
-                a.click(); URL.revokeObjectURL(url);
-              } catch { toast.error('Failed to download promotion card'); }
-            }} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <GraduationCap size={14} /> Promotion Card
-            </button>
+          {student.status === 'transferred' ? (
+            <>
+              <button className="btn btn-secondary btn-sm" onClick={() => onRejoin?.(student)} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#16a34a', borderColor: '#86efac' }}>
+                <GraduationCap size={14} /> Rejoin School
+              </button>
+              {student.transferHistory?.length > 0 && (
+                <button className="btn btn-secondary btn-sm" onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/students/${student._id}/transfer-certificate`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+                    if (!res.ok) throw new Error('Failed');
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = `TC_${student.admissionNumber || student._id}.pdf`;
+                    a.click(); URL.revokeObjectURL(url);
+                  } catch { toast.error('Failed to download TC'); }
+                }} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Download size={14} /> Transfer Certificate
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              {student.promotionHistory?.length > 0 && (
+                <button className="btn btn-secondary btn-sm" onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/students/${student._id}/promotion-card`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+                    if (!res.ok) throw new Error('Failed');
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = `PromotionCard_${student.admissionNumber || student._id}.pdf`;
+                    a.click(); URL.revokeObjectURL(url);
+                  } catch { toast.error('Failed to download promotion card'); }
+                }} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <GraduationCap size={14} /> Promotion Card
+                </button>
+              )}
+              <button className="btn btn-secondary btn-sm" onClick={() => onDownload(student._id)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Download size={14} /> Admission Letter
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => onTransfer?.(student)} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#b45309' }}>
+                <ArrowLeft size={14} style={{ transform: 'rotate(180deg)' }} /> Transfer
+              </button>
+            </>
           )}
-          <button className="btn btn-secondary btn-sm" onClick={() => onDownload(student._id)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Download size={14} /> Admission Letter
-          </button>
           <button className="btn btn-danger btn-sm" onClick={() => onDelete(student._id)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Trash2 size={14} /> Delete
           </button>
@@ -2789,3 +2855,225 @@ function PromotionSuccessModal({ result, onClose }) {
     </Modal>
   );
 }
+
+// ── Transfer Modal ────────────────────────────────────────────────────────────
+function TransferModal({ selected, students, onClose, onSuccess }) {
+  const selectedStudents = useMemo(() => (students || []).filter(s => selected.includes(s._id)), [students, selected]);
+  const [reason, setReason] = useState('');
+  const [feesData, setFeesData] = useState({});
+  const [loadingFees, setLoadingFees] = useState(true);
+  const [transferring, setTransferring] = useState(false);
+  const [collectModal, setCollectModal] = useState(null);
+
+  useEffect(() => {
+    const loadFees = async () => {
+      setLoadingFees(true);
+      const result = {};
+      await Promise.all(selectedStudents.map(async (stu) => {
+        try {
+          const res = await api.get(`/fees?studentId=${stu._id}&limit=100`);
+          const allFees = res.fees || [];
+          const pendingFees = allFees.filter(f => {
+            const net = (f.terms || []).reduce((s, t) => s + (t.amount || 0), 0);
+            return (f.paidAmount || 0) < net;
+          });
+          result[stu._id] = { pendingFees, allFees };
+        } catch { result[stu._id] = { pendingFees: [], allFees: [] }; }
+      }));
+      setFeesData(result);
+      setLoadingFees(false);
+    };
+    if (selectedStudents.length) loadFees();
+    else setLoadingFees(false);
+  }, []);
+
+  const hasPending = Object.values(feesData).some(d => d.pendingFees?.length > 0);
+  const fmt = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
+
+  const reloadFees = async (stuId) => {
+    try {
+      const res = await api.get(`/fees?studentId=${stuId}&limit=100`);
+      const allFees = res.fees || [];
+      const pendingFees = allFees.filter(f => {
+        const net = (f.terms || []).reduce((s, t) => s + (t.amount || 0), 0);
+        return (f.paidAmount || 0) < net;
+      });
+      setFeesData(d => ({ ...d, [stuId]: { pendingFees, allFees } }));
+    } catch {}
+  };
+
+  const handleTransfer = async () => {
+    setTransferring(true);
+    let successCount = 0;
+    try {
+      for (const stu of selectedStudents) {
+        const res = await fetch(`/api/students/${stu._id}/transfer`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ message: 'Transfer failed' }));
+          toast.error(`${stu.name}: ${err.message || 'Transfer failed'}`);
+          continue;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `TC_${stu.admissionNumber || stu._id}.pdf`;
+        a.click(); URL.revokeObjectURL(url);
+        successCount++;
+      }
+      if (successCount > 0) {
+        toast.success(`${successCount} student(s) transferred. TC downloaded.`);
+        onSuccess();
+      }
+    } catch (err) {
+      toast.error(err.message || 'Transfer failed');
+    } finally {
+      setTransferring(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={`Transfer ${selected.length} Student${selected.length !== 1 ? 's' : ''}`} size="md"
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={handleTransfer}
+          disabled={transferring || loadingFees || hasPending}>
+          {transferring ? 'Transferring...' : hasPending ? 'Clear Pending Fees First' : `Transfer & Download TC`}
+        </button>
+      </>}>
+      {loadingFees ? (
+        <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>Checking pending fees…</div>
+      ) : (
+        <>
+          {hasPending && (
+            <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, padding: 12, fontSize: 13, color: '#92400e', marginBottom: 14 }}>
+              ⚠️ All pending dues must be cleared before completing the transfer.
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+            {selectedStudents.map(stu => {
+              const data = feesData[stu._id] || {};
+              const totalPending = (data.pendingFees || []).reduce((s, f) => {
+                const net = (f.terms || []).reduce((a, t) => a + (t.amount || 0), 0);
+                return s + net - (f.paidAmount || 0);
+              }, 0);
+              const isPending = totalPending > 0;
+              return (
+                <div key={stu._id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: isPending ? '#fefce8' : '#f0fdf4', borderRadius: 8, border: `1px solid ${isPending ? '#fde047' : '#86efac'}` }}>
+                  <Avatar src={stu.photo} name={stu.name} size={34} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{stu.name}</div>
+                    <div style={{ fontSize: 12, color: '#6b7280' }}>{stu.currentClass?.name} {stu.currentClass?.section} · {stu.admissionNumber}</div>
+                    {isPending && (
+                      <div style={{ fontSize: 12, color: '#b45309', marginTop: 2 }}>
+                        {(data.pendingFees || []).map(f => {
+                          const net = (f.terms || []).reduce((a, t) => a + (t.amount || 0), 0);
+                          return <span key={f._id} style={{ marginRight: 8 }}>{f.academicYear}: {fmt(net - (f.paidAmount || 0))} pending</span>;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  {isPending ? (
+                    <button className="btn btn-secondary btn-sm" style={{ fontSize: 11, padding: '4px 10px', color: '#b45309', flexShrink: 0 }}
+                      onClick={() => setCollectModal({ stuId: stu._id, fee: data.pendingFees[0] })}>
+                      Collect Fee
+                    </button>
+                  ) : (
+                    <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600, background: '#dcfce7', border: '1px solid #86efac', borderRadius: 10, padding: '2px 8px', flexShrink: 0 }}>Fees Clear ✓</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Reason for Transfer <span style={{ fontSize: 12, color: '#9ca3af' }}>(optional)</span></label>
+            <input className="form-control" value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Family relocation, school change…" />
+          </div>
+        </>
+      )}
+      {collectModal && (
+        <CollectFeeModal
+          fee={collectModal.fee}
+          onClose={() => setCollectModal(null)}
+          onSuccess={() => { setCollectModal(null); reloadFees(collectModal.stuId); }}
+        />
+      )}
+    </Modal>
+  );
+}
+
+// ── Rejoin Modal ──────────────────────────────────────────────────────────────
+function RejoinModal({ student, classes, onClose, onSuccess }) {
+  const { availableYears, selectedYear } = useYear();
+  const [targetClassName, setTargetClassName] = useState('');
+  const [toClass, setToClass] = useState('');
+  const [year, setYear] = useState(selectedYear);
+  const [loading, setLoading] = useState(false);
+
+  const uniqueClassNames = useMemo(() => {
+    const seen = new Set();
+    return classes.filter(c => { if (seen.has(c.name)) return false; seen.add(c.name); return true; }).map(c => c.name);
+  }, [classes]);
+
+  const sections = useMemo(() => classes.filter(c => c.name === targetClassName), [classes, targetClassName]);
+
+  const handleRejoin = async () => {
+    if (!toClass) return toast.error('Select a class and section');
+    setLoading(true);
+    try {
+      await api.post(`/students/${student._id}/rejoin`, { classId: toClass, academicYear: year });
+      toast.success(`${student.name} has rejoined!`);
+      onSuccess();
+    } catch (err) {
+      toast.error(err.message || 'Failed to rejoin');
+    } finally { setLoading(false); }
+  };
+
+  const lastTransfer = student.transferHistory?.[student.transferHistory.length - 1];
+
+  return (
+    <Modal open onClose={onClose} title={`Rejoin School — ${student.name}`}
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={handleRejoin} disabled={loading || !toClass}>
+          {loading ? 'Rejoining...' : 'Confirm Rejoin'}
+        </button>
+      </>}>
+      <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#15803d', marginBottom: 16 }}>
+        <div style={{ fontWeight: 600, marginBottom: 2 }}>Previously Transferred</div>
+        {lastTransfer && (
+          <div style={{ fontSize: 12, color: '#374151' }}>
+            From <strong>{lastTransfer.classAtTransfer}{lastTransfer.sectionAtTransfer ? ` ${lastTransfer.sectionAtTransfer}` : ''}</strong> · {lastTransfer.academicYearAtTransfer} · TC No: {lastTransfer.tcNumber}
+            {lastTransfer.reason && <span> · {lastTransfer.reason}</span>}
+          </div>
+        )}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+        <div className="form-group" style={{ margin: 0 }}>
+          <label className="form-label">Rejoin Class <span style={{ color: '#ef4444' }}>*</span></label>
+          <select className="form-control" value={targetClassName} onChange={e => { setTargetClassName(e.target.value); setToClass(''); }}>
+            <option value="">Select class</option>
+            {uniqueClassNames.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <div className="form-group" style={{ margin: 0 }}>
+          <label className="form-label">Section <span style={{ color: '#ef4444' }}>*</span></label>
+          <select className="form-control" value={toClass} onChange={e => setToClass(e.target.value)} disabled={!targetClassName}>
+            <option value="">Select section</option>
+            {sections.map(c => <option key={c._id} value={c._id}>{c.section || 'Default'}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="form-group" style={{ marginBottom: 0 }}>
+        <label className="form-label">Academic Year <span style={{ color: '#ef4444' }}>*</span></label>
+        <select className="form-control" value={year} onChange={e => setYear(e.target.value)}>
+          {availableYears.map(y => <option key={y.value} value={y.value}>{y.label}</option>)}
+        </select>
+      </div>
+    </Modal>
+  );
+}
+

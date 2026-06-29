@@ -71,6 +71,21 @@ const studentSchema = new mongoose.Schema({
     className:   String,
     section:     String,
     academicYear: String
+  }],
+  transferHistory: [{
+    transferredAt:       { type: Date, default: Date.now },
+    tcNumber:            String,
+    reason:              String,
+    classAtTransfer:     String,
+    sectionAtTransfer:   String,
+    academicYearAtTransfer: String,
+  }],
+  rejoinHistory: [{
+    rejoinedAt:  { type: Date, default: Date.now },
+    classId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Class' },
+    className:   String,
+    section:     String,
+    academicYear: String,
   }]
 }, { timestamps: true });
 

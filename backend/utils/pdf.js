@@ -1153,4 +1153,91 @@ const generatePromotionCard = (data, schoolData) => {
   });
 };
 
-module.exports = { generateFeeReceipt, generatePaySlip, generateAdmissionLetter, generateJobOffer, generateResultCard, generateHallTicket, generateFeesReport, generateExpensesReport, generateOutPass, generatePromotionCard };
+const generateTransferCertificate = (data, schoolData) => {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const buffers = [];
+    doc.on('data', b => buffers.push(b));
+    doc.on('end', () => resolve(Buffer.concat(buffers)));
+    doc.on('error', reject);
+
+    const cfg     = schoolData.pdfConfig || {};
+    const primary = cfg.primaryColor    || '#1a56e8';
+    const light   = lighten(primary);
+    const W = doc.page.width, L = 50, R = W - 50;
+
+    // Decorative double border
+    doc.rect(12, 12, W - 24, doc.page.height - 24).lineWidth(3).stroke(primary);
+    doc.rect(18, 18, W - 36, doc.page.height - 36).lineWidth(1).stroke(lighten(primary, 0.6));
+
+    let y = drawHeader(doc, schoolData, 'TRANSFER CERTIFICATE');
+
+    // TC Number strip
+    doc.rect(L, y, R - L, 24).fill(light);
+    doc.fillColor(primary).fontSize(10).font('Helvetica-Bold')
+      .text(`TC No: ${data.tcNumber}`, L, y + 7, { width: R - L, align: 'center' });
+    y += 36;
+
+    // Student name (large)
+    doc.fillColor('#1e293b').fontSize(24).font('Helvetica-Bold')
+      .text(data.studentName, L, y, { width: R - L, align: 'center' });
+    y += 42;
+
+    doc.fillColor('#374151').fontSize(11).font('Helvetica')
+      .text('has hereby been granted a Transfer Certificate from this institution.', L, y, { width: R - L, align: 'center' });
+    y += 40;
+
+    // Info grid
+    const fields = [
+      ['Admission Number',  data.admissionNumber || '—'],
+      ['Date of Admission', data.admissionDate ? new Date(data.admissionDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'],
+      ['Class at Transfer', `${data.classAtTransfer || '—'}${data.sectionAtTransfer ? ' — ' + data.sectionAtTransfer : ''}`],
+      ['Academic Year',     data.academicYearAtTransfer || '—'],
+      ['Date of Birth',     data.dateOfBirth ? new Date(data.dateOfBirth).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'],
+      ['Date of Transfer',  data.transferredAt ? new Date(data.transferredAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })],
+    ];
+
+    const rowH = 30, colMid = L + (R - L) / 2;
+    fields.forEach((f, i) => {
+      const fy = y + i * rowH;
+      const bg = i % 2 === 0 ? '#f8fafc' : '#ffffff';
+      doc.rect(L, fy, R - L, rowH).fill(bg);
+      doc.fillColor('#6b7280').fontSize(9).font('Helvetica')
+        .text(f[0].toUpperCase(), L + 12, fy + 6);
+      doc.fillColor('#1e293b').fontSize(10).font('Helvetica-Bold')
+        .text(f[1], L + 12, fy + 16);
+      // right column: separator
+      doc.moveTo(colMid, fy).lineTo(colMid, fy + rowH).stroke('#e5e7eb');
+    });
+    doc.rect(L, y, R - L, fields.length * rowH).stroke('#e2e8f0');
+    y += fields.length * rowH + 16;
+
+    if (data.reason) {
+      doc.rect(L, y, R - L, 32).fill('#fffbeb').stroke('#fde68a');
+      doc.fillColor('#92400e').fontSize(9).font('Helvetica-Bold').text('Reason for Transfer: ', L + 10, y + 8, { continued: true });
+      doc.font('Helvetica').text(data.reason);
+      y += 44;
+    }
+
+    // Conduct/Character note
+    doc.rect(L, y, R - L, 36).fill(light);
+    doc.fillColor(primary).fontSize(10).font('Helvetica-Bold')
+      .text('This is to certify that the above student has been a student of this institution and', L, y + 6, { width: R - L, align: 'center' });
+    doc.fillColor(primary).fontSize(10).font('Helvetica-Bold')
+      .text('has maintained good conduct and character during the period of study.', L, y + 20, { width: R - L, align: 'center' });
+    y += 52;
+
+    // Signature area
+    const sigY = Math.max(y + 30, doc.page.height - 130);
+    doc.moveTo(L, sigY).lineTo(L + 140, sigY).stroke('#94a3b8');
+    doc.fillColor('#64748b').fontSize(8).font('Helvetica')
+      .text("Class Teacher's Signature", L, sigY + 5, { width: 140, align: 'center' });
+    doc.moveTo(R - 160, sigY).lineTo(R, sigY).stroke('#94a3b8');
+    doc.text("Principal's Signature & Seal", R - 160, sigY + 5, { width: 160, align: 'center' });
+
+    drawFooter(doc, schoolData);
+    doc.end();
+  });
+};
+
+module.exports = { generateFeeReceipt, generatePaySlip, generateAdmissionLetter, generateJobOffer, generateResultCard, generateHallTicket, generateFeesReport, generateExpensesReport, generateOutPass, generatePromotionCard, generateTransferCertificate };

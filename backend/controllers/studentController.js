@@ -5,7 +5,8 @@ const Class = require('../models/Class');
 const School = require('../models/School');
 const { sendEmail, invitationEmail } = require('../utils/email');
 const { sendSMS } = require('../utils/sms');
-const { generateAdmissionLetter, generatePromotionCard } = require('../utils/pdf');
+const { generateAdmissionLetter, generatePromotionCard, generateTransferCertificate } = require('../utils/pdf');
+const FeeCollection = require('../models/FeeCollection');
 const { assertWithinLimit } = require('../utils/planLimits');
 const escapeRegex = require('../utils/escapeRegex');
 const { v4: uuidv4 } = require('uuid');
@@ -468,7 +469,161 @@ const getPromotionCardPDF = async (req, res) => {
   }
 };
 
+// Transfer a student — check pending fees first, then mark transferred + generate TC
+const transferStudent = async (req, res) => {
+  try {
+    const { reason, force } = req.body;
+    const student = await Student.findOne({ _id: req.params.id, school: req.user.school })
+      .populate('currentClass', 'name section');
+    if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+    if (student.status === 'transferred') return res.status(400).json({ success: false, message: 'Student is already transferred.' });
+
+    // Check for pending fees
+    const allFees = await FeeCollection.find({ school: req.user.school, student: student._id });
+    const pendingFees = allFees.filter(f => {
+      const paid = f.paidAmount || 0;
+      const net = (f.terms || []).reduce((s, t) => s + (t.amount || 0), 0);
+      return paid < net;
+    });
+
+    if (pendingFees.length > 0 && !force) {
+      const feeSummary = pendingFees.map(f => {
+        const net = (f.terms || []).reduce((s, t) => s + (t.amount || 0), 0);
+        return {
+          _id: f._id,
+          academicYear: f.academicYear,
+          netAmount: net,
+          paidAmount: f.paidAmount || 0,
+          pendingAmount: net - (f.paidAmount || 0),
+          terms: f.terms,
+        };
+      });
+      return res.status(402).json({ success: false, code: 'FEES_PENDING', pendingFees: feeSummary });
+    }
+
+    // Generate TC number: TC + 4-digit school-year count
+    const school = await School.findById(req.user.school);
+    const year = new Date().getFullYear();
+    const tcCount = await Student.countDocuments({
+      school: req.user.school,
+      'transferHistory.0': { $exists: true },
+    });
+    const tcNumber = `TC${year}${String(tcCount + 1).padStart(4, '0')}`;
+
+    student.transferHistory.push({
+      transferredAt: new Date(),
+      tcNumber,
+      reason: reason || '',
+      classAtTransfer: student.currentClass?.name || '',
+      sectionAtTransfer: student.currentClass?.section || '',
+      academicYearAtTransfer: student.academicYear || '',
+    });
+    student.status = 'transferred';
+    await student.save();
+    if (student.currentClass) await renumberClassRolls(req.user.school, student.currentClass._id || student.currentClass);
+
+    // Generate TC PDF inline
+    const lastTransfer = student.transferHistory[student.transferHistory.length - 1];
+    const pdfData = {
+      studentName:           student.name,
+      admissionNumber:       student.admissionNumber,
+      admissionDate:         student.admissionDate,
+      dateOfBirth:           student.dateOfBirth,
+      classAtTransfer:       lastTransfer.classAtTransfer,
+      sectionAtTransfer:     lastTransfer.sectionAtTransfer,
+      academicYearAtTransfer: lastTransfer.academicYearAtTransfer,
+      tcNumber:              lastTransfer.tcNumber,
+      reason:                lastTransfer.reason,
+      transferredAt:         lastTransfer.transferredAt,
+    };
+    const pdf = await generateTransferCertificate(pdfData, school.toObject());
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=TC_${student.admissionNumber}.pdf`);
+    res.send(pdf);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Download TC PDF for an already-transferred student
+const getTransferCertPDF = async (req, res) => {
+  try {
+    const student = await Student.findOne({ _id: req.params.id, school: req.user.school })
+      .populate('currentClass', 'name section');
+    if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+    if (!student.transferHistory?.length) return res.status(400).json({ success: false, message: 'No transfer record found.' });
+
+    const school = await School.findById(req.user.school);
+    const lastTransfer = student.transferHistory[student.transferHistory.length - 1];
+    const pdfData = {
+      studentName:           student.name,
+      admissionNumber:       student.admissionNumber,
+      admissionDate:         student.admissionDate,
+      dateOfBirth:           student.dateOfBirth,
+      classAtTransfer:       lastTransfer.classAtTransfer,
+      sectionAtTransfer:     lastTransfer.sectionAtTransfer,
+      academicYearAtTransfer: lastTransfer.academicYearAtTransfer,
+      tcNumber:              lastTransfer.tcNumber,
+      reason:                lastTransfer.reason,
+      transferredAt:         lastTransfer.transferredAt,
+    };
+    const pdf = await generateTransferCertificate(pdfData, school.toObject());
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=TC_${student.admissionNumber}.pdf`);
+    res.send(pdf);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Rejoin a transferred student into a new class
+const rejoinStudent = async (req, res) => {
+  try {
+    const { classId, academicYear } = req.body;
+    if (!classId || !academicYear) return res.status(400).json({ success: false, message: 'classId and academicYear are required.' });
+
+    const student = await Student.findOne({ _id: req.params.id, school: req.user.school });
+    if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+    if (student.status !== 'transferred') return res.status(400).json({ success: false, message: 'Student is not in transferred status.' });
+
+    const newClass = await Class.findById(classId);
+    if (!newClass) return res.status(404).json({ success: false, message: 'Class not found' });
+
+    student.status = 'active';
+    student.previousClass = student.currentClass;
+    student.currentClass = classId;
+    student.academicYear = academicYear;
+
+    student.rejoinHistory.push({
+      rejoinedAt: new Date(),
+      classId,
+      className: newClass.name,
+      section: newClass.section,
+      academicYear,
+    });
+
+    // Add to classHistory for the new year
+    const alreadyHas = student.classHistory.some(
+      h => String(h.classId) === String(classId) && h.academicYear === academicYear
+    );
+    if (!alreadyHas) {
+      student.classHistory.push({ classId, className: newClass.name, section: newClass.section, academicYear });
+    }
+
+    await student.save();
+    await renumberClassRolls(req.user.school, classId);
+
+    const fresh = await Student.findById(student._id)
+      .populate('currentClass', 'name section')
+      .populate('guardians', 'name relation phone');
+    res.json({ success: true, student: fresh });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   createStudent, getStudents, getStudent, updateStudent, deleteStudent,
-  promoteStudents, getAdmissionLetterPDF, getIDCardData, suggestCodes, getPromotionCardPDF
+  promoteStudents, getAdmissionLetterPDF, getIDCardData, suggestCodes,
+  getPromotionCardPDF, transferStudent, getTransferCertPDF, rejoinStudent
 };
