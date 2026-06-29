@@ -343,6 +343,20 @@ export default function Students() {
           transports={transports} selectedTransport={selectedTransport} setSelectedTransport={setSelectedTransport}
           busStop={busStop} setBusStop={setBusStop}
         />
+        {transferModal && (
+          <TransferModal
+            selected={selected} students={[viewStudent]} classes={classes}
+            onClose={() => setTransferModal(false)}
+            onSuccess={() => { qc.invalidateQueries(['students']); setSelected([]); setTransferModal(false); setViewStudent(null); }}
+          />
+        )}
+        {rejoinModal && (
+          <RejoinModal
+            student={rejoinModal} classes={classes}
+            onClose={() => setRejoinModal(null)}
+            onSuccess={() => { qc.invalidateQueries(['students']); setSelected([]); setRejoinModal(null); setViewStudent(null); }}
+          />
+        )}
       </>
     );
   }

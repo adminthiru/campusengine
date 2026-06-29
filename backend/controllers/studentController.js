@@ -636,7 +636,31 @@ const rejoinStudent = async (req, res) => {
       academicYear,
     });
 
-    // Add to classHistory for the new year
+    // Backfill classHistory from transferHistory for any pre-transfer class periods
+    // that are missing (students admitted before classHistory seeding was introduced).
+    for (const t of (student.transferHistory || [])) {
+      const ay = t.academicYearAtTransfer;
+      const cn = t.classAtTransfer;
+      const sec = t.sectionAtTransfer;
+      if (!ay) continue;
+      const alreadyHasTrans = student.classHistory.some(h => {
+        const hName = h.className || '';
+        const hSec  = h.section  || '';
+        return h.academicYear === ay && hName === cn && hSec === sec;
+      });
+      if (!alreadyHasTrans) {
+        const origClass = await Class.findOne({ school: student.school, name: cn, section: sec });
+        student.classHistory.unshift({
+          classId:     origClass?._id || undefined,
+          className:   cn,
+          section:     sec,
+          academicYear: ay,
+          startedAt:   student.admissionDate || undefined,
+        });
+      }
+    }
+
+    // Add the rejoin class to classHistory (like a promotion)
     const alreadyHas = student.classHistory.some(
       h => String(h.classId) === String(classId) && h.academicYear === academicYear
     );
