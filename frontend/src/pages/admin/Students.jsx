@@ -7,7 +7,7 @@ import { Select, DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import {
   Plus, Download, Trash2, GraduationCap, ArrowLeft,
-  Edit, Phone, Mail, MapPin, BookOpen, Camera, ChevronLeft, ChevronRight, Upload,
+  Edit, Phone, Mail, MapPin, BookOpen, Camera, ChevronLeft, ChevronRight, ChevronDown, Upload,
   IndianRupee, CreditCard, Lock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -1137,7 +1137,29 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
         <button className="btn btn-secondary btn-sm" onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <ArrowLeft size={16} /> Back
         </button>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {/* Class / Year selector — shown only when there is history to pick from */}
+          {classYearOptions.length > 1 && (
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <BookOpen size={13} style={{ position: 'absolute', left: 10, color: 'var(--primary)', pointerEvents: 'none' }} />
+              <select
+                value={selectedCYIdx}
+                onChange={e => setSelectedCYIdx(Number(e.target.value))}
+                className="btn btn-secondary btn-sm"
+                style={{
+                  paddingLeft: 28, paddingRight: 28, appearance: 'none',
+                  cursor: 'pointer', fontWeight: 600, color: 'var(--primary)',
+                  border: '1px solid var(--primary)', background: '#eff6ff',
+                }}>
+                {classYearOptions.map((cy, i) => (
+                  <option key={i} value={i}>
+                    {cy.className}{cy.section ? ` ${cy.section}` : ''} — {cy.academicYear}{i === 0 ? ' (Latest)' : ''}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={13} style={{ position: 'absolute', right: 10, color: 'var(--primary)', pointerEvents: 'none' }} />
+            </div>
+          )}
           <button className="btn btn-secondary btn-sm" onClick={() => onEdit(student)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Edit size={14} /> Edit
           </button>
@@ -1182,26 +1204,6 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
               )}
             </div>
 
-            {/* Class / Academic Year picker */}
-            {classYearOptions.length > 0 && (
-              <div style={{ marginTop: 10 }}>
-                <select
-                  value={selectedCYIdx}
-                  onChange={e => setSelectedCYIdx(Number(e.target.value))}
-                  style={{
-                    fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 20,
-                    border: '1px solid var(--primary)', color: 'var(--primary)',
-                    background: '#eff6ff', cursor: 'pointer', outline: 'none',
-                  }}>
-                  {classYearOptions.map((cy, i) => (
-                    <option key={i} value={i}>
-                      {cy.className}{cy.section ? ` ${cy.section}` : ''} — {cy.academicYear}
-                      {i === 0 ? ' (Latest)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
           </div>
 
           {/* Attendance circle */}
