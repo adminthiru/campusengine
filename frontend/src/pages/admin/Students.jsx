@@ -439,10 +439,10 @@ export default function Students() {
                     {col('gender')             && <td style={{ fontSize: 13, textTransform: 'capitalize' }}>{stu.gender || '—'}</td>}
                     {col('dob')                && <td style={{ fontSize: 13 }}>{stu.dateOfBirth ? format(new Date(stu.dateOfBirth), 'dd MMM yyyy') : '—'}</td>}
                     {col('status')             && <td><StatusBadge status={stu.status} /></td>}
-                    {col('promotionStatus')    && <td>{(() => {
-                      if (stu.status === 'transferred') return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0' }}>Transferred</span>;
-                      if (stu.promotionHistory?.length > 0) return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0' }}>Promoted</span>;
-                      return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>Joined This Year</span>;
+                    {col('promotionStatus')    && <td style={{ whiteSpace: 'nowrap' }}>{(() => {
+                      if (stu.status === 'transferred') return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Transferred</span>;
+                      if (stu.promotionHistory?.length > 0) return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0', whiteSpace: 'nowrap' }}>Promoted</span>;
+                      return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe', whiteSpace: 'nowrap' }}>Joined This Year</span>;
                     })()}</td>}
                     {col('parentName')          && <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{stu.guardians?.[0]?.name || '—'}</td>}
                     {col('parentRelation')      && <td style={{ fontSize: 13, textTransform: 'capitalize' }}>{stu.guardians?.[0]?.relation || '—'}</td>}
