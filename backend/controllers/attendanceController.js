@@ -262,10 +262,24 @@ const getStudentAttendanceSummary = async (req, res) => {
       }
       const startIdx = ayStartYear * 12 + (startMonth - 1);
       const ayEndIdx = ayEndYear * 12 + (endMonth - 1);
-      // Cap at today so future months don't inflate the denominator.
-      // For a fully-future year (startIdx > todayIdx) the loop produces 0 months → 0/0.
-      const lastIdx = Math.min(curY * 12 + (curM - 1), ayEndIdx);
-      dateFilter = { $gte: new Date(ayStartYear, startMonth - 1, 1), $lt: new Date(ayEndYear, endMonth, 0 + 1) };
+      const todayIdx = curY * 12 + (curM - 1);
+
+      let lastIdx;
+      if (ayEndIdx < todayIdx) {
+        // Past year — show the full completed year
+        lastIdx = ayEndIdx;
+      } else if (startIdx > todayIdx) {
+        // Future year — mirror the same number of months elapsed in the CURRENT AY
+        // so the denominator matches what the Attendance calendar already shows.
+        const curAYStartYear = curM >= startMonth ? curY : curY - 1;
+        const curAYStartIdx = curAYStartYear * 12 + (startMonth - 1);
+        const monthsElapsed = todayIdx - curAYStartIdx;
+        lastIdx = Math.min(startIdx + monthsElapsed, ayEndIdx);
+      } else {
+        // Current year — cap at today
+        lastIdx = Math.min(todayIdx, ayEndIdx);
+      }
+      dateFilter = { $gte: new Date(ayStartYear, startMonth - 1, 1), $lte: new Date(ayEndYear, endMonth, 0) };
       for (let idx = startIdx; idx <= lastIdx; idx++) {
         monthsToCount.push({ y: Math.floor(idx / 12), m: (idx % 12) + 1 });
       }
