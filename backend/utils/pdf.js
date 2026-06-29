@@ -1054,4 +1054,103 @@ const generateOutPass = (passData, schoolData) => {
   });
 };
 
-module.exports = { generateFeeReceipt, generatePaySlip, generateAdmissionLetter, generateJobOffer, generateResultCard, generateHallTicket, generateFeesReport, generateExpensesReport, generateOutPass };
+// ── Promotion Certificate ─────────────────────────────────────────────────────
+const generatePromotionCard = (data, schoolData) => {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const buffers = [];
+    doc.on('data', b => buffers.push(b));
+    doc.on('end', () => resolve(Buffer.concat(buffers)));
+    doc.on('error', reject);
+
+    const cfg     = schoolData.pdfConfig || {};
+    const primary = cfg.primaryColor    || '#1a56e8';
+    const light   = lighten(primary);
+    const W = doc.page.width, L = 50, R = W - 50;
+
+    // Outer decorative border
+    doc.rect(20, 20, W - 40, doc.page.height - 40).lineWidth(3).stroke(primary);
+    doc.rect(26, 26, W - 52, doc.page.height - 52).lineWidth(1).stroke(lighten(primary, 0.6));
+
+    let y = drawHeader(doc, schoolData, 'PROMOTION CERTIFICATE');
+
+    y += 24;
+
+    // "This is to certify that"
+    doc.fillColor('#64748b').fontSize(12).font('Helvetica')
+      .text('This is to certify that', L, y, { width: R - L, align: 'center' });
+    y += 26;
+
+    // Student name — large
+    doc.fillColor(primary).fontSize(30).font('Helvetica-Bold')
+      .text(data.studentName || '—', L, y, { width: R - L, align: 'center' });
+    y += 46;
+
+    // Admission number
+    doc.fillColor('#94a3b8').fontSize(10).font('Helvetica')
+      .text(`Admission No: ${data.admissionNumber || '—'}`, L, y, { width: R - L, align: 'center' });
+    y += 28;
+
+    // Underline
+    const lineW = 200;
+    doc.moveTo((W - lineW) / 2, y).lineTo((W + lineW) / 2, y).lineWidth(1.5).stroke(lighten(primary, 0.5));
+    y += 22;
+
+    // Promotion description
+    doc.fillColor('#374151').fontSize(12).font('Helvetica')
+      .text('has been successfully promoted from', L, y, { width: R - L, align: 'center' });
+    y += 30;
+
+    // FROM → TO boxes
+    const boxW = (R - L - 44) / 2;
+
+    // FROM box
+    doc.rect(L, y, boxW, 68).fill('#f8fafc').stroke('#e2e8f0');
+    doc.fillColor('#94a3b8').fontSize(9).font('Helvetica').text('FROM', L, y + 8, { width: boxW, align: 'center' });
+    doc.fillColor('#1e293b').fontSize(18).font('Helvetica-Bold')
+      .text(`${data.fromClassName}${data.fromSection ? ' ' + data.fromSection : ''}`, L, y + 24, { width: boxW, align: 'center' });
+    doc.fillColor('#64748b').fontSize(9).font('Helvetica')
+      .text(data.fromAcademicYear || '—', L, y + 50, { width: boxW, align: 'center' });
+
+    // Arrow
+    const arrowCX = L + boxW + 22;
+    doc.fillColor(primary).fontSize(22).font('Helvetica-Bold')
+      .text('→', arrowCX, y + 24, { width: 22, align: 'center' });
+
+    // TO box
+    const toX = L + boxW + 44;
+    doc.rect(toX, y, boxW, 68).fill(primary).stroke(primary);
+    doc.fillColor('rgba(255,255,255,0.75)').fontSize(9).font('Helvetica').text('PROMOTED TO', toX, y + 8, { width: boxW, align: 'center' });
+    doc.fillColor('white').fontSize(18).font('Helvetica-Bold')
+      .text(`${data.toClassName}${data.toSection ? ' ' + data.toSection : ''}`, toX, y + 24, { width: boxW, align: 'center' });
+    doc.fillColor('rgba(255,255,255,0.8)').fontSize(9).font('Helvetica')
+      .text(data.toAcademicYear || '—', toX, y + 50, { width: boxW, align: 'center' });
+
+    y += 88;
+
+    if (data.isDoublePromotion) {
+      doc.rect(L, y, R - L, 26).fill('#fff7ed').stroke('#fed7aa');
+      doc.fillColor('#9a3412').fontSize(10).font('Helvetica-Bold')
+        .text('⚡ Double Promotion', L, y + 8, { width: R - L, align: 'center' });
+      y += 36;
+    }
+
+    // Date
+    const promotedDate = data.promotedAt
+      ? new Date(data.promotedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
+      : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+    doc.fillColor('#64748b').fontSize(10).font('Helvetica')
+      .text(`Date of Promotion: ${promotedDate}`, L, y, { width: R - L, align: 'center' });
+    y += 32;
+
+    // Congratulations banner
+    doc.rect(L, y, R - L, 38).fill(light);
+    doc.fillColor(primary).fontSize(12).font('Helvetica-Bold')
+      .text('Congratulations! Wishing you continued success in your academic journey.', L, y + 13, { width: R - L, align: 'center' });
+
+    drawFooter(doc, schoolData);
+    doc.end();
+  });
+};
+
+module.exports = { generateFeeReceipt, generatePaySlip, generateAdmissionLetter, generateJobOffer, generateResultCard, generateHallTicket, generateFeesReport, generateExpensesReport, generateOutPass, generatePromotionCard };

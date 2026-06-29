@@ -364,6 +364,7 @@ router.put('/students/:id', protect, checkSubscription, authorize('admin', 'corr
 router.delete('/students/:id', protect, checkSubscription, authorize('admin', 'correspondent'), stuCtrl.deleteStudent);
 router.post('/students/promote', protect, checkSubscription, authorize('admin', 'correspondent', 'principal'), stuCtrl.promoteStudents);
 router.post('/students/:id/admission-letter-pdf', protect, stuCtrl.getAdmissionLetterPDF);
+router.get('/students/:id/promotion-card', protect, checkSubscription, stuCtrl.getPromotionCardPDF);
 router.post('/students/id-card-data', protect, stuCtrl.getIDCardData);
 router.post('/students/:id/upload-photo', protect, checkSubscription, authorize('admin', 'correspondent', 'principal', 'accountant'), upload.single('photo'), async (req, res) => {
   try {

@@ -5,7 +5,7 @@ const Class = require('../models/Class');
 const School = require('../models/School');
 const { sendEmail, invitationEmail } = require('../utils/email');
 const { sendSMS } = require('../utils/sms');
-const { generateAdmissionLetter } = require('../utils/pdf');
+const { generateAdmissionLetter, generatePromotionCard } = require('../utils/pdf');
 const { assertWithinLimit } = require('../utils/planLimits');
 const escapeRegex = require('../utils/escapeRegex');
 const { v4: uuidv4 } = require('uuid');
@@ -423,7 +423,52 @@ const suggestCodes = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
+const getPromotionCardPDF = async (req, res) => {
+  try {
+    const student = await Student.findOne({ _id: req.params.id, school: req.user.school })
+      .populate('currentClass', 'name section');
+    if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+    if (!student.promotionHistory?.length) {
+      return res.status(400).json({ success: false, message: 'No promotion history found for this student.' });
+    }
+
+    const school = await School.findById(req.user.school);
+    const lastPromotion = student.promotionHistory[student.promotionHistory.length - 1];
+
+    // Use classHistory (denormalized) for from/to details
+    const sortedHistory = [...(student.classHistory || [])].sort(
+      (a, b) => parseInt(b.academicYear) - parseInt(a.academicYear)
+    );
+    const toEntry   = sortedHistory[0];
+    const fromEntry = sortedHistory[1];
+
+    const data = {
+      studentName:      student.name,
+      admissionNumber:  student.admissionNumber,
+      fromClassName:    fromEntry?.className || '—',
+      fromSection:      fromEntry?.section   || '',
+      fromAcademicYear: fromEntry?.academicYear || '—',
+      toClassName:      toEntry?.className   || student.currentClass?.name || '—',
+      toSection:        toEntry?.section     || student.currentClass?.section || '',
+      toAcademicYear:   toEntry?.academicYear || lastPromotion.academicYear || student.academicYear || '—',
+      promotedAt:       lastPromotion.promotedAt,
+      isDoublePromotion: (() => {
+        const fromLevel = parseInt((fromEntry?.className || '').match(/\d+/)?.[0] || '0');
+        const toLevel   = parseInt((toEntry?.className   || '').match(/\d+/)?.[0] || '0');
+        return toLevel - fromLevel >= 2;
+      })(),
+    };
+
+    const pdf = await generatePromotionCard(data, school.toObject());
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=PromotionCard_${student.admissionNumber}.pdf`);
+    res.send(pdf);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   createStudent, getStudents, getStudent, updateStudent, deleteStudent,
-  promoteStudents, getAdmissionLetterPDF, getIDCardData, suggestCodes
+  promoteStudents, getAdmissionLetterPDF, getIDCardData, suggestCodes, getPromotionCardPDF
 };

@@ -24,6 +24,7 @@ const STUDENT_COLS = [
   { key: 'gender',            label: 'Gender',                required: true },
   { key: 'dob',               label: 'Date of Birth',         required: true },
   { key: 'status',            label: 'Status',                required: true },
+  { key: 'promotionStatus',   label: 'Promotion',             required: true },
   { key: 'parentName',        label: 'Parent Name',           required: true },
   { key: 'parentRelation',    label: 'Relationship',          required: true },
   { key: 'mobile',            label: 'Parent Mobile Number',  required: true },
@@ -61,6 +62,7 @@ export default function Students() {
   const [viewStudent, setViewStudent] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
   const [promoteModal, setPromoteModal] = useState(false);
+  const [promoteResult, setPromoteResult] = useState(null);
   const [selected, setSelected] = useState([]);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [formTab, setFormTab] = useState('personal');
@@ -403,6 +405,7 @@ export default function Students() {
                   {col('gender')             && <th style={{ whiteSpace: 'nowrap', minWidth: 90 }}>Gender</th>}
                   {col('dob')                && <th style={{ whiteSpace: 'nowrap', minWidth: 130 }}>Date of Birth</th>}
                   {col('status')             && <th style={{ whiteSpace: 'nowrap', minWidth: 100 }}>Status</th>}
+                  {col('promotionStatus')    && <th style={{ whiteSpace: 'nowrap', minWidth: 130 }}>Promotion</th>}
                   {col('parentName')          && <th style={{ whiteSpace: 'nowrap', minWidth: 180 }}>Parent Name</th>}
                   {col('parentRelation')      && <th style={{ whiteSpace: 'nowrap', minWidth: 120 }}>Relationship</th>}
                   {col('mobile')             && <th style={{ whiteSpace: 'nowrap', minWidth: 170 }}>Parent Mobile Number</th>}
@@ -436,6 +439,11 @@ export default function Students() {
                     {col('gender')             && <td style={{ fontSize: 13, textTransform: 'capitalize' }}>{stu.gender || '—'}</td>}
                     {col('dob')                && <td style={{ fontSize: 13 }}>{stu.dateOfBirth ? format(new Date(stu.dateOfBirth), 'dd MMM yyyy') : '—'}</td>}
                     {col('status')             && <td><StatusBadge status={stu.status} /></td>}
+                    {col('promotionStatus')    && <td>{(() => {
+                      if (stu.status === 'transferred') return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0' }}>Transferred</span>;
+                      if (stu.promotionHistory?.length > 0) return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0' }}>Promoted</span>;
+                      return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>Joined This Year</span>;
+                    })()}</td>}
                     {col('parentName')          && <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{stu.guardians?.[0]?.name || '—'}</td>}
                     {col('parentRelation')      && <td style={{ fontSize: 13, textTransform: 'capitalize' }}>{stu.guardians?.[0]?.relation || '—'}</td>}
                     {col('mobile')             && <td style={{ fontSize: 13 }}>{stu.phone || '—'}</td>}
@@ -475,10 +483,18 @@ export default function Students() {
       />
 
       {promoteModal && (
-        <PromoteModal selected={selected} classes={classes}
+        <PromoteModal selected={selected} classes={classes} students={students}
           onClose={() => setPromoteModal(false)}
-          onSuccess={() => { qc.invalidateQueries(['students']); setSelected([]); setPromoteModal(false); }}
+          onSuccess={(result) => {
+            qc.invalidateQueries(['students']);
+            setSelected([]);
+            setPromoteModal(false);
+            setPromoteResult(result);
+          }}
         />
+      )}
+      {promoteResult && (
+        <PromotionSuccessModal result={promoteResult} onClose={() => setPromoteResult(null)} />
       )}
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)}
@@ -1195,6 +1211,21 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
           <button className="btn btn-secondary btn-sm" onClick={() => onEdit(student)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Edit size={14} /> Edit
           </button>
+          {student.promotionHistory?.length > 0 && (
+            <button className="btn btn-secondary btn-sm" onClick={async () => {
+              try {
+                const res = await fetch(`/api/students/${student._id}/promotion-card`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+                if (!res.ok) throw new Error('Failed');
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `PromotionCard_${student.admissionNumber || student._id}.pdf`;
+                a.click(); URL.revokeObjectURL(url);
+              } catch { toast.error('Failed to download promotion card'); }
+            }} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <GraduationCap size={14} /> Promotion Card
+            </button>
+          )}
           <button className="btn btn-secondary btn-sm" onClick={() => onDownload(student._id)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Download size={14} /> Admission Letter
           </button>
@@ -2575,43 +2606,72 @@ function ContactItem({ icon: Icon, value }) {
 }
 
 
-function PromoteModal({ selected, classes, onClose, onSuccess }) {
+function PromoteModal({ selected, classes, students, onClose, onSuccess }) {
   const { availableYears, selectedYear } = useYear();
 
-  // Derive unique class names (without section) for the first dropdown
-  const classNames = useMemo(() => {
+  // Extract numeric level from a class name string (e.g. "Class 7" → 7, "VIII" → 0)
+  const classLevel = (name) => parseInt((name || '').match(/\d+/)?.[0] || '0');
+
+  // Determine the "from" class by looking at the selected students list
+  const fromClassInfo = useMemo(() => {
+    const firstSelected = (students || []).find(s => selected.includes(s._id));
+    return firstSelected?.currentClass || null;
+  }, [students, selected]);
+
+  const fromLevel = classLevel(fromClassInfo?.name);
+
+  // Eligible target class names: only level+1 (normal) and level+2 (double promotion)
+  const eligibleClassNames = useMemo(() => {
+    if (!fromLevel) {
+      // No restriction if we can't determine level
+      const seen = new Set();
+      return classes.filter(c => { if (seen.has(c.name)) return false; seen.add(c.name); return true; }).map(c => c.name);
+    }
     const seen = new Set();
     return classes.filter(c => {
+      const lvl = classLevel(c.name);
+      if (lvl !== fromLevel + 1 && lvl !== fromLevel + 2) return false;
       if (seen.has(c.name)) return false;
-      seen.add(c.name);
-      return true;
+      seen.add(c.name); return true;
     }).map(c => c.name);
-  }, [classes]);
+  }, [classes, fromLevel]);
+
+  // Default academic year = next year from selected header year
+  const nextYear = useMemo(() => {
+    const base = parseInt(selectedYear);
+    const isRange = selectedYear.includes('-');
+    const nextVal = isRange ? `${base + 1}-${base + 2}` : `${base + 1}`;
+    // Use next year if it exists in available years; otherwise fall back to selectedYear
+    return availableYears.find(y => y.value === nextVal)?.value || selectedYear;
+  }, [selectedYear, availableYears]);
 
   const [targetClassName, setTargetClassName] = useState('');
   const [toClass, setToClass] = useState('');
-  const [year, setYear] = useState(selectedYear);
+  const [year, setYear] = useState(nextYear);
   const [loading, setLoading] = useState(false);
 
-  // Sections available for the chosen class name
-  const sections = useMemo(
-    () => classes.filter(c => c.name === targetClassName),
-    [classes, targetClassName]
-  );
+  const sections = useMemo(() => classes.filter(c => c.name === targetClassName), [classes, targetClassName]);
 
-  const handleClassNameChange = (name) => {
-    setTargetClassName(name);
-    setToClass(''); // reset section when class changes
-  };
+  const isDoublePromotion = fromLevel > 0 && classLevel(targetClassName) === fromLevel + 2;
+
+  const handleClassNameChange = (name) => { setTargetClassName(name); setToClass(''); };
 
   const handlePromote = async () => {
     if (!targetClassName) return toast.error('Select target class');
     if (!toClass) return toast.error('Select target section');
     setLoading(true);
     try {
-      await api.post('/students/promote', { studentIds: selected, toClassId: toClass, academicYear: year });
-      toast.success(`${selected.length} students promoted!`);
-      onSuccess();
+      const res = await api.post('/students/promote', { studentIds: selected, toClassId: toClass, academicYear: year });
+      const toClassObj = classes.find(c => c._id === toClass);
+      toast.success(`${selected.length} student(s) promoted!`);
+      onSuccess({
+        count: selected.length,
+        toClassName: toClassObj?.name || targetClassName,
+        toSection: toClassObj?.section || '',
+        academicYear: year,
+        isDoublePromotion,
+        promotedStudents: (students || []).filter(s => selected.includes(s._id)),
+      });
     } catch (err) {
       toast.error(err.message || 'Failed');
     } finally {
@@ -2620,17 +2680,26 @@ function PromoteModal({ selected, classes, onClose, onSuccess }) {
   };
 
   return (
-    <Modal open onClose={onClose} title={`Promote ${selected.length} Students`}
+    <Modal open onClose={onClose} title={`Promote ${selected.length} Student${selected.length !== 1 ? 's' : ''}`}
       footer={<>
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-        <button className="btn btn-primary" onClick={handlePromote} disabled={loading}>{loading ? 'Promoting...' : 'Promote Students'}</button>
+        <button className="btn btn-primary" onClick={handlePromote} disabled={loading}>
+          {loading ? 'Promoting...' : 'Promote Students'}
+        </button>
       </>}>
+      {fromClassInfo && (
+        <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#0369a1', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <GraduationCap size={14} />
+          Promoting from: <strong>{fromClassInfo.name}{fromClassInfo.section ? ` — ${fromClassInfo.section}` : ''}</strong>
+          {fromLevel > 0 && <span style={{ marginLeft: 'auto', fontSize: 12, color: '#64748b' }}>Eligible: Class {fromLevel + 1} or Class {fromLevel + 2} (double)</span>}
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <div className="form-group" style={{ margin: 0 }}>
-          <label className="form-label">Class <span style={{ color: '#ef4444' }}>*</span></label>
+          <label className="form-label">Target Class <span style={{ color: '#ef4444' }}>*</span></label>
           <select className="form-control" value={targetClassName} onChange={e => handleClassNameChange(e.target.value)}>
             <option value="">Select class</option>
-            {classNames.map(name => <option key={name} value={name}>{name}</option>)}
+            {eligibleClassNames.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
         </div>
         <div className="form-group" style={{ margin: 0 }}>
@@ -2641,15 +2710,82 @@ function PromoteModal({ selected, classes, onClose, onSuccess }) {
           </select>
         </div>
       </div>
-      <div className="form-group" style={{ marginTop: 12 }}>
+      <div className="form-group" style={{ marginTop: 12, marginBottom: 0 }}>
         <label className="form-label">New Academic Year <span style={{ color: '#ef4444' }}>*</span></label>
         <select className="form-control" value={year} onChange={e => setYear(e.target.value)}>
           {availableYears.map(y => <option key={y.value} value={y.value}>{y.label}</option>)}
         </select>
       </div>
-      <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: 12, fontSize: 13, color: '#92400e', marginTop: 4 }}>
-        ⚠️ This will update {selected.length} student(s) to the selected class.
+      {isDoublePromotion && (
+        <div style={{ background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 8, padding: 12, fontSize: 13, color: '#c2410c', marginTop: 12 }}>
+          ⚡ Double promotion selected — skipping one class level. Please confirm this is intentional.
+        </div>
+      )}
+      <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: 12, fontSize: 13, color: '#92400e', marginTop: 12 }}>
+        ⚠️ This will move {selected.length} student(s) to {targetClassName || 'the selected class'}{toClass && sections.find(c => c._id === toClass) ? ` — ${sections.find(c => c._id === toClass)?.section}` : ''} for {year}.
       </div>
+    </Modal>
+  );
+}
+
+function PromotionSuccessModal({ result, onClose }) {
+  const [downloading, setDownloading] = useState({});
+
+  const downloadCard = async (studentId, admissionNumber) => {
+    setDownloading(d => ({ ...d, [studentId]: true }));
+    try {
+      const res = await fetch(`/api/students/${studentId}/promotion-card`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      if (!res.ok) throw new Error('Failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `PromotionCard_${admissionNumber || studentId}.pdf`;
+      a.click(); URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Failed to download promotion card');
+    } finally {
+      setDownloading(d => ({ ...d, [studentId]: false }));
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Promotion Successful"
+      footer={<button className="btn btn-primary" onClick={onClose}>Done</button>}>
+      <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
+        <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+          <GraduationCap size={28} color="#16a34a" />
+        </div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: '#111827', marginBottom: 4 }}>
+          {result.count} Student{result.count !== 1 ? 's' : ''} Promoted!
+        </div>
+        <div style={{ fontSize: 13, color: '#6b7280' }}>
+          Promoted to <strong>{result.toClassName}{result.toSection ? ` — ${result.toSection}` : ''}</strong> for <strong>{result.academicYear}</strong>
+        </div>
+        {result.isDoublePromotion && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 8, fontSize: 12, fontWeight: 600, color: '#c2410c', background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 12, padding: '2px 10px' }}>
+            ⚡ Double Promotion
+          </div>
+        )}
+      </div>
+      {result.promotedStudents?.length > 0 && (
+        <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 280, overflowY: 'auto' }}>
+          {result.promotedStudents.map(stu => (
+            <div key={stu._id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#f9fafb', borderRadius: 8 }}>
+              <Avatar src={stu.photo} name={stu.name} size={32} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{stu.name}</div>
+                <div style={{ fontSize: 12, color: '#6b7280' }}>{stu.admissionNumber}</div>
+              </div>
+              <button className="btn btn-secondary btn-sm" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
+                disabled={downloading[stu._id]}
+                onClick={() => downloadCard(stu._id, stu.admissionNumber)}>
+                <Download size={12} />
+                {downloading[stu._id] ? 'Downloading...' : 'Promotion Card'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </Modal>
   );
 }
