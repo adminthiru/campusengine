@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useYear } from '../../store/YearContext';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -2395,12 +2395,37 @@ function ContactItem({ icon: Icon, value }) {
 
 
 function PromoteModal({ selected, classes, onClose, onSuccess }) {
+  const { availableYears, selectedYear } = useYear();
+
+  // Derive unique class names (without section) for the first dropdown
+  const classNames = useMemo(() => {
+    const seen = new Set();
+    return classes.filter(c => {
+      if (seen.has(c.name)) return false;
+      seen.add(c.name);
+      return true;
+    }).map(c => c.name);
+  }, [classes]);
+
+  const [targetClassName, setTargetClassName] = useState('');
   const [toClass, setToClass] = useState('');
-  const [year, setYear] = useState(`${new Date().getFullYear()}-${new Date().getFullYear() + 1}`);
+  const [year, setYear] = useState(selectedYear);
   const [loading, setLoading] = useState(false);
 
+  // Sections available for the chosen class name
+  const sections = useMemo(
+    () => classes.filter(c => c.name === targetClassName),
+    [classes, targetClassName]
+  );
+
+  const handleClassNameChange = (name) => {
+    setTargetClassName(name);
+    setToClass(''); // reset section when class changes
+  };
+
   const handlePromote = async () => {
-    if (!toClass) return toast.error('Select target class');
+    if (!targetClassName) return toast.error('Select target class');
+    if (!toClass) return toast.error('Select target section');
     setLoading(true);
     try {
       await api.post('/students/promote', { studentIds: selected, toClassId: toClass, academicYear: year });
@@ -2419,18 +2444,29 @@ function PromoteModal({ selected, classes, onClose, onSuccess }) {
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
         <button className="btn btn-primary" onClick={handlePromote} disabled={loading}>{loading ? 'Promoting...' : 'Promote Students'}</button>
       </>}>
-      <div className="form-group">
-        <label className="form-label">Target Class <span style={{ color: '#ef4444' }}>*</span></label>
-        <select className="form-control" value={toClass} onChange={e => setToClass(e.target.value)}>
-          <option value="">Select target class</option>
-          {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div className="form-group" style={{ margin: 0 }}>
+          <label className="form-label">Class <span style={{ color: '#ef4444' }}>*</span></label>
+          <select className="form-control" value={targetClassName} onChange={e => handleClassNameChange(e.target.value)}>
+            <option value="">Select class</option>
+            {classNames.map(name => <option key={name} value={name}>{name}</option>)}
+          </select>
+        </div>
+        <div className="form-group" style={{ margin: 0 }}>
+          <label className="form-label">Section <span style={{ color: '#ef4444' }}>*</span></label>
+          <select className="form-control" value={toClass} onChange={e => setToClass(e.target.value)} disabled={!targetClassName}>
+            <option value="">Select section</option>
+            {sections.map(c => <option key={c._id} value={c._id}>{c.section || 'Default'}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="form-group" style={{ marginTop: 12 }}>
+        <label className="form-label">New Academic Year <span style={{ color: '#ef4444' }}>*</span></label>
+        <select className="form-control" value={year} onChange={e => setYear(e.target.value)}>
+          {availableYears.map(y => <option key={y.value} value={y.value}>{y.label}</option>)}
         </select>
       </div>
-      <div className="form-group">
-        <label className="form-label">New Academic Year <span style={{ color: '#ef4444' }}>*</span></label>
-        <input className="form-control" value={year} onChange={e => setYear(e.target.value)} placeholder="2025-2026" />
-      </div>
-      <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: 12, fontSize: 13, color: '#92400e' }}>
+      <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: 12, fontSize: 13, color: '#92400e', marginTop: 4 }}>
         ⚠️ This will update {selected.length} student(s) to the selected class.
       </div>
     </Modal>
