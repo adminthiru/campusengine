@@ -1136,53 +1136,26 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit, onRejoin
   // Fallback to currentClass + academicYear for students without history yet.
   const classYearOptions = useMemo(() => {
     const now = new Date();
-    const buildRange = (ay, startedAt) => {
+    const buildRange = (ay) => {
       const startCalYear = parseInt(ay);
       const endCalYear = endMonth < startMonth ? startCalYear + 1 : startCalYear;
-      const startDate = startedAt
-        ? new Date(startedAt).toISOString().slice(0, 10)
-        : new Date(startCalYear, startMonth - 1, 1).toISOString().slice(0, 10);
       return {
-        startDate,
-        endDate: new Date(endCalYear, endMonth, 0).toISOString().slice(0, 10),
+        startDate: new Date(startCalYear, startMonth - 1, 1).toISOString().slice(0, 10),
+        endDate:   new Date(endCalYear, endMonth, 0).toISOString().slice(0, 10),
       };
     };
 
     let entries = [];
     if (student.classHistory?.length) {
-      const originalHistory = student.classHistory;
-      entries = [...originalHistory]
+      entries = [...student.classHistory]
         .reverse()   // last-added entry is always the current class (promotion/rejoin preserves insertion order)
-        .map((h, revIdx) => {
-          const ay = h.academicYear;
-          let startedAt = h.startedAt;
-
-          // If startedAt missing, check if an earlier classHistory entry has the same
-          // academicYear — that means this is a re-entry (rejoin) and we fall back to
-          // rejoinHistory.rejoinedAt so fee date-range filtering works even for rejoins
-          // that happened before startedAt tracking was added.
-          if (!startedAt) {
-            const origIdx = originalHistory.length - 1 - revIdx;
-            const hasEarlierSameYear = originalHistory.slice(0, origIdx).some(p => p.academicYear === ay);
-            if (hasEarlierSameYear) {
-              const hClassId = (h.classId?._id || h.classId)?.toString();
-              const rejoin = student.rejoinHistory?.find(r =>
-                r.academicYear === ay &&
-                (r.classId?._id || r.classId)?.toString() === hClassId
-              );
-              startedAt = rejoin?.rejoinedAt;
-            }
-          }
-
-          return {
-            classId:      h.classId?._id || h.classId,
-            className:    h.classId?.name  || h.className,
-            section:      h.classId?.section || h.section,
-            academicYear: ay,
-            startedAt,
-            ...buildRange(ay, startedAt),
-          };
-        });
+        .map(h => ({
+          classId:     h.classId?._id || h.classId,
+          className:   h.classId?.name  || h.className,
+          section:     h.classId?.section || h.section,
+          academicYear: h.academicYear,
+          ...buildRange(h.academicYear),
+        }));
     } else if (student.currentClass && student.academicYear) {
       const ci = student.currentClass;
       entries = [{
@@ -1193,6 +1166,31 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit, onRejoin
         ...buildRange(student.academicYear),
       }];
     }
+    // Supplement with transferHistory entries missing from classHistory.
+    // This handles students admitted before classHistory seeding was added —
+    // their original class won't be in classHistory but IS in transferHistory.
+    if (student.transferHistory?.length) {
+      for (const t of student.transferHistory) {
+        const ay = t.academicYearAtTransfer;
+        const cn = t.classAtTransfer;
+        const sec = t.sectionAtTransfer;
+        if (!ay) continue;
+        const alreadyCovered = entries.some(e =>
+          e.academicYear === ay && e.className === cn && e.section === sec
+        );
+        if (!alreadyCovered) {
+          entries.push({
+            classId: null,
+            className: cn || '',
+            section: sec || '',
+            academicYear: ay,
+            startedAt: null,
+            ...buildRange(ay, null),
+          });
+        }
+      }
+    }
+
     return entries;
   }, [student, startMonth, endMonth]);
 
@@ -1645,17 +1643,16 @@ function AttendanceTab({ student, classYear }) {
   }
 
   const ayParam = classYear ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
-  const cidParam = classYear?.classId ? `&classId=${classYear.classId}` : '';
   const { data: summaryData } = useQuery({
-    queryKey: ['student-att-summary-tab', student._id, classYear?.academicYear, classYear?.classId],
-    queryFn:  () => api.get(`/attendance/summary?studentId=${student._id}${ayParam}${cidParam}`),
+    queryKey: ['student-att-summary-tab', student._id, classYear?.academicYear],
+    queryFn:  () => api.get(`/attendance/summary?studentId=${student._id}${ayParam}`),
     enabled:  !!student._id,
   });
   const overall = summaryData?.summary;
 
   const { data: recData, isLoading } = useQuery({
-    queryKey: ['student-att-records', student._id, month, year, classYear?.classId],
-    queryFn:  () => api.get(`/attendance/student-records?studentId=${student._id}&month=${month}&year=${year}${cidParam}`),
+    queryKey: ['student-att-records', student._id, month, year],
+    queryFn:  () => api.get(`/attendance/student-records?studentId=${student._id}&month=${month}&year=${year}`),
     enabled:  !!student._id,
   });
   const records = recData?.records || [];
@@ -1878,10 +1875,9 @@ function ExamResultsTab({ student, classYear }) {
   const [activeId, setActiveId] = useState(null);
 
   const ayParam = classYear ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
-  const cidParam = classYear?.classId ? `&classId=${classYear.classId}` : '';
   const { data, isLoading } = useQuery({
-    queryKey: ['student-exam-results', student._id, classYear?.academicYear, classYear?.classId],
-    queryFn: () => api.get(`/exams/results?studentId=${student._id}${ayParam}${cidParam}`),
+    queryKey: ['student-exam-results', student._id, classYear?.academicYear],
+    queryFn: () => api.get(`/exams/results?studentId=${student._id}${ayParam}`),
     enabled: !!student._id,
   });
   const results = data?.results || [];
@@ -2253,10 +2249,9 @@ function FeesTab({ student, classYear }) {
   const [collectTarget, setCollectTarget] = useState(null);
 
   const ayParam = classYear ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
-  const createdAfterParam = classYear?.startedAt ? `&createdAfter=${encodeURIComponent(classYear.startedAt)}` : '';
   const { data, isLoading } = useQuery({
-    queryKey: ['student-fees', student._id, classYear?.academicYear, classYear?.startedAt],
-    queryFn: () => api.get(`/fees?studentId=${student._id}&limit=50${ayParam}${createdAfterParam}`),
+    queryKey: ['student-fees', student._id, classYear?.academicYear],
+    queryFn: () => api.get(`/fees?studentId=${student._id}&limit=50${ayParam}`),
     enabled: !!student._id,
   });
   const feeRecords = data?.fees || [];
