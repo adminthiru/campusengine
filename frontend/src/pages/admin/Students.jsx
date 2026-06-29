@@ -1645,16 +1645,17 @@ function AttendanceTab({ student, classYear }) {
   }
 
   const ayParam = classYear ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
+  const cidParam = classYear?.classId ? `&classId=${classYear.classId}` : '';
   const { data: summaryData } = useQuery({
-    queryKey: ['student-att-summary-tab', student._id, classYear?.academicYear],
-    queryFn:  () => api.get(`/attendance/summary?studentId=${student._id}${ayParam}`),
+    queryKey: ['student-att-summary-tab', student._id, classYear?.academicYear, classYear?.classId],
+    queryFn:  () => api.get(`/attendance/summary?studentId=${student._id}${ayParam}${cidParam}`),
     enabled:  !!student._id,
   });
   const overall = summaryData?.summary;
 
   const { data: recData, isLoading } = useQuery({
-    queryKey: ['student-att-records', student._id, month, year],
-    queryFn:  () => api.get(`/attendance/student-records?studentId=${student._id}&month=${month}&year=${year}`),
+    queryKey: ['student-att-records', student._id, month, year, classYear?.classId],
+    queryFn:  () => api.get(`/attendance/student-records?studentId=${student._id}&month=${month}&year=${year}${cidParam}`),
     enabled:  !!student._id,
   });
   const records = recData?.records || [];
@@ -1877,9 +1878,10 @@ function ExamResultsTab({ student, classYear }) {
   const [activeId, setActiveId] = useState(null);
 
   const ayParam = classYear ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
+  const cidParam = classYear?.classId ? `&classId=${classYear.classId}` : '';
   const { data, isLoading } = useQuery({
-    queryKey: ['student-exam-results', student._id, classYear?.academicYear],
-    queryFn: () => api.get(`/exams/results?studentId=${student._id}${ayParam}`),
+    queryKey: ['student-exam-results', student._id, classYear?.academicYear, classYear?.classId],
+    queryFn: () => api.get(`/exams/results?studentId=${student._id}${ayParam}${cidParam}`),
     enabled: !!student._id,
   });
   const results = data?.results || [];

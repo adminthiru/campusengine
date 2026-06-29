@@ -852,9 +852,10 @@ router.get('/attendance/working-days', protect, async (req, res) => {
 // Student day-by-day attendance records for detail view
 router.get('/attendance/student-records', protect, checkSubscription, async (req, res) => {
   try {
-    const { studentId, month, year, academicYear } = req.query;
+    const { studentId, month, year, academicYear, classId } = req.query;
     if (!studentId) return res.status(400).json({ success: false, message: 'studentId required' });
     const query = { school: req.user.school, type: 'student', 'records.student': studentId };
+    if (classId) query.class = classId;
     if (month && year) {
       query.date = { $gte: new Date(year, month - 1, 1), $lt: new Date(year, month, 1) };
     } else if (academicYear) {

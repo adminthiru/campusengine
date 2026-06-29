@@ -273,6 +273,7 @@ const getStudentAttendanceSummary = async (req, res) => {
 
     const query = { school: schoolId, type: 'student', 'records.student': studentId };
     if (dateFilter) query.date = dateFilter;
+    if (classId) query.class = classId;
     const records = await Attendance.find(query);
     let present = 0, absent = 0, late = 0, half_day = 0;
     records.forEach(a => {
