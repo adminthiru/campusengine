@@ -451,7 +451,7 @@ export default function Students() {
                   </td></tr>
                 )}
                 {students.map(stu => (
-                  <tr key={stu._id} onClick={() => setViewStudent(stu)} style={{ cursor: 'pointer' }}>
+                  <tr key={stu._id} onClick={() => api.get(`/students/${stu._id}`).then(r => setViewStudent(r.student || r)).catch(() => setViewStudent(stu))} style={{ cursor: 'pointer' }}>
                     <td onClick={e => e.stopPropagation()}>
                       <input type="checkbox" checked={selected.includes(stu._id)} onChange={e => setSelected(p => e.target.checked ? [...p, stu._id] : p.filter(id => id !== stu._id))} />
                     </td>
