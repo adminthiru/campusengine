@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useYear } from '../../store/YearContext';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, Controller } from 'react-hook-form';
@@ -1070,13 +1071,14 @@ function ParentFormInline({ draft, setDraft, onSave, onCancel }) {
 function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [zoomImage, setZoomImage] = useState(false);
+  const { selectedYear } = useYear();
 
   const classInfo = student.currentClass;
   const primaryGuardian = student.guardians?.[0];
 
   const { data: attData } = useQuery({
-    queryKey: ['student-att-summary', student._id],
-    queryFn: () => api.get(`/attendance/summary?studentId=${student._id}`),
+    queryKey: ['student-att-summary', student._id, selectedYear],
+    queryFn: () => api.get(`/attendance/summary?studentId=${student._id}&academicYear=${encodeURIComponent(selectedYear)}`),
     enabled: !!student._id,
   });
   const attSummary = attData?.summary;

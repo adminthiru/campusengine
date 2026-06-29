@@ -213,7 +213,7 @@ const getAttendance = async (req, res) => {
 // Get student attendance summary (includes working days)
 const getStudentAttendanceSummary = async (req, res) => {
   try {
-    const { studentId, month, year, classId } = req.query;
+    const { studentId, month, year, classId, academicYear } = req.query;
     const schoolId = req.user.school;
 
     const schoolDoc = await School.findById(schoolId).select('workingDays academicYear');
@@ -248,12 +248,24 @@ const getStudentAttendanceSummary = async (req, res) => {
     } else {
       const startMonth = schoolDoc?.academicYear?.startMonth || 6;
       const endMonth = schoolDoc?.academicYear?.endMonth || 3;
-      const ayStartYear = curM >= startMonth ? curY : curY - 1;
-      const ayEndYear = endMonth < startMonth ? ayStartYear + 1 : ayStartYear;
+      // If a specific academicYear string is passed (e.g. "2026-2027"), derive its
+      // start/end calendar years from that string rather than from today's date.
+      // This ensures switching to a past or future year in the header shows the
+      // correct attendance window (or 0/0 for a fully-future year).
+      let ayStartYear, ayEndYear;
+      if (academicYear) {
+        ayStartYear = parseInt(academicYear); // "2026-2027" → 2026, "2026" → 2026
+        ayEndYear = endMonth < startMonth ? ayStartYear + 1 : ayStartYear;
+      } else {
+        ayStartYear = curM >= startMonth ? curY : curY - 1;
+        ayEndYear = endMonth < startMonth ? ayStartYear + 1 : ayStartYear;
+      }
       const startIdx = ayStartYear * 12 + (startMonth - 1);
       const ayEndIdx = ayEndYear * 12 + (endMonth - 1);
+      // Cap at today so future months don't inflate the denominator.
+      // For a fully-future year (startIdx > todayIdx) the loop produces 0 months → 0/0.
       const lastIdx = Math.min(curY * 12 + (curM - 1), ayEndIdx);
-      dateFilter = { $gte: new Date(ayStartYear, startMonth - 1, 1) };
+      dateFilter = { $gte: new Date(ayStartYear, startMonth - 1, 1), $lt: new Date(ayEndYear, endMonth, 0 + 1) };
       for (let idx = startIdx; idx <= lastIdx; idx++) {
         monthsToCount.push({ y: Math.floor(idx / 12), m: (idx % 12) + 1 });
       }
