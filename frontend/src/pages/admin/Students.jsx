@@ -3,7 +3,7 @@ import { useYear } from '../../store/YearContext';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, Controller } from 'react-hook-form';
-import { Select, DatePicker } from 'antd';
+import { Select, DatePicker, Dropdown } from 'antd';
 import dayjs from 'dayjs';
 import {
   Plus, Download, Trash2, GraduationCap, ArrowLeft,
@@ -1138,28 +1138,32 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
           <ArrowLeft size={16} /> Back
         </button>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {/* Class / Year selector — shown only when there is history to pick from */}
-          {classYearOptions.length > 1 && (
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              <BookOpen size={13} style={{ position: 'absolute', left: 10, color: 'var(--primary)', pointerEvents: 'none' }} />
-              <select
-                value={selectedCYIdx}
-                onChange={e => setSelectedCYIdx(Number(e.target.value))}
-                className="btn btn-secondary btn-sm"
-                style={{
-                  paddingLeft: 28, paddingRight: 28, appearance: 'none',
-                  cursor: 'pointer', fontWeight: 600, color: 'var(--primary)',
-                  border: '1px solid var(--primary)', background: '#eff6ff',
-                }}>
-                {classYearOptions.map((cy, i) => (
-                  <option key={i} value={i}>
-                    {cy.className}{cy.section ? ` ${cy.section}` : ''} — {cy.academicYear}{i === 0 ? ' (Latest)' : ''}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={13} style={{ position: 'absolute', right: 10, color: 'var(--primary)', pointerEvents: 'none' }} />
-            </div>
-          )}
+          {/* Class / Year selector — Ant Dropdown, shown only when student has 2+ years */}
+          {classYearOptions.length > 1 && (() => {
+            const cy = classYearOptions[selectedCYIdx];
+            const label = `${cy.className}${cy.section ? ` ${cy.section}` : ''} — ${cy.academicYear}`;
+            const items = classYearOptions.map((opt, i) => ({
+              key: String(i),
+              label: (
+                <span style={{ fontWeight: i === selectedCYIdx ? 600 : 400 }}>
+                  {opt.className}{opt.section ? ` ${opt.section}` : ''} — {opt.academicYear}
+                  {i === 0 && <span style={{ marginLeft: 6, fontSize: 11, color: '#60a5fa' }}>Latest</span>}
+                </span>
+              ),
+            }));
+            return (
+              <Dropdown
+                menu={{ items, onClick: ({ key }) => setSelectedCYIdx(Number(key)), selectedKeys: [String(selectedCYIdx)] }}
+                trigger={['click']}
+                placement="bottomRight">
+                <button className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--primary)', border: '1px solid var(--primary)', background: '#eff6ff' }}>
+                  <BookOpen size={13} />
+                  {label}
+                  <ChevronDown size={13} />
+                </button>
+              </Dropdown>
+            );
+          })()}
           <button className="btn btn-secondary btn-sm" onClick={() => onEdit(student)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Edit size={14} /> Edit
           </button>
