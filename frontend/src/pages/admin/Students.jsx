@@ -1150,16 +1150,39 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit, onRejoin
 
     let entries = [];
     if (student.classHistory?.length) {
-      entries = [...student.classHistory]
+      const originalHistory = student.classHistory;
+      entries = [...originalHistory]
         .reverse()   // last-added entry is always the current class (promotion/rejoin preserves insertion order)
-        .map(h => ({
-          classId:     h.classId?._id || h.classId,
-          className:   h.classId?.name  || h.className,
-          section:     h.classId?.section || h.section,
-          academicYear: h.academicYear,
-          startedAt:   h.startedAt,
-          ...buildRange(h.academicYear, h.startedAt),
-        }));
+        .map((h, revIdx) => {
+          const ay = h.academicYear;
+          let startedAt = h.startedAt;
+
+          // If startedAt missing, check if an earlier classHistory entry has the same
+          // academicYear — that means this is a re-entry (rejoin) and we fall back to
+          // rejoinHistory.rejoinedAt so fee date-range filtering works even for rejoins
+          // that happened before startedAt tracking was added.
+          if (!startedAt) {
+            const origIdx = originalHistory.length - 1 - revIdx;
+            const hasEarlierSameYear = originalHistory.slice(0, origIdx).some(p => p.academicYear === ay);
+            if (hasEarlierSameYear) {
+              const hClassId = (h.classId?._id || h.classId)?.toString();
+              const rejoin = student.rejoinHistory?.find(r =>
+                r.academicYear === ay &&
+                (r.classId?._id || r.classId)?.toString() === hClassId
+              );
+              startedAt = rejoin?.rejoinedAt;
+            }
+          }
+
+          return {
+            classId:      h.classId?._id || h.classId,
+            className:    h.classId?.name  || h.className,
+            section:      h.classId?.section || h.section,
+            academicYear: ay,
+            startedAt,
+            ...buildRange(ay, startedAt),
+          };
+        });
     } else if (student.currentClass && student.academicYear) {
       const ci = student.currentClass;
       entries = [{
