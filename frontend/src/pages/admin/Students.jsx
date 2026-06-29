@@ -405,17 +405,9 @@ export default function Students() {
           onChange={val => { setClassFilter(val ?? ''); setPage(1); }}
           options={classes.map(c => ({ value: c._id, label: `${c.name}${c.section ? ` ${c.section}` : ''}` }))}
         />
-        <button
-          onClick={() => { setShowTransferred(v => !v); setPage(1); setSelected([]); }}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer',
-            border: showTransferred ? '1px solid #cbd5e1' : '1px solid #e2e8f0',
-            background: showTransferred ? '#f1f5f9' : 'white',
-            color: showTransferred ? '#475569' : '#64748b',
-          }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#94a3b8', display: 'inline-block' }} />
-          Transferred
+        <button className={`btn btn-sm ${showTransferred ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => { setShowTransferred(v => !v); setPage(1); setSelected([]); }}>
+          <ArrowLeft size={14} style={{ transform: 'rotate(180deg)' }} /> Transferred
         </button>
         {selected.length > 0 && (
           <button className="btn btn-danger btn-sm" onClick={() => setBulkDeleteConfirm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
