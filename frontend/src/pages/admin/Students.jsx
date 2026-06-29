@@ -2313,43 +2313,89 @@ function FeesTab({ student, classYear }) {
   );
 }
 
+const FEE_PAYMENT_METHODS = [
+  { value: 'cash',          label: 'Cash' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'cheque',        label: 'Cheque' },
+  { value: 'online',        label: 'Online (UPI/NEFT)' },
+];
+
 function CollectFeeModal({ fee, onClose, onSuccess }) {
   const pendingTerms = (fee.terms || []).filter(t => t.pendingAmount > 0);
   const [selectedTerm, setSelectedTerm] = useState(pendingTerms.length === 1 ? pendingTerms[0].name : 'all');
   const [method, setMethod] = useState('cash');
   const [loading, setLoading] = useState(false);
+  const [discounts, setDiscounts] = useState({});
+  const [allDiscount, setAllDiscount] = useState('');
+  const [allReason, setAllReason] = useState('');
+
+  const allDiscNum = Math.max(0, Number(allDiscount) || 0);
+  const sumPending = pendingTerms.reduce((s, t) => s + t.pendingAmount, 0);
+
+  const discOf = (name, src = discounts) => Math.max(0, Number(src[name]?.amount) || 0);
+  const effPending = (t, src = discounts) => Math.max(0, t.pendingAmount - discOf(t.name, src));
+  const computeBase = (term, src = discounts, allD = allDiscNum) => term === 'all'
+    ? Math.max(0, sumPending - allD)
+    : effPending(fee.terms?.find(x => x.name === term) || { pendingAmount: 0, name: term }, src);
+
   const [payAmount, setPayAmount] = useState(() => {
     if (pendingTerms.length === 1) return String(pendingTerms[0].pendingAmount);
-    return String(pendingTerms.reduce((s, t) => s + t.pendingAmount, 0));
+    return String(sumPending);
   });
+
+  const basePending = computeBase(selectedTerm);
+  const maxAmount = basePending;
+  const scopeDisc = selectedTerm === 'all' ? allDiscNum : discOf(selectedTerm);
 
   const handleSelectTerm = (val) => {
     setSelectedTerm(val);
-    const max = val === 'all'
-      ? pendingTerms.reduce((s, t) => s + t.pendingAmount, 0)
-      : fee.terms?.find(t => t.name === val)?.pendingAmount || 0;
-    setPayAmount(String(max));
+    setPayAmount(String(computeBase(val)));
   };
 
-  const maxAmount = selectedTerm === 'all'
-    ? pendingTerms.reduce((s, t) => s + t.pendingAmount, 0)
-    : fee.terms?.find(t => t.name === selectedTerm)?.pendingAmount || 0;
+  const setTermDiscount = (name, field, val) => {
+    setDiscounts(prev => {
+      const next = { ...prev, [name]: { ...prev[name], [field]: val } };
+      if (field === 'amount' && selectedTerm === name) setPayAmount(String(computeBase(name, next)));
+      return next;
+    });
+  };
+
+  const setAllDiscountVal = (val) => {
+    setAllDiscount(val);
+    if (selectedTerm === 'all') setPayAmount(String(Math.max(0, sumPending - Math.max(0, Number(val) || 0))));
+  };
 
   const enteredAmount = Math.max(0, parseFloat(payAmount) || 0);
   const isPartial = enteredAmount < maxAmount && enteredAmount > 0;
-  const isValid   = enteredAmount > 0 && enteredAmount <= maxAmount;
+  const isValid = (enteredAmount > 0 || scopeDisc > 0) && enteredAmount <= maxAmount;
 
   const handleCollect = async () => {
-    if (!isValid) return toast.error(`Amount must be between ₹1 and ₹${maxAmount.toLocaleString('en-IN')}`);
+    if (!isValid) return toast.error(`Enter an amount up to ₹${maxAmount.toLocaleString('en-IN')}`);
     setLoading(true);
     try {
+      let discList = [];
+      if (selectedTerm === 'all') {
+        let remaining = allDiscNum;
+        for (const t of pendingTerms) {
+          if (remaining <= 0) break;
+          const give = Math.min(remaining, t.pendingAmount);
+          if (give > 0) discList.push({ termName: t.name, amount: give, reason: allReason || '' });
+          remaining -= give;
+        }
+      } else {
+        const da = discOf(selectedTerm);
+        if (da > 0) discList = [{ termName: selectedTerm, amount: da, reason: discounts[selectedTerm]?.reason || '' }];
+      }
       await api.post('/fees/collect', {
         feeId: fee._id,
         termName: selectedTerm === 'all' ? undefined : selectedTerm,
         amount: enteredAmount,
         method,
+        discounts: discList,
       });
-      toast.success(isPartial ? `Partial payment of ₹${enteredAmount.toLocaleString('en-IN')} collected!` : 'Payment collected!');
+      toast.success(enteredAmount > 0
+        ? (isPartial ? `Partial payment of ₹${enteredAmount.toLocaleString('en-IN')} collected!` : 'Payment collected!')
+        : 'Discount applied!');
       onSuccess();
     } catch (err) {
       toast.error(err.message || 'Failed');
@@ -2358,18 +2404,17 @@ function CollectFeeModal({ fee, onClose, onSuccess }) {
     }
   };
 
-  const AmountInput = ({ pendingAmt }) => (
+  const renderAmountInput = (pendingAmt) => (
     <div style={{ padding: '10px 14px', borderTop: '1px solid #dbeafe', background: '#f0f7ff' }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Amount to Collect (₹)</div>
           <input
-            className="form-control"
-            type="number"
-            min={1}
-            max={pendingAmt}
+            className="form-control no-spinner"
+            type="number" min={1} max={pendingAmt}
             value={payAmount}
             onChange={e => setPayAmount(e.target.value)}
+            onWheel={e => e.currentTarget.blur()}
             style={{ fontSize: 15, fontWeight: 600, textAlign: 'right' }}
             placeholder={`Max ₹${pendingAmt.toLocaleString('en-IN')}`}
             autoFocus
@@ -2407,7 +2452,7 @@ function CollectFeeModal({ fee, onClose, onSuccess }) {
       footer={<>
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
         <button className="btn btn-primary" onClick={handleCollect} disabled={loading || !isValid}>
-          {loading ? 'Processing...' : `✓ Collect ₹${enteredAmount > 0 ? enteredAmount.toLocaleString('en-IN') : '0'}`}
+          {loading ? 'Processing...' : enteredAmount > 0 ? `✓ Collect ₹${enteredAmount.toLocaleString('en-IN')}` : 'Apply Discount'}
         </button>
       </>}>
       <div style={{ marginBottom: 16 }}>
@@ -2423,44 +2468,67 @@ function CollectFeeModal({ fee, onClose, onSuccess }) {
               <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer' }}>
                 <input type="radio" name="cfterm" checked={selectedTerm === 'all'} onChange={() => handleSelectTerm('all')} />
                 <div style={{ flex: 1 }}>
-                  <div className="text-14-semibold" style={{ color: selectedTerm === 'all' ? 'var(--primary)' : undefined }}>Pay All Pending</div>
+                  <div className="text-14-semibold" style={{ color: selectedTerm === 'all' ? 'var(--primary)' : undefined }}>Pay All</div>
                   <div className="text-12-regular" style={{ color: 'var(--text-muted)' }}>{pendingTerms.map(t => t.name).join(' + ')}</div>
                 </div>
                 <span className="text-14-semibold" style={{ color: selectedTerm === 'all' ? 'var(--primary)' : undefined }}>
-                  ₹{pendingTerms.reduce((s, t) => s + t.pendingAmount, 0).toLocaleString('en-IN')}
+                  ₹{computeBase('all').toLocaleString('en-IN')}
                 </span>
               </label>
-              {selectedTerm === 'all' && <AmountInput pendingAmt={pendingTerms.reduce((s, t) => s + t.pendingAmount, 0)} />}
+              {selectedTerm === 'all' && (
+                <>
+                  <div style={{ display: 'flex', gap: 8, padding: '8px 14px 10px', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 64, flexShrink: 0 }}>Discount</span>
+                    <input className="form-control no-spinner" type="number" min={0} value={allDiscount}
+                      onChange={e => setAllDiscountVal(e.target.value)} onWheel={e => e.currentTarget.blur()} placeholder="₹0" style={{ flex: 1, fontSize: 13 }} />
+                    <input className="form-control" value={allReason}
+                      onChange={e => setAllReason(e.target.value)} placeholder="Reason (e.g. Merit)" style={{ flex: 2, fontSize: 13 }} />
+                  </div>
+                  {allDiscNum > 0 && (
+                    <div style={{ fontSize: 11, color: '#16a34a', padding: '4px 14px 0' }}>−₹{allDiscNum.toLocaleString('en-IN')} discount spread across terms</div>
+                  )}
+                  {renderAmountInput(computeBase('all'))}
+                </>
+              )}
             </div>
           )}
-          {pendingTerms.map(t => (
-            <div key={t.name} style={{ border: `1.5px solid ${selectedTerm === t.name ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, overflow: 'hidden', background: selectedTerm === t.name ? '#eff6ff' : 'white' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer' }}>
-                <input type="radio" name="cfterm" checked={selectedTerm === t.name} onChange={() => handleSelectTerm(t.name)} />
-                <div style={{ flex: 1 }}>
-                  <div className="text-14-semibold" style={{ color: selectedTerm === t.name ? 'var(--primary)' : undefined }}>{t.name}</div>
-                  <div className="text-12-regular" style={{ color: 'var(--text-muted)' }}>
-                    Net ₹{(t.netAmount || 0).toLocaleString('en-IN')} · Paid ₹{(t.paidAmount || 0).toLocaleString('en-IN')}
+
+          {pendingTerms.map(t => {
+            const d = discOf(t.name);
+            return (
+              <div key={t.name} style={{ border: `1.5px solid ${selectedTerm === t.name ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, overflow: 'hidden', background: selectedTerm === t.name ? '#eff6ff' : 'white' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer' }}>
+                  <input type="radio" name="cfterm" checked={selectedTerm === t.name} onChange={() => handleSelectTerm(t.name)} />
+                  <div style={{ flex: 1 }}>
+                    <div className="text-14-semibold" style={{ color: selectedTerm === t.name ? 'var(--primary)' : undefined }}>{t.name}</div>
+                    <div className="text-12-regular" style={{ color: 'var(--text-muted)' }}>
+                      Net ₹{(t.netAmount || 0).toLocaleString('en-IN')} · Paid ₹{(t.paidAmount || 0).toLocaleString('en-IN')}
+                    </div>
                   </div>
+                  <span className="text-14-semibold" style={{ color: selectedTerm === t.name ? 'var(--primary)' : '#ef4444' }}>
+                    ₹{effPending(t).toLocaleString('en-IN')}
+                  </span>
+                </label>
+                <div style={{ display: 'flex', gap: 8, padding: '0 14px 10px', alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 64, flexShrink: 0 }}>Discount</span>
+                  <input className="form-control no-spinner" type="number" min={0} value={discounts[t.name]?.amount || ''}
+                    onChange={e => setTermDiscount(t.name, 'amount', e.target.value)} onWheel={e => e.currentTarget.blur()} placeholder="₹0" style={{ flex: 1, fontSize: 13 }} />
+                  <input className="form-control" value={discounts[t.name]?.reason || ''}
+                    onChange={e => setTermDiscount(t.name, 'reason', e.target.value)} placeholder="Reason (e.g. Merit)" style={{ flex: 2, fontSize: 13 }} />
                 </div>
-                <span className="text-14-semibold" style={{ color: selectedTerm === t.name ? 'var(--primary)' : '#ef4444' }}>
-                  ₹{t.pendingAmount.toLocaleString('en-IN')}
-                </span>
-              </label>
-              {selectedTerm === t.name && <AmountInput pendingAmt={t.pendingAmount} />}
-            </div>
-          ))}
+                {d > 0 && (
+                  <div style={{ fontSize: 11, color: '#16a34a', padding: '0 14px 8px' }}>−₹{d.toLocaleString('en-IN')} discount · pending now ₹{effPending(t).toLocaleString('en-IN')}</div>
+                )}
+                {selectedTerm === t.name && renderAmountInput(effPending(t))}
+              </div>
+            );
+          })}
         </div>
       </div>
 
       <div className="form-group" style={{ marginTop: 16 }}>
         <label className="form-label">Payment Method</label>
-        <select className="form-control" value={method} onChange={e => setMethod(e.target.value)}>
-          <option value="cash">Cash</option>
-          <option value="bank_transfer">Bank Transfer</option>
-          <option value="cheque">Cheque</option>
-          <option value="online">Online (UPI/NEFT)</option>
-        </select>
+        <Select style={{ width: '100%' }} value={method} onChange={val => setMethod(val)} options={FEE_PAYMENT_METHODS} />
       </div>
     </Modal>
   );
