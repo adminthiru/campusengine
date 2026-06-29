@@ -78,7 +78,9 @@ export const YearProvider = ({ children }) => {
     return years;
   }, [school?.createdAt, school?.academicYear?.customYears, startMonth, endMonth]);
 
-  const currentYear = availableYears[0]?.value || ayString(new Date().getFullYear(), startMonth, endMonth);
+  // currentYear is always derived from TODAY — independent of availableYears order
+  // (availableYears[0] is now 1 year ahead, so it must not be used here)
+  const currentYear = ayString(startCalYearOf(new Date(), startMonth), startMonth, endMonth);
 
   const storageKey = `selectedYear:${school?._id || 'default'}`;
   const [selectedYear, setSelectedYearState] = useState(currentYear);
