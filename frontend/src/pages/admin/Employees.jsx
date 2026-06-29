@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useYear } from '../../store/YearContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch, Controller } from 'react-hook-form';
 import { Select, DatePicker } from 'antd';
@@ -1059,10 +1060,17 @@ function AddEditEmployeeModal({
 function EmployeeDetail({ employee, onBack, onDelete, onDownload, onEdit, onTasks }) {
   const [activeTab, setActiveTab] = useState('personal');
   const [zoomImage, setZoomImage] = useState(false);
+  const { selectedYear, startMonth, isCurrent } = useYear();
+
+  // Widget shows only a single month (same logic as student detail):
+  // current year → today's month/year; past/future → first month of that AY.
+  const now = new Date();
+  const attMonth = isCurrent ? (now.getMonth() + 1) : startMonth;
+  const attYear  = parseInt(selectedYear);
 
   const { data: attSummaryRes } = useQuery({
-    queryKey: ['emp-att-summary-header', employee._id],
-    queryFn: () => api.get(`/attendance/employee-summary?employeeId=${employee._id}`),
+    queryKey: ['emp-att-summary-header', employee._id, selectedYear],
+    queryFn: () => api.get(`/attendance/employee-summary?employeeId=${employee._id}&month=${attMonth}&year=${attYear}`),
     enabled: !!employee._id,
   });
   const attSummary = attSummaryRes?.summary || null;
