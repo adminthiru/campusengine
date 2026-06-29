@@ -1414,7 +1414,7 @@ router.delete('/staff-logins/:id', protect, authorize(...ACCESS_ADMIN), accessCt
 router.get('/homework', protect, checkSubscription, async (req, res) => {
   try {
     const Homework = require('../models/Homework');
-    const { classId, date, status } = req.query;
+    const { classId, date, status, startDate, endDate } = req.query;
     const query = { school: req.user.school };
     if (status) query.status = status;
 
@@ -1445,6 +1445,12 @@ router.get('/homework', protect, checkSubscription, async (req, res) => {
         { assignedDate: { $gte: d, $lt: next } },
         { dueDate:      { $gte: d, $lt: next } },
       ];
+    } else if (startDate || endDate) {
+      // Filter by academic year date range (from header year selector)
+      const rangeFilter = {};
+      if (startDate) rangeFilter.$gte = new Date(startDate);
+      if (endDate)   rangeFilter.$lte = new Date(endDate);
+      query.assignedDate = rangeFilter;
     }
     const homework = await Homework.find(query)
       .populate('class', 'name section')

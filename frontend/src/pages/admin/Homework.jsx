@@ -8,6 +8,7 @@ import { format } from 'date-fns';
 import api from '../../utils/api';
 import { PageLoader, EmptyState, Modal, FormRow, StatCard, SearchInput } from '../../components/ui';
 import { useAuth } from '../../store/AuthContext';
+import { useYear } from '../../store/YearContext';
 
 const STATUS_BADGE = { completed: 'badge-success', cancelled: 'badge-danger' };
 const STATUS_STYLE = {
@@ -24,6 +25,7 @@ const getSubStatus = v => SUB_STATUS.find(s => s.value === v) || SUB_STATUS[0];
 export default function Homework() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const { selectedYear, range } = useYear();
   const [activeClass, setActiveClass] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -38,14 +40,18 @@ export default function Homework() {
   const { data: classData } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes') });
   const classes = classData?.classes || [];
 
-  const { data: allHwData } = useQuery({ queryKey: ['homework-all'], queryFn: () => api.get('/homework') });
+  const { data: allHwData } = useQuery({
+    queryKey: ['homework-all', selectedYear],
+    queryFn: () => api.get(`/homework?startDate=${range.startDate}&endDate=${range.endDate}`),
+  });
   const allHw = allHwData?.homework || [];
 
   const { data: countData } = useQuery({
-    queryKey: ['homework-counts', dateFilter, statusFilter],
+    queryKey: ['homework-counts', selectedYear, dateFilter, statusFilter],
     queryFn: () => {
       const p = new URLSearchParams();
       if (dateFilter) p.set('date', dateFilter);
+      else { p.set('startDate', range.startDate); p.set('endDate', range.endDate); }
       if (statusFilter) p.set('status', statusFilter);
       return api.get(`/homework?${p}`);
     },
@@ -53,11 +59,12 @@ export default function Homework() {
   const filteredAll = countData?.homework || [];
 
   const { data: hwData, isLoading } = useQuery({
-    queryKey: ['homework', activeClass, dateFilter, statusFilter],
+    queryKey: ['homework', selectedYear, activeClass, dateFilter, statusFilter],
     queryFn: () => {
       const p = new URLSearchParams();
       if (activeClass !== 'all') p.set('classId', activeClass);
       if (dateFilter) p.set('date', dateFilter);
+      else { p.set('startDate', range.startDate); p.set('endDate', range.endDate); }
       if (statusFilter) p.set('status', statusFilter);
       return api.get(`/homework?${p}`);
     },
