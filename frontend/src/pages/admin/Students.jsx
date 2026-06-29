@@ -1130,6 +1130,22 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
   });
   const attSummary = attData?.summary;
 
+  // Fetch all fees once to know which years have a pending balance
+  const { data: allFeesData } = useQuery({
+    queryKey: ['student-fees-all', student._id],
+    queryFn: () => api.get(`/fees?studentId=${student._id}&limit=200`),
+    enabled: !!student._id,
+  });
+  const yearsWithPendingFees = useMemo(() => {
+    const s = new Set();
+    (allFeesData?.fees || []).forEach(f => {
+      if ((f.pendingAmount > 0 || ['pending','partial','overdue'].includes(f.status)) && f.academicYear) {
+        s.add(f.academicYear);
+      }
+    });
+    return s;
+  }, [allFeesData]);
+
   return (
     <div>
       {/* Page nav */}
@@ -1142,15 +1158,24 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
           {classYearOptions.length > 1 && (() => {
             const cy = classYearOptions[selectedCYIdx];
             const label = `${cy.className}${cy.section ? ` ${cy.section}` : ''} — ${cy.academicYear}`;
-            const items = classYearOptions.map((opt, i) => ({
-              key: String(i),
-              label: (
-                <span style={{ fontWeight: i === selectedCYIdx ? 600 : 400 }}>
-                  {opt.className}{opt.section ? ` ${opt.section}` : ''} — {opt.academicYear}
-                  {i === 0 && <span style={{ marginLeft: 6, fontSize: 11, color: '#60a5fa' }}>Latest</span>}
-                </span>
-              ),
-            }));
+            const hasPendingSelected = yearsWithPendingFees.has(cy.academicYear);
+            const items = classYearOptions.map((opt, i) => {
+              const hasPending = yearsWithPendingFees.has(opt.academicYear);
+              return {
+                key: String(i),
+                label: (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: i === selectedCYIdx ? 600 : 400 }}>
+                    <span>{opt.className}{opt.section ? ` ${opt.section}` : ''} — {opt.academicYear}</span>
+                    {i === 0 && (
+                      <span style={{ fontSize: 10, color: '#60a5fa', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '1px 6px' }}>Latest</span>
+                    )}
+                    {hasPending && (
+                      <span style={{ fontSize: 10, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '1px 6px' }}>Pending Fees</span>
+                    )}
+                  </span>
+                ),
+              };
+            });
             return (
               <Dropdown
                 menu={{ items, onClick: ({ key }) => setSelectedCYIdx(Number(key)), selectedKeys: [String(selectedCYIdx)] }}
@@ -1159,6 +1184,9 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
                 <button className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--primary)', border: '1px solid var(--primary)', background: '#eff6ff' }}>
                   <BookOpen size={13} />
                   {label}
+                  {hasPendingSelected && (
+                    <span style={{ fontSize: 10, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '1px 6px', lineHeight: 1.4 }}>Pending Fees</span>
+                  )}
                   <ChevronDown size={13} />
                 </button>
               </Dropdown>
