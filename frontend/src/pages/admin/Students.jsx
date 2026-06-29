@@ -1071,14 +1071,20 @@ function ParentFormInline({ draft, setDraft, onSave, onCancel }) {
 function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [zoomImage, setZoomImage] = useState(false);
-  const { selectedYear } = useYear();
+  const { selectedYear, startMonth, isCurrent } = useYear();
+
+  // Widget shows only a single month:
+  // current year → today's month/year; past/future → first month of that AY.
+  const now = new Date();
+  const attMonth = isCurrent ? (now.getMonth() + 1) : startMonth;
+  const attYear  = parseInt(selectedYear); // "2027-2028" → 2027
 
   const classInfo = student.currentClass;
   const primaryGuardian = student.guardians?.[0];
 
   const { data: attData } = useQuery({
     queryKey: ['student-att-summary', student._id, selectedYear],
-    queryFn: () => api.get(`/attendance/summary?studentId=${student._id}&academicYear=${encodeURIComponent(selectedYear)}`),
+    queryFn: () => api.get(`/attendance/summary?studentId=${student._id}&month=${attMonth}&year=${attYear}`),
     enabled: !!student._id,
   });
   const attSummary = attData?.summary;
