@@ -178,7 +178,37 @@ const getStudent = async (req, res) => {
       .populate('transportRoute', 'routeName vehicleType vehicleNumber routeNumber')
       .populate('classHistory.classId', 'name section');
     if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
-    res.json({ success: true, student });
+
+    // Backfill classHistory from transferHistory for students admitted before
+    // classHistory seeding was added — so the detail view always shows full history.
+    const obj = student.toObject();
+    if (obj.transferHistory?.length) {
+      for (const t of obj.transferHistory) {
+        const ay = t.academicYearAtTransfer;
+        const cn = t.classAtTransfer;
+        const sec = t.sectionAtTransfer;
+        if (!ay) continue;
+        const alreadyCovered = obj.classHistory.some(h => {
+          const hName = h.classId?.name || h.className;
+          const hSec  = h.classId?.section || h.section;
+          return h.academicYear === ay && hName === cn && hSec === sec;
+        });
+        if (!alreadyCovered) {
+          // Try to find the original class to get its _id for attendance/exam filtering
+          const origClass = await Class.findOne({ school: student.school, name: cn, section: sec });
+          obj.classHistory.unshift({
+            classId: origClass ? { _id: origClass._id, name: origClass.name, section: origClass.section } : null,
+            className: cn,
+            section: sec,
+            academicYear: ay,
+            startedAt: student.admissionDate || null,
+            _synthetic: true,
+          });
+        }
+      }
+    }
+
+    res.json({ success: true, student: obj });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
