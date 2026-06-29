@@ -23,8 +23,8 @@ const STUDENT_COLS = [
   { key: 'rollNumber',        label: 'Roll Number',           required: true },
   { key: 'gender',            label: 'Gender',                required: true },
   { key: 'dob',               label: 'Date of Birth',         required: true },
-  { key: 'status',            label: 'Status',                required: true },
   { key: 'promotionStatus',   label: 'Promotion',             required: true },
+  { key: 'status',            label: 'Status',                required: true },
   { key: 'parentName',        label: 'Parent Name',           required: true },
   { key: 'parentRelation',    label: 'Relationship',          required: true },
   { key: 'mobile',            label: 'Parent Mobile Number',  required: true },
@@ -404,8 +404,8 @@ export default function Students() {
                   {col('rollNumber')         && <th style={{ whiteSpace: 'nowrap', minWidth: 110 }}>Roll Number</th>}
                   {col('gender')             && <th style={{ whiteSpace: 'nowrap', minWidth: 90 }}>Gender</th>}
                   {col('dob')                && <th style={{ whiteSpace: 'nowrap', minWidth: 130 }}>Date of Birth</th>}
-                  {col('status')             && <th style={{ whiteSpace: 'nowrap', minWidth: 100 }}>Status</th>}
                   {col('promotionStatus')    && <th style={{ whiteSpace: 'nowrap', minWidth: 130 }}>Promotion</th>}
+                  {col('status')             && <th style={{ whiteSpace: 'nowrap', minWidth: 100 }}>Status</th>}
                   {col('parentName')          && <th style={{ whiteSpace: 'nowrap', minWidth: 180 }}>Parent Name</th>}
                   {col('parentRelation')      && <th style={{ whiteSpace: 'nowrap', minWidth: 120 }}>Relationship</th>}
                   {col('mobile')             && <th style={{ whiteSpace: 'nowrap', minWidth: 170 }}>Parent Mobile Number</th>}
@@ -438,12 +438,12 @@ export default function Students() {
                     {col('rollNumber')         && <td style={{ fontSize: 13 }}>{stu.rollNumber || '—'}</td>}
                     {col('gender')             && <td style={{ fontSize: 13, textTransform: 'capitalize' }}>{stu.gender || '—'}</td>}
                     {col('dob')                && <td style={{ fontSize: 13 }}>{stu.dateOfBirth ? format(new Date(stu.dateOfBirth), 'dd MMM yyyy') : '—'}</td>}
-                    {col('status')             && <td><StatusBadge status={stu.status} /></td>}
                     {col('promotionStatus')    && <td style={{ whiteSpace: 'nowrap' }}>{(() => {
                       if (stu.status === 'transferred') return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>Transferred</span>;
                       if (stu.promotionHistory?.length > 0) return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0', whiteSpace: 'nowrap' }}>Promoted</span>;
                       return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe', whiteSpace: 'nowrap' }}>Joined This Year</span>;
                     })()}</td>}
+                    {col('status')             && <td><StatusBadge status={stu.status} /></td>}
                     {col('parentName')          && <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{stu.guardians?.[0]?.name || '—'}</td>}
                     {col('parentRelation')      && <td style={{ fontSize: 13, textTransform: 'capitalize' }}>{stu.guardians?.[0]?.relation || '—'}</td>}
                     {col('mobile')             && <td style={{ fontSize: 13 }}>{stu.phone || '—'}</td>}
