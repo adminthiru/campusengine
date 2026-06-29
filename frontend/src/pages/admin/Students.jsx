@@ -1136,12 +1136,15 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit, onRejoin
   // Fallback to currentClass + academicYear for students without history yet.
   const classYearOptions = useMemo(() => {
     const now = new Date();
-    const buildRange = (ay) => {
+    const buildRange = (ay, startedAt) => {
       const startCalYear = parseInt(ay);
       const endCalYear = endMonth < startMonth ? startCalYear + 1 : startCalYear;
+      const startDate = startedAt
+        ? new Date(startedAt).toISOString().slice(0, 10)
+        : new Date(startCalYear, startMonth - 1, 1).toISOString().slice(0, 10);
       return {
-        startDate: new Date(startCalYear, startMonth - 1, 1).toISOString().slice(0, 10),
-        endDate:   new Date(endCalYear, endMonth, 0).toISOString().slice(0, 10),
+        startDate,
+        endDate: new Date(endCalYear, endMonth, 0).toISOString().slice(0, 10),
       };
     };
 
@@ -1154,7 +1157,8 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit, onRejoin
           className:   h.classId?.name  || h.className,
           section:     h.classId?.section || h.section,
           academicYear: h.academicYear,
-          ...buildRange(h.academicYear),
+          startedAt:   h.startedAt,
+          ...buildRange(h.academicYear, h.startedAt),
         }));
     } else if (student.currentClass && student.academicYear) {
       const ci = student.currentClass;
@@ -2224,9 +2228,10 @@ function FeesTab({ student, classYear }) {
   const [collectTarget, setCollectTarget] = useState(null);
 
   const ayParam = classYear ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
+  const createdAfterParam = classYear?.startedAt ? `&createdAfter=${encodeURIComponent(classYear.startedAt)}` : '';
   const { data, isLoading } = useQuery({
-    queryKey: ['student-fees', student._id, classYear?.academicYear],
-    queryFn: () => api.get(`/fees?studentId=${student._id}&limit=50${ayParam}`),
+    queryKey: ['student-fees', student._id, classYear?.academicYear, classYear?.startedAt],
+    queryFn: () => api.get(`/fees?studentId=${student._id}&limit=50${ayParam}${createdAfterParam}`),
     enabled: !!student._id,
   });
   const feeRecords = data?.fees || [];

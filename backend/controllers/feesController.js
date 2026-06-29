@@ -260,11 +260,12 @@ const verifyRazorpayPayment = async (req, res) => {
 // Get fee records
 const getFees = async (req, res) => {
   try {
-    const { studentId, classId, status, academicYear, page = 1, limit = 20, search } = req.query;
+    const { studentId, classId, status, academicYear, page = 1, limit = 20, search, createdAfter } = req.query;
     const query = { school: req.user.school };
     if (studentId) query.student = studentId;
     if (status) query.status = status;
     if (academicYear) query.academicYear = academicYear;
+    if (createdAfter) query.createdAt = { $gte: new Date(createdAfter) };
 
     if (classId) {
       const students = await Student.find({ school: req.user.school, currentClass: classId, status: { $ne: 'transferred' } }).select('_id');

@@ -113,7 +113,8 @@ const createStudent = async (req, res) => {
         classId: classInfo._id,
         className: classInfo.name,
         section: classInfo.section,
-        academicYear: student.academicYear
+        academicYear: student.academicYear,
+        startedAt: student.admissionDate || new Date(),
       }];
       await student.save();
     }
@@ -343,7 +344,8 @@ const promoteStudents = async (req, res) => {
           classId: toClassId,
           className: toClass.name,
           section: toClass.section,
-          academicYear: academicYear
+          academicYear: academicYear,
+          startedAt: new Date()
         });
       }
 
@@ -609,7 +611,7 @@ const rejoinStudent = async (req, res) => {
       h => String(h.classId) === String(classId) && h.academicYear === academicYear
     );
     if (!alreadyHas) {
-      student.classHistory.push({ classId, className: newClass.name, section: newClass.section, academicYear });
+      student.classHistory.push({ classId, className: newClass.name, section: newClass.section, academicYear, startedAt: new Date() });
     }
 
     await student.save();
