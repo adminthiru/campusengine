@@ -186,28 +186,39 @@ const getStudent = async (req, res) => {
       .populate('classHistory.classId', 'name section');
     if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
 
-    // Backfill classHistory from transferHistory for students admitted before
-    // classHistory seeding was added — so the detail view always shows full history.
+    // Backfill classHistory for transferred-then-rejoined students so the class
+    // picker dropdown shows the full history (same as promoted students).
     const obj = student.toObject();
-    if (obj.transferHistory?.length) {
-      for (const t of obj.transferHistory) {
-        const ay = t.academicYearAtTransfer;
-        const cn = t.classAtTransfer;
-        const sec = t.sectionAtTransfer;
-        if (!ay) continue;
-        const alreadyCovered = obj.classHistory.some(h => {
-          const hName = h.classId?.name || h.className;
-          const hSec  = h.classId?.section || h.section;
-          return h.academicYear === ay && hName === cn && hSec === sec;
-        });
-        if (!alreadyCovered) {
-          // Try to find the original class to get its _id for attendance/exam filtering
-          const origClass = await Class.findOne({ school: student.school, name: cn, section: sec });
+    if (obj.rejoinHistory?.length) {
+      // The pre-rejoin class is always in student.previousClass (set at rejoin time).
+      // The pre-transfer academic year is in the last transferHistory entry.
+      const lastTransfer = (obj.transferHistory || []).slice(-1)[0];
+      const oldAy  = lastTransfer?.academicYearAtTransfer || '';
+      const oldCn  = lastTransfer?.classAtTransfer        || '';
+      const oldSec = lastTransfer?.sectionAtTransfer      || '';
+
+      // Check if the pre-transfer period is already in classHistory
+      const prevClassId = student.previousClass?._id || student.previousClass;
+      const alreadyCovered = obj.classHistory.some(h => {
+        const hId = String(h.classId?._id || h.classId || '');
+        if (prevClassId && hId === String(prevClassId)) return true;
+        const hName = h.classId?.name || h.className;
+        const hSec  = h.classId?.section || h.section;
+        return oldAy && h.academicYear === oldAy && hName === oldCn && hSec === oldSec;
+      });
+
+      if (!alreadyCovered && oldAy) {
+        // Prefer previousClass document for accurate classId; fall back to name search
+        let prevClass = prevClassId ? await Class.findById(prevClassId).lean() : null;
+        if (!prevClass && oldCn) {
+          prevClass = await Class.findOne({ school: student.school, name: oldCn, section: oldSec }).lean();
+        }
+        const cn  = prevClass?.name  || oldCn  || '';
+        const sec = prevClass?.section || oldSec || '';
+        if (cn) {
           obj.classHistory.unshift({
-            classId: origClass ? { _id: origClass._id, name: origClass.name, section: origClass.section } : null,
-            className: cn,
-            section: sec,
-            academicYear: ay,
+            classId: prevClass ? { _id: prevClass._id, name: prevClass.name, section: prevClass.section } : null,
+            className: cn, section: sec, academicYear: oldAy,
             startedAt: student.admissionDate || null,
             _synthetic: true,
           });
@@ -636,6 +647,11 @@ const rejoinStudent = async (req, res) => {
     const newClass = await Class.findById(classId);
     if (!newClass) return res.status(404).json({ success: false, message: 'Class not found' });
 
+    // Capture pre-rejoin state BEFORE overwriting currentClass / academicYear
+    const oldClassId     = student.currentClass;
+    const oldAcademicYear = student.academicYear;
+    const oldClassDoc    = oldClassId ? await Class.findById(oldClassId).lean() : null;
+
     student.status = 'active';
     student.previousClass = student.currentClass;
     student.currentClass = classId;
@@ -649,25 +665,29 @@ const rejoinStudent = async (req, res) => {
       academicYear,
     });
 
-    // Backfill classHistory from transferHistory for any pre-transfer class periods
-    // that are missing (students admitted before classHistory seeding was introduced).
-    for (const t of (student.transferHistory || [])) {
-      const ay = t.academicYearAtTransfer;
-      const cn = t.classAtTransfer;
-      const sec = t.sectionAtTransfer;
-      if (!ay) continue;
+    // Backfill classHistory with the pre-transfer class period so the dropdown
+    // shows the full history (same behaviour as promotion).
+    // Primary source: transferHistory. Fallback: the actual class doc + old year captured above.
+    const lastTransfer = (student.transferHistory || []).slice(-1)[0];
+    const backfillAy  = lastTransfer?.academicYearAtTransfer || oldAcademicYear || '';
+    const backfillCn  = lastTransfer?.classAtTransfer        || oldClassDoc?.name  || '';
+    const backfillSec = lastTransfer?.sectionAtTransfer      || oldClassDoc?.section || '';
+    const backfillCid = oldClassId;
+
+    if (backfillAy && (backfillCn || backfillCid)) {
       const alreadyHasTrans = student.classHistory.some(h => {
-        const hName = h.className || '';
-        const hSec  = h.section  || '';
-        return h.academicYear === ay && hName === cn && hSec === sec;
+        const hId = String(h.classId || '');
+        if (backfillCid && hId === String(backfillCid)) return true;
+        return h.academicYear === backfillAy && (h.className || '') === backfillCn && (h.section || '') === backfillSec;
       });
       if (!alreadyHasTrans) {
-        const origClass = await Class.findOne({ school: student.school, name: cn, section: sec });
+        const origClass = oldClassDoc ||
+          (backfillCn ? await Class.findOne({ school: student.school, name: backfillCn, section: backfillSec }).lean() : null);
         student.classHistory.unshift({
-          classId:     origClass?._id || undefined,
-          className:   cn,
-          section:     sec,
-          academicYear: ay,
+          classId:     origClass?._id || backfillCid || undefined,
+          className:   origClass?.name  || backfillCn,
+          section:     origClass?.section || backfillSec,
+          academicYear: backfillAy,
           startedAt:   student.admissionDate || undefined,
         });
       }
