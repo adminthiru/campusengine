@@ -848,11 +848,18 @@ router.get('/attendance/working-days', protect, async (req, res) => {
 // Student day-by-day attendance records for detail view
 router.get('/attendance/student-records', protect, checkSubscription, async (req, res) => {
   try {
-    const { studentId, month, year } = req.query;
+    const { studentId, month, year, academicYear } = req.query;
     if (!studentId) return res.status(400).json({ success: false, message: 'studentId required' });
     const query = { school: req.user.school, type: 'student', 'records.student': studentId };
     if (month && year) {
       query.date = { $gte: new Date(year, month - 1, 1), $lt: new Date(year, month, 1) };
+    } else if (academicYear) {
+      const schoolDoc = await School.findById(req.user.school).select('academicYear');
+      const sm = schoolDoc?.academicYear?.startMonth || 6;
+      const em = schoolDoc?.academicYear?.endMonth || 5;
+      const startY = parseInt(academicYear);
+      const endY = em < sm ? startY + 1 : startY;
+      query.date = { $gte: new Date(startY, sm - 1, 1), $lte: new Date(endY, em, 0) };
     }
     const docs = await Attendance.find(query)
       .populate('class', 'name section')
@@ -1593,18 +1600,27 @@ router.get('/homework/student-summary', protect, checkSubscription, async (req, 
     const Homework = require('../models/Homework');
     const HomeworkSubmission = require('../models/HomeworkSubmission');
     const Student = require('../models/Student');
-    const { studentId } = req.query;
+    const { studentId, classId: classIdOverride, startDate: hwStart, endDate: hwEnd } = req.query;
     if (!studentId) return res.status(400).json({ success: false, message: 'studentId required' });
 
     const student = await Student.findOne({ _id: studentId, school: req.user.school });
     if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
 
+    const classIdForQuery = classIdOverride || student.currentClass;
+    const hwDateFilter = (hwStart || hwEnd) ? {
+      assignedDate: {
+        ...(hwStart ? { $gte: new Date(hwStart) } : {}),
+        ...(hwEnd   ? { $lte: new Date(hwEnd)   } : {}),
+      }
+    } : {};
+
     const homework = await Homework.find({
       school: req.user.school,
       $or: [
-        { class: student.currentClass, assignedTo: 'all' },
+        { class: classIdForQuery, assignedTo: 'all' },
         { students: studentId }
-      ]
+      ],
+      ...hwDateFilter
     })
       .populate('class', 'name section')
       .populate('subject', 'name color')

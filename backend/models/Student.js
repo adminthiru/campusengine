@@ -64,6 +64,13 @@ const studentSchema = new mongoose.Schema({
     academicYear: String,
     promotedAt: Date,
     promotedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  }],
+  // One entry per academic year — populated on creation and on each promotion
+  classHistory: [{
+    classId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Class' },
+    className:   String,
+    section:     String,
+    academicYear: String
   }]
 }, { timestamps: true });
 

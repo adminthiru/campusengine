@@ -106,6 +106,17 @@ const createStudent = async (req, res) => {
     });
     if (student.currentClass) await renumberClassRolls(schoolId, student.currentClass);
 
+    // Seed classHistory with the admission class/year
+    if (classInfo && student.academicYear) {
+      student.classHistory = [{
+        classId: classInfo._id,
+        className: classInfo.name,
+        section: classInfo.section,
+        academicYear: student.academicYear
+      }];
+      await student.save();
+    }
+
     // Update parent with student reference
     for (const gId of guardianIds) {
       await Parent.findByIdAndUpdate(gId, { $addToSet: { students: student._id } });
@@ -160,7 +171,8 @@ const getStudent = async (req, res) => {
       .populate('currentClass', 'name section fees')
       .populate('guardians')
       .populate('primaryGuardian')
-      .populate('transportRoute', 'routeName vehicleType vehicleNumber routeNumber');
+      .populate('transportRoute', 'routeName vehicleType vehicleNumber routeNumber')
+      .populate('classHistory.classId', 'name section');
     if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
     res.json({ success: true, student });
   } catch (err) {
@@ -308,6 +320,30 @@ const promoteStudents = async (req, res) => {
         promotedAt: new Date(),
         promotedBy: req.user._id
       });
+
+      // Seed classHistory retroactively for students admitted before this feature
+      if (!student.classHistory?.length && student.currentClass && student.academicYear) {
+        const fromClass = await Class.findById(student.currentClass);
+        student.classHistory = [{
+          classId: student.currentClass,
+          className: fromClass?.name || '',
+          section: fromClass?.section || '',
+          academicYear: student.academicYear
+        }];
+      }
+      // Push the new class/year entry (avoid duplicate if same year already recorded)
+      const alreadyHas = student.classHistory.some(
+        h => String(h.classId) === String(toClassId) && h.academicYear === academicYear
+      );
+      if (!alreadyHas) {
+        student.classHistory.push({
+          classId: toClassId,
+          className: toClass.name,
+          section: toClass.section,
+          academicYear: academicYear
+        });
+      }
+
       student.previousClass = student.currentClass;
       if (student.currentClass) affectedClasses.add(String(student.currentClass));
       student.currentClass = toClassId;

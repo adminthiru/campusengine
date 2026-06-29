@@ -310,11 +310,12 @@ const publishResults = async (req, res) => {
 // Get results
 const getResults = async (req, res) => {
   try {
-    const { examId, classId, studentId } = req.query;
+    const { examId, classId, studentId, academicYear } = req.query;
     const query = { school: req.user.school };
     if (examId) query.exam = examId;
     if (classId) query.class = classId;
     if (studentId) query.student = studentId;
+    if (academicYear) query.academicYear = academicYear;
     // Students & parents may only see results the admin has published.
     if (req.user.role === 'student' || req.user.role === 'parent') query.isPublished = true;
 

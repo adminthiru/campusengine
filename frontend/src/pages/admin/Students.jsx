@@ -1071,19 +1071,60 @@ function ParentFormInline({ draft, setDraft, onSave, onCancel }) {
 function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [zoomImage, setZoomImage] = useState(false);
-  const { selectedYear, startMonth, isCurrent } = useYear();
+  const { startMonth, endMonth, isCurrent } = useYear();
 
-  // Widget shows only a single month:
-  // current year → today's month/year; past/future → first month of that AY.
-  const now = new Date();
-  const attMonth = isCurrent ? (now.getMonth() + 1) : startMonth;
-  const attYear  = parseInt(selectedYear); // "2027-2028" → 2027
+  // Build class/year options from classHistory (newest first).
+  // Fallback to currentClass + academicYear for students without history yet.
+  const classYearOptions = useMemo(() => {
+    const now = new Date();
+    const buildRange = (ay) => {
+      const startCalYear = parseInt(ay);
+      const endCalYear = endMonth < startMonth ? startCalYear + 1 : startCalYear;
+      return {
+        startDate: new Date(startCalYear, startMonth - 1, 1).toISOString().slice(0, 10),
+        endDate:   new Date(endCalYear, endMonth, 0).toISOString().slice(0, 10),
+      };
+    };
+
+    let entries = [];
+    if (student.classHistory?.length) {
+      entries = [...student.classHistory]
+        .sort((a, b) => parseInt(b.academicYear) - parseInt(a.academicYear))
+        .map(h => ({
+          classId:     h.classId?._id || h.classId,
+          className:   h.classId?.name  || h.className,
+          section:     h.classId?.section || h.section,
+          academicYear: h.academicYear,
+          ...buildRange(h.academicYear),
+        }));
+    } else if (student.currentClass && student.academicYear) {
+      const ci = student.currentClass;
+      entries = [{
+        classId:     ci._id || ci,
+        className:   ci.name || '',
+        section:     ci.section || '',
+        academicYear: student.academicYear,
+        ...buildRange(student.academicYear),
+      }];
+    }
+    return entries;
+  }, [student, startMonth, endMonth]);
+
+  const [selectedCYIdx, setSelectedCYIdx] = useState(0);
+  const classYear = classYearOptions[selectedCYIdx] || null;
 
   const classInfo = student.currentClass;
   const primaryGuardian = student.guardians?.[0];
 
+  // Header attendance widget: single-month, based on selected classYear
+  const now = new Date();
+  const attMonth = (classYear && classYear.academicYear === student.academicYear && isCurrent)
+    ? (now.getMonth() + 1)
+    : startMonth;
+  const attYear = classYear ? parseInt(classYear.academicYear) : now.getFullYear();
+
   const { data: attData } = useQuery({
-    queryKey: ['student-att-summary', student._id, selectedYear],
+    queryKey: ['student-att-summary', student._id, classYear?.academicYear],
     queryFn: () => api.get(`/attendance/summary?studentId=${student._id}&month=${attMonth}&year=${attYear}`),
     enabled: !!student._id,
   });
@@ -1140,6 +1181,27 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
                 <><span style={{ color: '#94a3b8', fontSize: 18, lineHeight: 1, fontWeight: 700 }}>·</span><span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{format(new Date(student.dateOfBirth), 'dd MMM yyyy')}</span></>
               )}
             </div>
+
+            {/* Class / Academic Year picker */}
+            {classYearOptions.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <select
+                  value={selectedCYIdx}
+                  onChange={e => setSelectedCYIdx(Number(e.target.value))}
+                  style={{
+                    fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 20,
+                    border: '1px solid var(--primary)', color: 'var(--primary)',
+                    background: '#eff6ff', cursor: 'pointer', outline: 'none',
+                  }}>
+                  {classYearOptions.map((cy, i) => (
+                    <option key={i} value={i}>
+                      {cy.className}{cy.section ? ` ${cy.section}` : ''} — {cy.academicYear}
+                      {i === 0 ? ' (Latest)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Attendance circle */}
@@ -1362,16 +1424,16 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit }) {
           )}
 
           {/* ── Tab 3: Attendance ── */}
-          {activeTab === 'attendance' && <AttendanceTab student={student} />}
+          {activeTab === 'attendance' && <AttendanceTab student={student} classYear={classYear} />}
 
           {/* ── Tab 4: Exam Results ── */}
-          {activeTab === 'exams' && <ExamResultsTab student={student} />}
+          {activeTab === 'exams' && <ExamResultsTab student={student} classYear={classYear} />}
 
           {/* ── Tab 4: Home Works ── */}
-          {activeTab === 'homeworks' && <HomeworkTab student={student} />}
+          {activeTab === 'homeworks' && <HomeworkTab student={student} classYear={classYear} />}
 
           {/* ── Tab 5: Fees ── */}
-          {activeTab === 'fees' && <FeesTab student={student} />}
+          {activeTab === 'fees' && <FeesTab student={student} classYear={classYear} />}
 
         </div>
       </div>
@@ -1403,14 +1465,26 @@ const STATUS_META = {
 
 const DAY_PRIORITY = ['absent','late','half_day','excused','od','cl','sl','present'];
 
-function AttendanceTab({ student }) {
+function AttendanceTab({ student, classYear }) {
   const now = new Date();
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year,  setYear]  = useState(now.getFullYear());
+  // Default calendar to start of selected AY; fall back to today
+  const initCalYear  = classYear ? parseInt(classYear.academicYear) : now.getFullYear();
+  const initCalMonth = classYear ? parseInt(classYear.startDate.slice(5, 7)) : (now.getMonth() + 1);
+  const [month, setMonth] = useState(initCalMonth);
+  const [year,  setYear]  = useState(initCalYear);
 
+  // Reset calendar when classYear changes
+  const prevClassYear = useRef(classYear?.academicYear);
+  if (prevClassYear.current !== classYear?.academicYear) {
+    prevClassYear.current = classYear?.academicYear;
+    setYear(initCalYear);
+    setMonth(initCalMonth);
+  }
+
+  const ayParam = classYear ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
   const { data: summaryData } = useQuery({
-    queryKey: ['student-att-summary', student._id],
-    queryFn:  () => api.get(`/attendance/summary?studentId=${student._id}`),
+    queryKey: ['student-att-summary-tab', student._id, classYear?.academicYear],
+    queryFn:  () => api.get(`/attendance/summary?studentId=${student._id}${ayParam}`),
     enabled:  !!student._id,
   });
   const overall = summaryData?.summary;
@@ -1636,12 +1710,13 @@ function AttendanceTab({ student }) {
   );
 }
 
-function ExamResultsTab({ student }) {
+function ExamResultsTab({ student, classYear }) {
   const [activeId, setActiveId] = useState(null);
 
+  const ayParam = classYear ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
   const { data, isLoading } = useQuery({
-    queryKey: ['student-exam-results', student._id],
-    queryFn: () => api.get(`/exams/results?studentId=${student._id}`),
+    queryKey: ['student-exam-results', student._id, classYear?.academicYear],
+    queryFn: () => api.get(`/exams/results?studentId=${student._id}${ayParam}`),
     enabled: !!student._id,
   });
   const results = data?.results || [];
@@ -1803,13 +1878,16 @@ function ExamResultsTab({ student }) {
   );
 }
 
-function HomeworkTab({ student }) {
+function HomeworkTab({ student, classYear }) {
   const [filter, setFilter] = useState('all');
   const [lightbox, setLightbox] = useState(null); // { url, fileType }
 
+  const hwExtra = classYear
+    ? `&classId=${classYear.classId}&startDate=${classYear.startDate}&endDate=${classYear.endDate}`
+    : '';
   const { data, isLoading } = useQuery({
-    queryKey: ['student-homeworks', student._id],
-    queryFn: () => api.get(`/homework/student-summary?studentId=${student._id}`),
+    queryKey: ['student-homeworks', student._id, classYear?.academicYear],
+    queryFn: () => api.get(`/homework/student-summary?studentId=${student._id}${hwExtra}`),
     enabled: !!student._id,
   });
   const allHw = data?.homework || [];
@@ -2005,13 +2083,14 @@ function AttendanceCircle({ percentage, present, total }) {
 }
 
 // ── Fees Tab ──────────────────────────────────────────────────────────────────
-function FeesTab({ student }) {
+function FeesTab({ student, classYear }) {
   const qc = useQueryClient();
   const [collectTarget, setCollectTarget] = useState(null);
 
+  const ayParam = classYear ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
   const { data, isLoading } = useQuery({
-    queryKey: ['student-fees', student._id],
-    queryFn: () => api.get(`/fees?studentId=${student._id}&limit=50`),
+    queryKey: ['student-fees', student._id, classYear?.academicYear],
+    queryFn: () => api.get(`/fees?studentId=${student._id}&limit=50${ayParam}`),
     enabled: !!student._id,
   });
   const feeRecords = data?.fees || [];
