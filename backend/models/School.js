@@ -29,7 +29,8 @@ const schoolSchema = new mongoose.Schema({
       name: String,
       startDate: Date,
       endDate: Date
-    }]
+    }],
+    customYears: { type: [String], default: [] },
   },
   workingDays: {
     monday: { type: Boolean, default: true },

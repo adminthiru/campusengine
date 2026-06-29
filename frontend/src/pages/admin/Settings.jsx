@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useYear } from '../../store/YearContext';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { Select as AntSelect } from 'antd';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -532,10 +533,16 @@ function AcademicYearSettings() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
   const school = data?.school;
+  const { availableYears, customYears: ctxCustomYears } = useYear();
 
   const [startMonth, setStartMonth] = useState(null);
   const [endMonth, setEndMonth] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  // Custom year management state
+  const [addYearOpen, setAddYearOpen] = useState(false);
+  const [newYear, setNewYear] = useState(null);
+  const [savingYear, setSavingYear] = useState(false);
 
   const sm = startMonth ?? school?.academicYear?.startMonth ?? 6;
   const em = endMonth ?? school?.academicYear?.endMonth ?? 3;
@@ -545,7 +552,19 @@ function AcademicYearSettings() {
   const now = new Date();
   const startCalYear = (now.getMonth() + 1) >= sm ? now.getFullYear() : now.getFullYear() - 1;
   const previewLabel = spansTwo ? `${startCalYear}-${startCalYear + 1}` : `${startCalYear}`;
+  const currentYear = previewLabel;
   const monthName = (n) => MONTH_OPTIONS[n - 1].label;
+
+  // Year options for the picker: ±10 years relative to today, excluding already-present years
+  const yearOptions = useMemo(() => {
+    const base = now.getFullYear();
+    const opts = [];
+    for (let y = base - 10; y <= base + 5; y++) {
+      const label = spansTwo ? `${y}-${y + 1}` : `${y}`;
+      if (!availableYears.some(ay => ay.value === label)) opts.push({ value: label, label });
+    }
+    return opts;
+  }, [availableYears, spansTwo]);
 
   const save = async () => {
     setSaving(true);
@@ -555,6 +574,27 @@ function AcademicYearSettings() {
       toast.success('Academic year settings saved!');
     } catch { toast.error('Failed to save'); }
     finally { setSaving(false); }
+  };
+
+  const addYear = async () => {
+    if (!newYear) return;
+    setSavingYear(true);
+    try {
+      await api.put('/school/academic-year/custom-years', { action: 'add', year: newYear });
+      qc.invalidateQueries(['school']);
+      setNewYear(null);
+      setAddYearOpen(false);
+      toast.success(`${newYear} added`);
+    } catch { toast.error('Failed to add year'); }
+    finally { setSavingYear(false); }
+  };
+
+  const removeYear = async (year) => {
+    try {
+      await api.put('/school/academic-year/custom-years', { action: 'remove', year });
+      qc.invalidateQueries(['school']);
+      toast.success(`${year} removed`);
+    } catch { toast.error('Failed to remove year'); }
   };
 
   if (isLoading) return <PageLoader />;
@@ -601,6 +641,70 @@ function AcademicYearSettings() {
         <button className="btn btn-primary" onClick={save} disabled={saving} style={{ height: 42 }}>
           {saving ? 'Saving...' : 'Save Academic Year'}
         </button>
+      </div>
+
+      {/* ── Available Academic Years ── */}
+      <div style={{ marginTop: 28, borderTop: '1px solid var(--border)', paddingTop: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+          <div>
+            <h3 className="text-16-semibold">Available Academic Years</h3>
+            <p className="text-13-regular" style={{ color: 'var(--text-secondary)', marginTop: 3 }}>
+              Add past or future years to enter historical data or plan ahead.
+            </p>
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={() => { setAddYearOpen(v => !v); setNewYear(null); }}>
+            <Plus size={14} style={{ marginRight: 4 }} />Add Year
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {availableYears.map(y => {
+            const isCur = y.value === currentYear;
+            const isCustom = ctxCustomYears.includes(y.value);
+            return (
+              <span key={y.value} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '5px 12px', borderRadius: 20, fontSize: 13, fontWeight: 500,
+                background: isCur ? '#eff6ff' : '#f8fafc',
+                border: `1px solid ${isCur ? '#bfdbfe' : 'var(--border)'}`,
+                color: isCur ? '#1d4ed8' : 'var(--text-primary)',
+              }}>
+                {y.label}
+                {isCur && <span style={{ fontSize: 11, color: '#60a5fa', fontWeight: 400 }}>current</span>}
+                {isCustom && (
+                  <button
+                    onClick={() => removeYear(y.value)}
+                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                      color: 'var(--text-secondary)', lineHeight: 1 }}
+                    title={`Remove ${y.value}`}
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </span>
+            );
+          })}
+        </div>
+
+        {addYearOpen && (
+          <div style={{ marginTop: 14, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <AntSelect
+              value={newYear}
+              onChange={setNewYear}
+              options={yearOptions}
+              style={{ width: 180 }}
+              placeholder="Select year"
+              showSearch
+            />
+            <button className="btn btn-primary btn-sm" onClick={addYear} disabled={!newYear || savingYear}>
+              {savingYear ? 'Adding…' : 'Add'}
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => { setAddYearOpen(false); setNewYear(null); }}>
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

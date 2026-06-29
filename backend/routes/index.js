@@ -220,10 +220,25 @@ router.get('/academic-years', protect, async (req, res) => {
 
     const set = new Set(dataYears);
     if (current) set.add(current); // always allow the live year, even if empty
+    const customYears = school?.academicYear?.customYears || [];
+    customYears.forEach(y => { if (y) set.add(y); });
     const years = [...set].filter(Boolean).sort().reverse();
     const latestWithData = [...dataYears].filter(Boolean).sort().reverse()[0] || null;
 
-    res.json({ success: true, years, current, latestWithData, startMonth, endMonth });
+    res.json({ success: true, years, current, latestWithData, startMonth, endMonth, customYears });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.put('/school/academic-year/custom-years', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
+  try {
+    const { action, year } = req.body;
+    if (!year || !/^\d{4}(-\d{4})?$/.test(year))
+      return res.status(400).json({ success: false, message: 'Invalid year format. Use "2025-2026" or "2025".' });
+    const update = action === 'add'
+      ? { $addToSet: { 'academicYear.customYears': year } }
+      : { $pull: { 'academicYear.customYears': year } };
+    const school = await School.findByIdAndUpdate(req.user.school, update, { returnDocument: 'after' });
+    res.json({ success: true, customYears: school.academicYear.customYears });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 

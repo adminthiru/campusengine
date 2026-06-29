@@ -48,24 +48,35 @@ export const YearProvider = ({ children }) => {
   const startMonth = school?.academicYear?.startMonth || 6;
   const endMonth = school?.academicYear?.endMonth || 3;
 
-  // Build the list of selectable academic years: from the year the school
-  // started using the software (createdAt) up to the current academic year.
+  // Build the list of selectable academic years:
+  // auto-range: from school.createdAt up to 1 year ahead of current,
+  // plus any admin-added customYears (past or future).
   const availableYears = useMemo(() => {
     const now = new Date();
     const currentStart = startCalYearOf(now, startMonth);
+    const nextStart = currentStart + 1; // always show 1 future year
     const firstStart = school?.createdAt
       ? startCalYearOf(new Date(school.createdAt), startMonth)
       : currentStart;
     const years = [];
-    for (let y = currentStart; y >= firstStart; y--) {
+    for (let y = nextStart; y >= firstStart; y--) {
       years.push({
         value: ayString(y, startMonth, endMonth),
         label: ayString(y, startMonth, endMonth),
         startCalYear: y,
+        isCustom: false,
       });
     }
+    // Merge admin-added custom years (may be outside the auto range)
+    const customYears = school?.academicYear?.customYears || [];
+    customYears.forEach(cy => {
+      if (!years.some(y => y.value === cy)) {
+        years.push({ value: cy, label: cy, startCalYear: parseInt(cy), isCustom: true });
+      }
+    });
+    years.sort((a, b) => b.startCalYear - a.startCalYear);
     return years;
-  }, [school?.createdAt, startMonth, endMonth]);
+  }, [school?.createdAt, school?.academicYear?.customYears, startMonth, endMonth]);
 
   const currentYear = availableYears[0]?.value || ayString(new Date().getFullYear(), startMonth, endMonth);
 
@@ -99,6 +110,7 @@ export const YearProvider = ({ children }) => {
     startMonth,
     endMonth,
     isCurrent: selectedYear === currentYear,
+    customYears: school?.academicYear?.customYears || [],
     // Date range for date-based modules (Expenses, Attendance)
     range: ayRange(startCalYear, startMonth, endMonth),
     // (year, month) bounds for Salary's numeric-key filter
