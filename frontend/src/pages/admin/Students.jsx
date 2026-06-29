@@ -56,6 +56,7 @@ export default function Students() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('');
+  const [showTransferred, setShowTransferred] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [editStudent, setEditStudent] = useState(null);
@@ -99,8 +100,8 @@ export default function Students() {
   const [busStop, setBusStop] = useState('');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['students', page, search, classFilter],
-    queryFn: () => api.get(`/students?page=${page}&limit=20&search=${search}&classId=${classFilter}`),
+    queryKey: ['students', page, search, classFilter, showTransferred],
+    queryFn: () => api.get(`/students?page=${page}&limit=20&search=${search}&classId=${classFilter}${showTransferred ? '&status=transferred' : ''}`),
     keepPreviousData: true
   });
 
@@ -352,7 +353,7 @@ export default function Students() {
       <div className="page-header">
         <div>
           <h1 className="text-24-semibold">Students</h1>
-          <p className="page-subtitle">{total} students enrolled</p>
+          <p className="page-subtitle">{showTransferred ? `${total} transferred student${total !== 1 ? 's' : ''}` : `${total} students enrolled`}</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {selected.length > 0 && (() => {
@@ -401,9 +402,21 @@ export default function Students() {
           value={classFilter || undefined}
           placeholder="All Classes"
           allowClear
-          onChange={val => setClassFilter(val ?? '')}
+          onChange={val => { setClassFilter(val ?? ''); setPage(1); }}
           options={classes.map(c => ({ value: c._id, label: `${c.name}${c.section ? ` ${c.section}` : ''}` }))}
         />
+        <button
+          onClick={() => { setShowTransferred(v => !v); setPage(1); setSelected([]); }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '6px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer',
+            border: showTransferred ? '1px solid #cbd5e1' : '1px solid #e2e8f0',
+            background: showTransferred ? '#f1f5f9' : 'white',
+            color: showTransferred ? '#475569' : '#64748b',
+          }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#94a3b8', display: 'inline-block' }} />
+          Transferred
+        </button>
         {selected.length > 0 && (
           <button className="btn btn-danger btn-sm" onClick={() => setBulkDeleteConfirm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Trash2 size={15} /> Delete ({selected.length})

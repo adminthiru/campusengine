@@ -141,7 +141,9 @@ const getStudents = async (req, res) => {
     const { classId, status, search, page = 1, limit = 20 } = req.query;
     const query = { school: req.user.school };
     if (classId) query.currentClass = classId;
+    // Default: hide transferred students; pass status=transferred to see only them
     if (status) query.status = status;
+    else query.status = { $ne: 'transferred' };
     if (search) {
       const s = escapeRegex(search);
       query.$or = [

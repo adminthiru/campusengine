@@ -267,7 +267,7 @@ const getFees = async (req, res) => {
     if (academicYear) query.academicYear = academicYear;
 
     if (classId) {
-      const students = await Student.find({ school: req.user.school, currentClass: classId }).select('_id');
+      const students = await Student.find({ school: req.user.school, currentClass: classId, status: { $ne: 'transferred' } }).select('_id');
       query.student = { $in: students.map(s => s._id) };
     }
 
@@ -287,13 +287,17 @@ const getFees = async (req, res) => {
 
     const total = await FeeCollection.countDocuments(query);
     const fees = await FeeCollection.find(query)
-      .populate({ path: 'student', select: 'name admissionNumber rollNumber phone currentClass', populate: { path: 'currentClass', select: 'name section' } })
+      .populate({ path: 'student', select: 'name admissionNumber rollNumber phone currentClass status', populate: { path: 'currentClass', select: 'name section' } })
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(Number(limit));
 
-    // Hide records whose student was deleted (orphaned fee records).
-    const visible = fees.filter(f => f.student);
+    // Hide deleted students; hide transferred unless a specific studentId was requested
+    const visible = fees.filter(f => {
+      if (!f.student) return false;
+      if (!studentId && f.student.status === 'transferred') return false;
+      return true;
+    });
     res.json({ success: true, fees: visible, total: total - (fees.length - visible.length) });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
