@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, Pagination, SearchInput, PageLoader, EmptyState, StatCard, FormRow } from '../../components/ui';
 import { format } from 'date-fns';
+import { useYear } from '../../store/YearContext';
 
 // Purpose categories with their display labels and colors.
 const PURPOSES = [
@@ -66,6 +67,7 @@ function Pill({ meta }) {
 
 export default function Visits() {
   const qc = useQueryClient();
+  const { selectedYear, range } = useYear();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -90,14 +92,17 @@ export default function Visits() {
   const stats = statsData?.stats || {};
 
   const { data, isLoading } = useQuery({
-    queryKey: ['visits', page, search, statusFilter, purposeFilter, startDate, endDate, followUpOnly],
+    queryKey: ['visits', selectedYear, page, search, statusFilter, purposeFilter, startDate, endDate, followUpOnly],
     queryFn: () => {
       const params = new URLSearchParams({ page, limit: 20 });
       if (search) params.set('search', search);
       if (statusFilter) params.set('status', statusFilter);
       if (purposeFilter) params.set('purpose', purposeFilter);
+      // Use user-chosen dates if set; otherwise scope to the selected academic year
       if (startDate) params.set('startDate', startDate);
+      else params.set('startDate', range.startDate);
       if (endDate) params.set('endDate', endDate);
+      else params.set('endDate', range.endDate);
       if (followUpOnly) params.set('followUp', 'true');
       return api.get(`/visits?${params}`);
     },
