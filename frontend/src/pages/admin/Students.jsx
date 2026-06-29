@@ -1148,7 +1148,7 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit, onRejoin
     let entries = [];
     if (student.classHistory?.length) {
       entries = [...student.classHistory]
-        .sort((a, b) => parseInt(b.academicYear) - parseInt(a.academicYear))
+        .reverse()   // last-added entry is always the current class (promotion/rejoin preserves insertion order)
         .map(h => ({
           classId:     h.classId?._id || h.classId,
           className:   h.classId?.name  || h.className,
