@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, Pagination, SearchInput, PageLoader, EmptyState, StatCard, FormRow, Avatar } from '../../components/ui';
 import { format } from 'date-fns';
+import { useYear } from '../../store/YearContext';
 
 const REASONS = [
   { value: 'medical',         label: 'Medical',          color: '#dc2626', bg: '#fef2f2' },
@@ -41,6 +42,7 @@ const classLabel = (cls) => cls ? `${cls.name}${cls.section ? ' - ' + cls.sectio
 
 export default function OutPass() {
   const qc = useQueryClient();
+  const { selectedYear, range } = useYear();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -59,13 +61,16 @@ export default function OutPass() {
   const stats = statsData?.stats || {};
 
   const { data, isLoading } = useQuery({
-    queryKey: ['outpasses', page, search, statusFilter, startDate, endDate],
+    queryKey: ['outpasses', selectedYear, page, search, statusFilter, startDate, endDate],
     queryFn: () => {
       const params = new URLSearchParams({ page, limit: 20 });
       if (search) params.set('search', search);
       if (statusFilter) params.set('status', statusFilter);
+      // Use user-chosen dates if set; otherwise scope to the selected academic year
       if (startDate) params.set('startDate', startDate);
+      else params.set('startDate', range.startDate);
       if (endDate) params.set('endDate', endDate);
+      else params.set('endDate', range.endDate);
       return api.get(`/outpasses?${params}`);
     },
   });
