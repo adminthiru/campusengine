@@ -2873,10 +2873,7 @@ function TransferModal({ selected, students, onClose, onSuccess }) {
         try {
           const res = await api.get(`/fees?studentId=${stu._id}&limit=100`);
           const allFees = res.fees || [];
-          const pendingFees = allFees.filter(f => {
-            const net = (f.terms || []).reduce((s, t) => s + (t.amount || 0), 0);
-            return (f.paidAmount || 0) < net;
-          });
+          const pendingFees = allFees.filter(f => (f.pendingAmount || 0) > 0);
           result[stu._id] = { pendingFees, allFees };
         } catch { result[stu._id] = { pendingFees: [], allFees: [] }; }
       }));
@@ -2894,10 +2891,7 @@ function TransferModal({ selected, students, onClose, onSuccess }) {
     try {
       const res = await api.get(`/fees?studentId=${stuId}&limit=100`);
       const allFees = res.fees || [];
-      const pendingFees = allFees.filter(f => {
-        const net = (f.terms || []).reduce((s, t) => s + (t.amount || 0), 0);
-        return (f.paidAmount || 0) < net;
-      });
+      const pendingFees = allFees.filter(f => (f.pendingAmount || 0) > 0);
       setFeesData(d => ({ ...d, [stuId]: { pendingFees, allFees } }));
     } catch {}
   };
@@ -2956,10 +2950,7 @@ function TransferModal({ selected, students, onClose, onSuccess }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
             {selectedStudents.map(stu => {
               const data = feesData[stu._id] || {};
-              const totalPending = (data.pendingFees || []).reduce((s, f) => {
-                const net = (f.terms || []).reduce((a, t) => a + (t.amount || 0), 0);
-                return s + net - (f.paidAmount || 0);
-              }, 0);
+              const totalPending = (data.pendingFees || []).reduce((s, f) => s + (f.pendingAmount || 0), 0);
               const isPending = totalPending > 0;
               return (
                 <div key={stu._id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: isPending ? '#fefce8' : '#f0fdf4', borderRadius: 8, border: `1px solid ${isPending ? '#fde047' : '#86efac'}` }}>
@@ -2969,10 +2960,9 @@ function TransferModal({ selected, students, onClose, onSuccess }) {
                     <div style={{ fontSize: 12, color: '#6b7280' }}>{stu.currentClass?.name} {stu.currentClass?.section} · {stu.admissionNumber}</div>
                     {isPending && (
                       <div style={{ fontSize: 12, color: '#b45309', marginTop: 2 }}>
-                        {(data.pendingFees || []).map(f => {
-                          const net = (f.terms || []).reduce((a, t) => a + (t.amount || 0), 0);
-                          return <span key={f._id} style={{ marginRight: 8 }}>{f.academicYear}: {fmt(net - (f.paidAmount || 0))} pending</span>;
-                        })}
+                        {(data.pendingFees || []).map(f => (
+                          <span key={f._id} style={{ marginRight: 8 }}>{f.academicYear}: {fmt(f.pendingAmount)} pending</span>
+                        ))}
                       </div>
                     )}
                   </div>
