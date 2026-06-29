@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, CalendarDays, List, X, Settings2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Select as AntSelect, DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import api from '../../utils/api';
+import { useYear } from '../../store/YearContext';
 
 const TYPE_CONFIG = {
   holiday:  { label: 'Holiday',   color: '#ef4444', bg: '#fef2f2' },
@@ -33,9 +34,23 @@ function toInputDate(d) {
 export default function Calendar() {
   const qc = useQueryClient();
   const today = new Date();
-  const [year,  setYear]  = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth() + 1); // 1-based
+  const { selectedYear, startMonth, isCurrent } = useYear();
+
+  // Derive the display month to jump to when the selected year changes:
+  // current year → stay on today's month; past/future year → jump to AY start month.
+  const initialMonth = isCurrent ? today.getMonth() + 1 : startMonth;
+  const initialYear  = parseInt(selectedYear); // "2027-2028" → 2027
+
+  const [year,  setYear]  = useState(initialYear);
+  const [month, setMonth] = useState(initialMonth);
   const [view,  setView]  = useState('calendar'); // 'calendar' | 'list'
+
+  // Reset the displayed month whenever the header year selector changes.
+  useEffect(() => {
+    setYear(parseInt(selectedYear));
+    setMonth(isCurrent ? today.getMonth() + 1 : startMonth);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedYear]);
   const [modal, setModal] = useState(null); // null | { mode:'add'|'edit', event?, date? }
   const [form,  setForm]  = useState({});
   const [selectedDay, setSelectedDay] = useState(null);
