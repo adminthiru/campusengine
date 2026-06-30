@@ -1314,9 +1314,7 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit, onRejoin
               {student.transferHistory?.length > 0 && (
                 <button className="btn btn-secondary btn-sm" onClick={async () => {
                   try {
-                    const res = await fetch(`/api/students/${student._id}/transfer-certificate`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-                    if (!res.ok) throw new Error('Failed');
-                    const blob = await res.blob();
+                    const blob = await api.get(`/students/${student._id}/transfer-certificate`, { responseType: 'blob' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url; a.download = `TC_${student.admissionNumber || student._id}.pdf`;
@@ -2980,29 +2978,32 @@ function TransferModal({ selected, students, onClose, onSuccess }) {
     let successCount = 0;
     try {
       for (const stu of selectedStudents) {
-        const res = await fetch(`/api/students/${stu._id}/transfer`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reason }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ message: 'Transfer failed' }));
-          toast.error(`${stu.name}: ${err.message || 'Transfer failed'}`);
-          continue;
+        try {
+          const blob = await api.post(
+            `/students/${stu._id}/transfer`,
+            { reason },
+            { responseType: 'blob' }
+          );
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = `TC_${stu.admissionNumber || stu._id}.pdf`;
+          a.click(); URL.revokeObjectURL(url);
+          successCount++;
+        } catch (err) {
+          // err.response?.data is a Blob when responseType:'blob'; parse it back to JSON for the message
+          let msg = 'Transfer failed';
+          try {
+            const raw = err instanceof Blob ? err : err?.response?.data;
+            if (raw instanceof Blob) { const t = await raw.text(); msg = JSON.parse(t).message || msg; }
+            else if (err?.message) msg = err.message;
+          } catch {}
+          toast.error(`${stu.name}: ${msg}`);
         }
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `TC_${stu.admissionNumber || stu._id}.pdf`;
-        a.click(); URL.revokeObjectURL(url);
-        successCount++;
       }
       if (successCount > 0) {
         toast.success(`${successCount} student(s) transferred. TC downloaded.`);
         onSuccess();
       }
-    } catch (err) {
-      toast.error(err.message || 'Transfer failed');
     } finally {
       setTransferring(false);
     }
