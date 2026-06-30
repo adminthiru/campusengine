@@ -130,9 +130,8 @@ const deleteEmployee = async (req, res) => {
   try {
     const employee = await Employee.findOneAndDelete({ _id: req.params.id, school: req.user.school });
     if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
-    if (employee.user) {
-      await User.findByIdAndDelete(employee.user);
-    }
+    // Delete via employeeId index — doesn't depend on employee.user being set.
+    await User.deleteOne({ employeeId: employee._id, school: req.user.school });
     // Cascade: remove the employee's salary records so no orphans remain.
     await Salary.deleteMany({ school: req.user.school, employee: employee._id });
     res.json({ success: true, message: 'Employee deleted' });

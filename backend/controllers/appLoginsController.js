@@ -38,7 +38,10 @@ const listAppLogins = async (req, res) => {
         .select('name email admissionNumber isActive firstLogin lastLogin createdAt studentId')
         .populate({ path: 'studentId', select: 'currentClass', populate: { path: 'currentClass', select: 'name section' } })
         .sort({ createdAt: -1 });
-      const logins = users.map(u => ({
+      // Remove orphans — student doc was deleted but User wasn't cleaned up
+      const orphanIds = users.filter(u => !u.studentId).map(u => u._id);
+      if (orphanIds.length) User.deleteMany({ _id: { $in: orphanIds } }).catch(() => {});
+      const logins = users.filter(u => u.studentId).map(u => ({
         _id: u._id, name: u.name, identifier: identifierFor(u),
         isActive: u.isActive, firstLogin: u.firstLogin, lastLogin: u.lastLogin,
         classId: u.studentId?.currentClass?._id ? String(u.studentId.currentClass._id) : null,
@@ -52,27 +55,47 @@ const listAppLogins = async (req, res) => {
         .select('name email phone isActive firstLogin lastLogin createdAt parentId')
         .populate({ path: 'parentId', select: 'students', populate: { path: 'students', select: 'currentClass', populate: { path: 'currentClass', select: 'name section' } } })
         .sort({ createdAt: -1 });
-      const logins = users.map(u => {
-        const classes = (u.parentId?.students || []).map(s => s.currentClass).filter(Boolean);
-        const uniq = [...new Map(classes.map(c => [String(c._id), c])).values()];
-        return {
-          _id: u._id, name: u.name, identifier: identifierFor(u),
-          isActive: u.isActive, firstLogin: u.firstLogin, lastLogin: u.lastLogin,
-          classIds: uniq.map(c => String(c._id)),
-          className: uniq.map(classLabel).join(', '),
-        };
-      });
+      // Remove orphans — parent doc deleted or all children deleted
+      const orphanIds = users
+        .filter(u => !u.parentId || (u.parentId.students || []).length === 0)
+        .map(u => u._id);
+      if (orphanIds.length) {
+        User.deleteMany({ _id: { $in: orphanIds } }).catch(() => {});
+        Parent.updateMany({ user: { $in: orphanIds } }, { $unset: { user: 1 } }).catch(() => {});
+      }
+      const logins = users
+        .filter(u => u.parentId && (u.parentId.students || []).length > 0)
+        .map(u => {
+          const classes = (u.parentId?.students || []).map(s => s.currentClass).filter(Boolean);
+          const uniq = [...new Map(classes.map(c => [String(c._id), c])).values()];
+          return {
+            _id: u._id, name: u.name, identifier: identifierFor(u),
+            isActive: u.isActive, firstLogin: u.firstLogin, lastLogin: u.lastLogin,
+            classIds: uniq.map(c => String(c._id)),
+            className: uniq.map(classLabel).join(', '),
+          };
+        });
       return res.json({ success: true, logins });
     }
 
     if (type === 'teacher') {
       const users = await User.find({ ...base, role: { $in: STAFF_LIST_ROLES }, accessType: { $ne: 'custom' } })
-        .select('name email role isActive firstLogin lastLogin createdAt')
+        .select('name email role isActive firstLogin lastLogin createdAt employeeId')
         .sort({ createdAt: -1 });
-      const logins = users.map(u => ({
-        _id: u._id, name: u.name, identifier: identifierFor(u), role: u.role,
-        isActive: u.isActive, firstLogin: u.firstLogin, lastLogin: u.lastLogin,
-      }));
+      // Remove orphans — employee deleted but User wasn't cleaned up
+      const linkedEmpIds = users.map(u => u.employeeId).filter(Boolean);
+      const existingEmps = await Employee.find({ _id: { $in: linkedEmpIds } }).select('_id');
+      const existingEmpSet = new Set(existingEmps.map(e => String(e._id)));
+      const orphanIds = users
+        .filter(u => u.employeeId && !existingEmpSet.has(String(u.employeeId)))
+        .map(u => u._id);
+      if (orphanIds.length) User.deleteMany({ _id: { $in: orphanIds } }).catch(() => {});
+      const logins = users
+        .filter(u => !u.employeeId || existingEmpSet.has(String(u.employeeId)))
+        .map(u => ({
+          _id: u._id, name: u.name, identifier: identifierFor(u), role: u.role,
+          isActive: u.isActive, firstLogin: u.firstLogin, lastLogin: u.lastLogin,
+        }));
       return res.json({ success: true, logins });
     }
 

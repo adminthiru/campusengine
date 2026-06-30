@@ -329,14 +329,23 @@ const deleteStudent = async (req, res) => {
     if (!student) return res.status(404).json({ success: false, message: 'Not found' });
     // Close the gap left in the class roll sequence.
     if (student.currentClass) await renumberClassRolls(req.user.school, student.currentClass);
-    // Remove this student from all parent records
+    // Remove this student from all parent records, then delete logins for
+    // parents who now have no remaining children.
     if (student.guardians?.length) {
       await Parent.updateMany({ _id: { $in: student.guardians } }, { $pull: { students: student._id } });
+      const emptiedParents = await Parent.find({
+        _id: { $in: student.guardians }, students: { $size: 0 },
+      }).select('_id user');
+      if (emptiedParents.length) {
+        const emptyIds = emptiedParents.map(p => p._id);
+        await User.deleteMany({ parentId: { $in: emptyIds }, school: req.user.school });
+        await Parent.updateMany({ _id: { $in: emptyIds } }, { $unset: { user: 1 } });
+      }
     }
-    // Delete associated user account
-    if (student.user) {
-      await User.findByIdAndDelete(student.user);
-    }
+    // Delete the student's own login — use studentId index rather than the
+    // student.user field (which may be unset if the login was created before
+    // the user reference was stored on the student document).
+    await User.deleteOne({ studentId: student._id, school: req.user.school });
     // Cascade-delete the student's own records so nothing is left orphaned.
     const FeeCollection = require('../models/FeeCollection');
     const StudentLeave = require('../models/StudentLeave');
