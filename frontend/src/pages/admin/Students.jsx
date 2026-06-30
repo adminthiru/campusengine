@@ -1656,9 +1656,10 @@ function AttendanceTab({ student, classYear }) {
     setMonth(initCalMonth);
   }
 
-  const ayParam = classYear ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
+  const hasMultiplePeriods = (student.classHistory?.length || 0) > 1;
+  const ayParam = (classYear && hasMultiplePeriods) ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
   const { data: summaryData } = useQuery({
-    queryKey: ['student-att-summary-tab', student._id, classYear?.academicYear],
+    queryKey: ['student-att-summary-tab', student._id, hasMultiplePeriods ? classYear?.academicYear : 'all'],
     queryFn:  () => api.get(`/attendance/summary?studentId=${student._id}${ayParam}`),
     enabled:  !!student._id,
   });
@@ -1888,9 +1889,10 @@ function AttendanceTab({ student, classYear }) {
 function ExamResultsTab({ student, classYear }) {
   const [activeId, setActiveId] = useState(null);
 
-  const ayParam = classYear ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
+  const hasMultiplePeriods = (student.classHistory?.length || 0) > 1;
+  const ayParam = (classYear && hasMultiplePeriods) ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
   const { data, isLoading } = useQuery({
-    queryKey: ['student-exam-results', student._id, classYear?.academicYear],
+    queryKey: ['student-exam-results', student._id, hasMultiplePeriods ? classYear?.academicYear : 'all'],
     queryFn: () => api.get(`/exams/results?studentId=${student._id}${ayParam}`),
     enabled: !!student._id,
   });
@@ -2262,9 +2264,13 @@ function FeesTab({ student, classYear }) {
   const qc = useQueryClient();
   const [collectTarget, setCollectTarget] = useState(null);
 
-  const ayParam = classYear ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
+  // Only filter by academicYear when the student has multiple class periods (dropdown visible).
+  // For single-period students (same-class rejoin / new student), show all fee records so
+  // an accidental transfer+rejoin never appears to wipe historical data.
+  const hasMultiplePeriods = (student.classHistory?.length || 0) > 1;
+  const ayParam = (classYear && hasMultiplePeriods) ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
   const { data, isLoading } = useQuery({
-    queryKey: ['student-fees', student._id, classYear?.academicYear],
+    queryKey: ['student-fees', student._id, hasMultiplePeriods ? classYear?.academicYear : 'all'],
     queryFn: () => api.get(`/fees?studentId=${student._id}&limit=50${ayParam}`),
     enabled: !!student._id,
   });
