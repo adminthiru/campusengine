@@ -417,6 +417,51 @@ const promoteStudents = async (req, res) => {
     // Keep both source and destination class roll sequences alphabetical.
     for (const cid of affectedClasses) await renumberClassRolls(req.user.school, cid);
 
+    // Auto-apply the destination class fee structure to each promoted student.
+    // Find the fee template from any existing student in toClass for this year,
+    // then create/update the promoted student's fee record so the amounts match
+    // the new class — avoiding stale old-class fees showing in the new class list.
+    if (academicYear && results.length) {
+      const templateFee = await FeeCollection.findOne({
+        school: req.user.school,
+        academicYear,
+        student: { $nin: results },  // find a different student's record as template
+      }).where('student').in(
+        (await Student.find({ school: req.user.school, currentClass: toClassId, status: 'active', _id: { $nin: results } }).select('_id').lean()).map(s => s._id)
+      ).select('terms').lean();
+
+      if (templateFee?.terms?.length) {
+        const cloneTerms = (tmpl) => tmpl.map(t => {
+          const fb = (t.feeBreakdown || []).map(x => ({ type: x.type, amount: Number(x.amount) || 0 }));
+          const totalAmount = fb.reduce((a, b) => a + b.amount, 0);
+          const discAmt = Number(t.discount?.amount) || 0;
+          const netAmount = Math.max(0, totalAmount - discAmt);
+          return { name: t.name, feeBreakdown: fb, totalAmount, discount: { amount: discAmt, reason: t.discount?.reason || '' }, netAmount, paidAmount: 0, pendingAmount: netAmount, status: 'pending' };
+        });
+        for (const sid of results) {
+          let fee = await FeeCollection.findOne({ school: req.user.school, student: sid, academicYear });
+          if (!fee) {
+            fee = new FeeCollection({ school: req.user.school, student: sid, academicYear, terms: cloneTerms(templateFee.terms) });
+          } else {
+            // Replace terms with the new class structure (preserve paid amounts where term names match).
+            fee.terms = cloneTerms(templateFee.terms).map(newTerm => {
+              const existing = fee.terms.find(t => t.name === newTerm.name);
+              if (existing && existing.paidAmount > 0) {
+                newTerm.paidAmount = existing.paidAmount;
+                newTerm.pendingAmount = Math.max(0, newTerm.netAmount - existing.paidAmount);
+                newTerm.status = newTerm.pendingAmount <= 0 ? 'paid' : 'partial';
+              }
+              return newTerm;
+            });
+          }
+          const tots = fee.terms.reduce((a, t) => ({ total: a.total + t.totalAmount, net: a.net + t.netAmount, paid: a.paid + t.paidAmount, pending: a.pending + t.pendingAmount }), { total: 0, net: 0, paid: 0, pending: 0 });
+          fee.totalAmount = tots.total; fee.netAmount = tots.net; fee.paidAmount = tots.paid; fee.pendingAmount = tots.pending;
+          fee.status = tots.pending <= 0 ? 'paid' : tots.paid > 0 ? 'partial' : 'pending';
+          await fee.save();
+        }
+      }
+    }
+
     res.json({ success: true, message: `${results.length} students promoted`, count: results.length });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
