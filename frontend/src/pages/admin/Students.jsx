@@ -57,6 +57,7 @@ export default function Students() {
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('');
   const [showTransferred, setShowTransferred] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [editStudent, setEditStudent] = useState(null);
@@ -100,8 +101,8 @@ export default function Students() {
   const [busStop, setBusStop] = useState('');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['students', page, search, classFilter, showTransferred],
-    queryFn: () => api.get(`/students?page=${page}&limit=20&search=${search}&classId=${classFilter}${showTransferred ? '&status=transferred' : ''}`),
+    queryKey: ['students', page, search, classFilter, showTransferred, showInactive],
+    queryFn: () => api.get(`/students?page=${page}&limit=20&search=${search}&classId=${classFilter}${showTransferred ? '&status=transferred' : showInactive ? '&status=inactive' : ''}`),
     keepPreviousData: true
   });
 
@@ -367,7 +368,7 @@ export default function Students() {
       <div className="page-header">
         <div>
           <h1 className="text-24-semibold">Students</h1>
-          <p className="page-subtitle">{showTransferred ? `${total} transferred student${total !== 1 ? 's' : ''}` : `${total} students enrolled`}</p>
+          <p className="page-subtitle">{showTransferred ? `${total} transferred student${total !== 1 ? 's' : ''}` : showInactive ? `${total} inactive student${total !== 1 ? 's' : ''}` : `${total} students enrolled`}</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {selected.length > 0 && (() => {
@@ -420,8 +421,12 @@ export default function Students() {
           options={classes.map(c => ({ value: c._id, label: `${c.name}${c.section ? ` ${c.section}` : ''}` }))}
         />
         <button className={`btn btn-sm ${showTransferred ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => { setShowTransferred(v => !v); setPage(1); setSelected([]); }}>
+          onClick={() => { setShowTransferred(v => !v); setShowInactive(false); setPage(1); setSelected([]); }}>
           <ArrowLeft size={14} style={{ transform: 'rotate(180deg)' }} /> Transferred
+        </button>
+        <button className={`btn btn-sm ${showInactive ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => { setShowInactive(v => !v); setShowTransferred(false); setPage(1); setSelected([]); }}>
+          Inactive
         </button>
         {selected.length > 0 && (
           <button className="btn btn-danger btn-sm" onClick={() => setBulkDeleteConfirm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
