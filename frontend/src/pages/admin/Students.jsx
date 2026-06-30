@@ -1222,7 +1222,7 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit, onRejoin
   const attYear = classYear ? parseInt(classYear.academicYear) : now.getFullYear();
 
   const { data: attData } = useQuery({
-    queryKey: ['student-att-summary', student._id, classYear?.academicYear],
+    queryKey: ['student-att-summary', student._id, attMonth, attYear],
     queryFn: () => api.get(`/attendance/summary?studentId=${student._id}&month=${attMonth}&year=${attYear}`),
     enabled: !!student._id,
     staleTime: 0,
@@ -1657,10 +1657,9 @@ function AttendanceTab({ student, classYear }) {
     setMonth(initCalMonth);
   }
 
-  const ayParam = classYear ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
   const { data: summaryData } = useQuery({
-    queryKey: ['student-att-summary-tab', student._id, classYear?.academicYear],
-    queryFn:  () => api.get(`/attendance/summary?studentId=${student._id}${ayParam}`),
+    queryKey: ['student-att-summary-tab', student._id, month, year],
+    queryFn:  () => api.get(`/attendance/summary?studentId=${student._id}&month=${month}&year=${year}`),
     enabled:  !!student._id,
     staleTime: 0,
   });
