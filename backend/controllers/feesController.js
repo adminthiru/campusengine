@@ -704,22 +704,24 @@ const getFeesReport = async (req, res) => {
 // ── Sync: create fee records for class students who don't have one yet,
 // cloning their class's existing fee structure (template). ──────────────────
 async function computeUnsynced(schoolId, academicYear) {
-  const [fees, students] = await Promise.all([
+  const [fees, activeStudents, allStudents] = await Promise.all([
     FeeCollection.find({ school: schoolId, academicYear }).select('student terms').lean(),
     Student.find({ school: schoolId, status: 'active' }).select('_id name currentClass').lean(),
+    Student.find({ school: schoolId }).select('_id currentClass').lean(),
   ]);
   const feeStudentIds = new Set(fees.map(f => String(f.student)));
+  // Build classOf from ALL students so fee records belonging to students who
+  // later became inactive/transferred still contribute their class template.
   const classOf = {};
-  students.forEach(s => { classOf[String(s._id)] = s.currentClass ? String(s.currentClass) : null; });
+  allStudents.forEach(s => { classOf[String(s._id)] = s.currentClass ? String(s.currentClass) : null; });
   const templateByClass = {};
   for (const f of fees) {
     const cls = classOf[String(f.student)];
     if (cls && !templateByClass[cls] && f.terms?.length) templateByClass[cls] = f.terms;
   }
-  const unsynced = students.filter(s => {
-    const cls = s.currentClass ? String(s.currentClass) : null;
-    return cls && templateByClass[cls] && !feeStudentIds.has(String(s._id));
-  });
+  // Every active student without a fee record needs syncing; those whose class
+  // has no template yet will be skipped during the actual sync operation.
+  const unsynced = activeStudents.filter(s => s.currentClass && !feeStudentIds.has(String(s._id)));
   return { unsynced, templateByClass };
 }
 
@@ -797,16 +799,19 @@ const syncClassStudents = async (req, res) => {
     let academicYear = req.body.academicYear || req.query.academicYear;
     if (!academicYear) academicYear = await getAcademicYear(schoolId);
     const { unsynced, templateByClass } = await computeUnsynced(schoolId, academicYear);
-    let created = 0;
+    let created = 0, skipped = 0;
     for (const s of unsynced) {
       const terms = cloneTerms(templateByClass[String(s.currentClass)]);
-      if (!terms.length) continue;
+      if (!terms.length) { skipped++; continue; }
       const fee = new FeeCollection({ school: schoolId, student: s._id, academicYear, terms });
       recalcAggregates(fee);
       await fee.save();
       created++;
     }
-    res.json({ success: true, created, message: `Synced ${created} student${created !== 1 ? 's' : ''}` });
+    const msg = created
+      ? `Synced ${created} student${created !== 1 ? 's' : ''}${skipped ? ` (${skipped} skipped — apply a class fee structure first)` : ''}`
+      : `No records created — apply a class fee structure first`;
+    res.json({ success: true, created, skipped, message: msg });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
