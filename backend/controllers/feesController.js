@@ -23,6 +23,33 @@ const getAcademicYear = async (schoolId) => {
   return academicYearForDate(new Date(), sm, em);
 };
 
+// Resolve which students belonged to a class DURING a given academic year.
+// A promoted student's currentClass reflects only their latest year, so for a
+// past year we consult classHistory (one entry per year). Students without a
+// history entry for that year fall back to currentClass (current / un-promoted
+// case, and legacy students created before classHistory existed).
+const STUDENT_STATUS_FILTER = { $nin: ['transferred', 'inactive'] };
+async function classStudentIdsForYear(schoolId, classId, academicYear) {
+  if (!academicYear) {
+    const students = await Student.find({ school: schoolId, currentClass: classId, status: STUDENT_STATUS_FILTER }).select('_id').lean();
+    return students.map(s => s._id);
+  }
+  const [inHistory, currentMatch] = await Promise.all([
+    Student.find({
+      school: schoolId, status: STUDENT_STATUS_FILTER,
+      classHistory: { $elemMatch: { classId, academicYear } },
+    }).select('_id').lean(),
+    Student.find({
+      school: schoolId, status: STUDENT_STATUS_FILTER,
+      currentClass: classId, academicYear,
+      'classHistory.academicYear': { $ne: academicYear },
+    }).select('_id').lean(),
+  ]);
+  const map = new Map();
+  [...inHistory, ...currentMatch].forEach(s => map.set(String(s._id), s._id));
+  return [...map.values()];
+}
+
 // Build per-term objects from input array
 const buildTerms = (termsInput) =>
   (termsInput || []).map(t => {
@@ -268,8 +295,8 @@ const getFees = async (req, res) => {
     if (createdAfter) query.createdAt = { $gte: new Date(createdAfter) };
 
     if (classId) {
-      const students = await Student.find({ school: req.user.school, currentClass: classId, status: { $nin: ['transferred', 'inactive'] } }).select('_id');
-      query.student = { $in: students.map(s => s._id) };
+      const ids = await classStudentIdsForYear(req.user.school, classId, academicYear);
+      query.student = { $in: ids };
     }
 
     if (search && search.trim()) {
@@ -315,8 +342,8 @@ const getPaymentSummary = async (req, res) => {
     if (academicYear) query.academicYear = academicYear;
 
     if (classId) {
-      const students = await Student.find({ school: schoolId, currentClass: classId, status: { $nin: ['transferred', 'inactive'] } }).select('_id');
-      query.student = { $in: students.map(s => s._id) };
+      const ids = await classStudentIdsForYear(schoolId, classId, academicYear);
+      query.student = { $in: ids };
     }
     if (search && search.trim()) {
       const regex = new RegExp(escapeRegex(search.trim()), 'i');
@@ -678,8 +705,8 @@ const getFeesReport = async (req, res) => {
       const Class = require('../models/Class');
       const cls = await Class.findById(classId);
       className = cls ? `${cls.name}${cls.section ? ' ' + cls.section : ''}` : '';
-      const students = await Student.find({ school: req.user.school, currentClass: classId, status: { $nin: ['transferred', 'inactive'] } }).select('_id');
-      query.student = { $in: students.map(s => s._id) };
+      const ids = await classStudentIdsForYear(req.user.school, classId, academicYear);
+      query.student = { $in: ids };
     }
 
     const fees = await FeeCollection.find(query)
