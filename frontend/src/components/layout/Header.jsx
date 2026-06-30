@@ -226,16 +226,6 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
             </div>
           )}
 
-          {/* Language toggle */}
-          <button
-            onClick={toggleLanguage}
-            className="btn btn-secondary btn-sm"
-            style={{ gap: 6, padding: '6px 12px' }}
-            data-tooltip={i18n.language === 'en' ? 'Switch to Tamil' : 'Switch to English'}
-          >
-            <Globe size={14} />
-            {i18n.language === 'en' ? 'EN' : 'தமிழ்'}
-          </button>
 
           {/* Notifications */}
           <div ref={notifRef} style={{ position: 'relative' }}>
