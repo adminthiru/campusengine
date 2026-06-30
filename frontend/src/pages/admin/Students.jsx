@@ -1225,6 +1225,7 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit, onRejoin
     queryKey: ['student-att-summary', student._id, classYear?.academicYear],
     queryFn: () => api.get(`/attendance/summary?studentId=${student._id}&month=${attMonth}&year=${attYear}`),
     enabled: !!student._id,
+    staleTime: 0,
   });
   const attSummary = attData?.summary;
 
