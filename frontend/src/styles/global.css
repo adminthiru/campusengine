@@ -136,6 +136,7 @@ h1, h2, h3, h4, h5, h6 { font-family: 'Inter', sans-serif; font-weight: 700; lin
   flex: 1;
   min-width: 0;
   margin-left: var(--sidebar-width);
+  padding-top: var(--header-height);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -147,7 +148,6 @@ h1, h2, h3, h4, h5, h6 { font-family: 'Inter', sans-serif; font-weight: 700; lin
 
 .page-content {
   padding: 20px;
-  padding-top: calc(var(--header-height) + 4px);
   flex: 1;
 }
 
