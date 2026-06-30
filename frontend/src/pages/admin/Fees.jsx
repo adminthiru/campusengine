@@ -699,22 +699,41 @@ function ArrearModal({ student, beforeYear, onClose, onSuccess }) {
   const items = data?.items || [];
   const grandTotal = data?.total || 0;
 
-  // Per-year input state keyed by feeId: { amount, method }
+  // Per-year input state keyed by feeId: { amount, method, discount, reason }
   const [inputs, setInputs] = useState({});
   const [busyId, setBusyId] = useState(null);
 
-  const getInput = (it) => inputs[it.feeId] || { amount: String(it.pendingAmount), method: 'cash' };
+  const getInput = (it) => inputs[it.feeId] || { amount: String(it.pendingAmount), method: 'cash', discount: '', reason: '' };
   const setInput = (feeId, patch) => setInputs(p => ({ ...p, [feeId]: { ...(p[feeId] || {}), ...patch } }));
+
+  // Changing the discount auto-adjusts the amount to settle the remaining balance.
+  const setDiscount = (it, val) => {
+    const disc = Math.max(0, parseFloat(val) || 0);
+    setInput(it.feeId, { discount: val, amount: String(Math.max(0, it.pendingAmount - disc)) });
+  };
 
   const collectYear = async (it) => {
     const inp = getInput(it);
     const amt = Math.max(0, parseFloat(inp.amount) || 0);
-    if (amt <= 0) return toast.error('Enter an amount');
-    if (amt > it.pendingAmount) return toast.error(`Cannot exceed ₹${it.pendingAmount.toLocaleString('en-IN')}`);
+    const disc = Math.max(0, parseFloat(inp.discount) || 0);
+    if (disc > it.pendingAmount) return toast.error(`Discount cannot exceed ₹${it.pendingAmount.toLocaleString('en-IN')}`);
+    if (amt <= 0 && disc <= 0) return toast.error('Enter an amount or a discount');
+    if (amt > it.pendingAmount - disc) return toast.error(`Amount + discount cannot exceed ₹${it.pendingAmount.toLocaleString('en-IN')}`);
+    // Distribute the discount across this year's pending terms, in order.
+    const discList = [];
+    let remaining = disc;
+    for (const t of it.terms) {
+      if (remaining <= 0) break;
+      const give = Math.min(remaining, t.pendingAmount);
+      if (give > 0) discList.push({ termName: t.name, amount: give, reason: inp.reason || '' });
+      remaining -= give;
+    }
     setBusyId(it.feeId);
     try {
-      await api.post('/fees/collect', { feeId: it.feeId, amount: amt, method: inp.method || 'cash' });
-      toast.success(`₹${amt.toLocaleString('en-IN')} collected for ${it.className || it.academicYear}`);
+      await api.post('/fees/collect', { feeId: it.feeId, amount: amt, method: inp.method || 'cash', discounts: discList });
+      toast.success(amt > 0
+        ? `₹${amt.toLocaleString('en-IN')} collected for ${it.className || it.academicYear}${disc > 0 ? ` (₹${disc.toLocaleString('en-IN')} discount)` : ''}`
+        : `₹${disc.toLocaleString('en-IN')} discount applied for ${it.className || it.academicYear}`);
       qc.invalidateQueries(['student-arrears', student._id, beforeYear]);
       onSuccess?.();
     } catch (err) {
@@ -747,6 +766,7 @@ function ArrearModal({ student, beforeYear, onClose, onSuccess }) {
             {items.map(it => {
               const inp = getInput(it);
               const amt = Math.max(0, parseFloat(inp.amount) || 0);
+              const disc = Math.max(0, parseFloat(inp.discount) || 0);
               return (
                 <div key={it.feeId} style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
@@ -770,24 +790,38 @@ function ArrearModal({ student, beforeYear, onClose, onSuccess }) {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', padding: '10px 14px', borderTop: '1px solid #f1f5f9' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Amount (₹)</div>
-                      <input className="form-control no-spinner" type="number" min={1} max={it.pendingAmount}
-                        value={inp.amount} onWheel={e => e.currentTarget.blur()}
-                        onChange={e => setInput(it.feeId, { amount: e.target.value })}
-                        style={{ textAlign: 'right', fontWeight: 600 }} />
+                  <div style={{ padding: '10px 14px', borderTop: '1px solid #f1f5f9' }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Amount (₹)</div>
+                        <input className="form-control no-spinner" type="number" min={0} max={it.pendingAmount}
+                          value={inp.amount} onWheel={e => e.currentTarget.blur()}
+                          onChange={e => setInput(it.feeId, { amount: e.target.value })}
+                          style={{ textAlign: 'right', fontWeight: 600 }} />
+                      </div>
+                      <div style={{ width: 120 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Discount (₹)</div>
+                        <input className="form-control no-spinner" type="number" min={0} max={it.pendingAmount}
+                          value={inp.discount} onWheel={e => e.currentTarget.blur()}
+                          onChange={e => setDiscount(it, e.target.value)}
+                          placeholder="0" style={{ textAlign: 'right', fontWeight: 600, color: '#b45309' }} />
+                      </div>
+                      <div style={{ width: 140 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Method</div>
+                        <AntSelect style={{ width: '100%' }} value={inp.method || 'cash'}
+                          onChange={v => setInput(it.feeId, { method: v })}
+                          options={PAYMENT_METHODS} />
+                      </div>
+                      <button className="btn btn-success" disabled={busyId === it.feeId || (amt <= 0 && disc <= 0) || amt > it.pendingAmount - disc}
+                        onClick={() => collectYear(it)} style={{ whiteSpace: 'nowrap' }}>
+                        {busyId === it.feeId ? '…' : amt > 0 ? `Collect ₹${amt.toLocaleString('en-IN')}` : 'Apply Discount'}
+                      </button>
                     </div>
-                    <div style={{ width: 150 }}>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Method</div>
-                      <AntSelect style={{ width: '100%' }} value={inp.method || 'cash'}
-                        onChange={v => setInput(it.feeId, { method: v })}
-                        options={PAYMENT_METHODS} />
-                    </div>
-                    <button className="btn btn-success" disabled={busyId === it.feeId || amt <= 0 || amt > it.pendingAmount}
-                      onClick={() => collectYear(it)} style={{ whiteSpace: 'nowrap' }}>
-                      {busyId === it.feeId ? '…' : `Collect ₹${amt.toLocaleString('en-IN')}`}
-                    </button>
+                    {disc > 0 && (
+                      <input className="form-control" value={inp.reason || ''}
+                        onChange={e => setInput(it.feeId, { reason: e.target.value })}
+                        placeholder="Discount reason (optional)" style={{ marginTop: 8, fontSize: 13 }} />
+                    )}
                   </div>
                 </div>
               );
