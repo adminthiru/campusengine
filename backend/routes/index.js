@@ -463,6 +463,7 @@ router.get('/parent/my-children', protect, authorize('parent'), async (req, res)
     if (!req.user.parentId) return res.status(400).json({ success: false, message: 'No parent profile linked' });
     const students = await Student.find({
       school: req.user.school,
+      status: 'active',
       $or: [{ primaryGuardian: req.user.parentId }, { guardians: req.user.parentId }]
     })
       .populate('currentClass', 'name section')
@@ -1243,7 +1244,7 @@ router.get('/transport', protect, async (req, res) => {
     const routes = await Transport.find({ school: req.user.school }).sort({ routeNumber: 1 });
     // Count students via Student.transportRoute (the authoritative field)
     const studentCounts = await Student.aggregate([
-      { $match: { school: req.user.school, transportRoute: { $in: routes.map(r => r._id) }, status: { $ne: 'dropped' } } },
+      { $match: { school: req.user.school, transportRoute: { $in: routes.map(r => r._id) }, status: { $nin: ['dropped', 'transferred', 'inactive'] } } },
       { $group: { _id: '$transportRoute', count: { $sum: 1 } } }
     ]);
     const countMap = {};
@@ -1255,7 +1256,7 @@ router.get('/transport', protect, async (req, res) => {
 router.get('/transport/:id/students', protect, async (req, res) => {
   try {
     const students = await Student.find({
-      school: req.user.school, transportRoute: req.params.id, status: { $ne: 'dropped' }
+      school: req.user.school, transportRoute: req.params.id, status: { $nin: ['dropped', 'transferred', 'inactive'] }
     }).populate('currentClass', 'name section').select('name admissionNumber phone currentClass gender photo rollNumber busStop').sort({ name: 1 });
     res.json({ success: true, students });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -1268,7 +1269,7 @@ router.get('/transport/:id/students-pdf', protect, async (req, res) => {
     const route = await Transport.findOne({ _id: req.params.id, school: req.user.school });
     if (!route) return res.status(404).json({ success: false, message: 'Vehicle not found' });
     const students = await Student.find({
-      school: req.user.school, transportRoute: req.params.id, status: { $ne: 'dropped' }
+      school: req.user.school, transportRoute: req.params.id, status: { $nin: ['dropped', 'transferred', 'inactive'] }
     }).populate('currentClass', 'name section')
       .select('name rollNumber admissionNumber phone currentClass busStop')
       .sort({ name: 1 });
@@ -1696,7 +1697,7 @@ router.post('/homework/:id/notify', protect, checkSubscription, authorize('admin
       studentsToNotify = hw.students;
     } else {
       studentsToNotify = await Student.find({
-        school: req.user.school, currentClass: hw.class._id, status: { $ne: 'dropped' }
+        school: req.user.school, currentClass: hw.class._id, status: 'active'
       }).select('name guardians');
     }
     const dueStr = hw.dueDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });

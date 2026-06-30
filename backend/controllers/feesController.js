@@ -268,7 +268,7 @@ const getFees = async (req, res) => {
     if (createdAfter) query.createdAt = { $gte: new Date(createdAfter) };
 
     if (classId) {
-      const students = await Student.find({ school: req.user.school, currentClass: classId, status: { $ne: 'transferred' } }).select('_id');
+      const students = await Student.find({ school: req.user.school, currentClass: classId, status: { $nin: ['transferred', 'inactive'] } }).select('_id');
       query.student = { $in: students.map(s => s._id) };
     }
 
@@ -296,7 +296,7 @@ const getFees = async (req, res) => {
     // Hide deleted students; hide transferred unless a specific studentId was requested
     const visible = fees.filter(f => {
       if (!f.student) return false;
-      if (!studentId && f.student.status === 'transferred') return false;
+      if (!studentId && ['transferred', 'inactive'].includes(f.student.status)) return false;
       return true;
     });
     res.json({ success: true, fees: visible, total: total - (fees.length - visible.length) });
@@ -315,7 +315,7 @@ const getPaymentSummary = async (req, res) => {
     if (academicYear) query.academicYear = academicYear;
 
     if (classId) {
-      const students = await Student.find({ school: schoolId, currentClass: classId }).select('_id');
+      const students = await Student.find({ school: schoolId, currentClass: classId, status: { $nin: ['transferred', 'inactive'] } }).select('_id');
       query.student = { $in: students.map(s => s._id) };
     }
     if (search && search.trim()) {
@@ -678,7 +678,7 @@ const getFeesReport = async (req, res) => {
       const Class = require('../models/Class');
       const cls = await Class.findById(classId);
       className = cls ? `${cls.name}${cls.section ? ' ' + cls.section : ''}` : '';
-      const students = await Student.find({ school: req.user.school, currentClass: classId }).select('_id');
+      const students = await Student.find({ school: req.user.school, currentClass: classId, status: { $nin: ['transferred', 'inactive'] } }).select('_id');
       query.student = { $in: students.map(s => s._id) };
     }
 
