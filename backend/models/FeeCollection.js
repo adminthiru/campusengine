@@ -49,7 +49,9 @@ const feeCollectionSchema = new mongoose.Schema({
   payments: [{
     termName: String,
     amount: { type: Number, required: true },
-    method: { type: String, enum: ['cash', 'bank_transfer', 'online', 'cheque'], required: true },
+    // Built-in values: cash | bank_transfer | online | cheque. Schools may also
+    // add custom categories (e.g. a specific bank name), stored as free text.
+    method: { type: String, required: true },
     date: { type: Date, default: Date.now },
     transactionId: String,
     razorpayOrderId: String,

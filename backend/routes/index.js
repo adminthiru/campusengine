@@ -2007,6 +2007,20 @@ router.put('/school/expense-categories', protect, authorize('admin', 'correspond
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+// Save custom fee payment categories (batch — full list replaces the stored one)
+router.put('/school/payment-methods', protect, authorize('admin', 'correspondent', 'accountant'), async (req, res) => {
+  try {
+    const { methods } = req.body;
+    if (!Array.isArray(methods)) return res.status(400).json({ success: false, message: 'methods must be an array' });
+    // Trim, drop blanks/dupes, and never store the reserved built-in keys.
+    const reserved = new Set(['cash', 'bank_transfer', 'online', 'cheque']);
+    const clean = [...new Set(methods.map(m => String(m || '').trim()).filter(Boolean))]
+      .filter(m => !reserved.has(m.toLowerCase()));
+    const school = await School.findByIdAndUpdate(req.user.school, { paymentMethods: clean }, { returnDocument: 'after' });
+    res.json({ success: true, school });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 router.put('/school/inventory-categories', protect, authorize('admin', 'correspondent', 'principal'), async (req, res) => {
   try {
     const { categories } = req.body;

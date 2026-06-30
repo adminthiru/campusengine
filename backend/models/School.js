@@ -191,6 +191,9 @@ const schoolSchema = new mongoose.Schema({
     finePerDay: { type: Number, default: 2 }, // ₹ per day overdue
   },
   expenseCategories: { type: [String], default: [] },
+  // Custom fee payment categories (e.g. specific bank accounts) in addition to
+  // the built-in Cash / Bank Transfer / Cheque / Online methods.
+  paymentMethods: { type: [String], default: [] },
   inventoryCategories: { type: [String], default: [] },
   libraryCategories: { type: [String], default: [] },
   visitPurposes: { type: [String], default: [] },

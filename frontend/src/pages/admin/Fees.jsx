@@ -30,11 +30,18 @@ const classLabelForYear = (student, academicYear) => {
   return c?.name ? `${c.name}${c.section ? ' - ' + c.section : ''}` : '—';
 };
 
-const PAYMENT_METHODS = [
+const DEFAULT_PAYMENT_METHODS = [
   { value: 'cash',          label: 'Cash' },
   { value: 'bank_transfer', label: 'Bank Transfer' },
   { value: 'cheque',        label: 'Cheque' },
   { value: 'online',        label: 'Online (UPI/NEFT)' },
+];
+
+// Combine the built-in methods with the school's custom payment categories
+// (e.g. specific bank accounts). Custom entries store their label as the value.
+const buildPaymentMethods = (custom = []) => [
+  ...DEFAULT_PAYMENT_METHODS,
+  ...custom.filter(Boolean).map(m => ({ value: m, label: m })),
 ];
 
 export default function Fees() {
@@ -60,6 +67,9 @@ export default function Fees() {
 
   const { data: schoolData } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
   const feeTerms = schoolData?.school?.feeTerms || [];
+  const customMethods = schoolData?.school?.paymentMethods || [];
+  const paymentMethods = useMemo(() => buildPaymentMethods(customMethods), [customMethods]);
+  const [showMethodsModal, setShowMethodsModal] = useState(false);
 
   const { selectedYear } = useYear();
 
@@ -258,6 +268,9 @@ export default function Fees() {
               <RefreshCw size={16} /> {syncMutation.isPending ? 'Syncing…' : `Sync Students (${unsyncedCount})`}
             </button>
           )}
+          <button className="btn btn-secondary" onClick={() => setShowMethodsModal(true)}>
+            <Tag size={16} /> Add Payment Category
+          </button>
           <button className="btn btn-primary" onClick={openCreateModal}>
             <Plus size={16} /> Add / Edit Fee Record
           </button>
@@ -279,12 +292,12 @@ export default function Fees() {
                 onClick: ({ key }) => setMethodFilter(key),
                 items: [
                   { key: 'all', label: 'All Methods' },
-                  ...PAYMENT_METHODS.map(m => ({ key: m.value, label: `${m.label} · ₹${(methodTotals[m.value] || 0).toLocaleString('en-IN')}` })),
+                  ...paymentMethods.map(m => ({ key: m.value, label: `${m.label} · ₹${(methodTotals[m.value] || 0).toLocaleString('en-IN')}` })),
                 ],
               }}
             >
               <span className="text-14-regular" style={{ color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                {methodFilter === 'all' ? 'Collected (All Methods)' : `Collected · ${PAYMENT_METHODS.find(m => m.value === methodFilter)?.label}`}
+                {methodFilter === 'all' ? 'Collected (All Methods)' : `Collected · ${paymentMethods.find(m => m.value === methodFilter)?.label || methodFilter}`}
                 <ChevronDown size={14} />
               </span>
             </Dropdown>
@@ -456,10 +469,20 @@ export default function Fees() {
         </form>
       </Modal>
 
+      {/* Manage custom payment categories */}
+      {showMethodsModal && (
+        <PaymentMethodsModal
+          methods={customMethods}
+          onClose={() => setShowMethodsModal(false)}
+          onSuccess={() => { qc.invalidateQueries(['school']); setShowMethodsModal(false); }}
+        />
+      )}
+
       {/* Collect Payment Modal */}
       {showCollect && (
         <CollectPaymentModal
           fee={showCollect}
+          methods={paymentMethods}
           onClose={() => setShowCollect(null)}
           onSuccess={() => { qc.invalidateQueries(['fees']); setShowCollect(null); }}
         />
@@ -470,6 +493,7 @@ export default function Fees() {
         <ArrearModal
           student={arrearTarget}
           beforeYear={selectedYear}
+          methods={paymentMethods}
           onClose={() => setArrearTarget(null)}
           onSuccess={() => { qc.invalidateQueries(['fees']); qc.invalidateQueries(['fees-arrears-summary']); qc.invalidateQueries(['fees-payment-summary']); }}
         />
@@ -687,10 +711,91 @@ function FeeItemsEditor({ items, onChange, readonlyTypes = false }) {
   );
 }
 
+// Manage custom payment categories (e.g. specific bank accounts). The built-in
+// Cash / Bank Transfer / Cheque / Online methods are always present and shown
+// as locked; only custom entries can be added or removed.
+function PaymentMethodsModal({ methods, onClose, onSuccess }) {
+  const [list, setList] = useState(methods || []);
+  const [input, setInput] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const add = () => {
+    const v = input.trim();
+    if (!v) return;
+    if (DEFAULT_PAYMENT_METHODS.some(m => m.label.toLowerCase() === v.toLowerCase() || m.value.toLowerCase() === v.toLowerCase()))
+      return toast.error('That is a built-in method');
+    if (list.some(m => m.toLowerCase() === v.toLowerCase())) return toast.error('Already added');
+    setList(p => [...p, v]);
+    setInput('');
+  };
+  const remove = (m) => setList(p => p.filter(x => x !== m));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.put('/school/payment-methods', { methods: list });
+      toast.success('Payment categories saved');
+      onSuccess();
+    } catch (err) {
+      toast.error(err.message || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Payment Categories"
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+      </>}>
+      <p className="text-13-regular" style={{ color: 'var(--text-secondary)', marginBottom: 14 }}>
+        Add your own payment categories (e.g. a specific bank account) to track how much was collected via each. Built-in methods are always available.
+      </p>
+
+      <div style={{ marginBottom: 16 }}>
+        <label className="form-label">Built-in</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {DEFAULT_PAYMENT_METHODS.map(m => (
+            <span key={m.value} style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 20, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0' }}>
+              {m.label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Custom Categories</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input className="form-control" value={input} onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+            placeholder="e.g. HDFC Bank A/c, SBI Current A/c" />
+          <button className="btn btn-secondary" onClick={add} disabled={!input.trim()}><Plus size={15} /> Add</button>
+        </div>
+      </div>
+
+      {list.length > 0 ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+          {list.map(m => (
+            <span key={m} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '4px 6px 4px 12px', borderRadius: 20, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+              {m}
+              <button onClick={() => remove(m)} style={{ display: 'inline-flex', border: 'none', background: 'none', cursor: 'pointer', color: '#1d4ed8', padding: 0 }} title="Remove">
+                <X size={14} />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-12-regular" style={{ color: 'var(--text-muted)', marginTop: 4 }}>No custom categories yet.</p>
+      )}
+    </Modal>
+  );
+}
+
 // Collect arrears: prior-year pending fees shown class/year-wise. Each year can
 // be collected independently (amount distributed across that year's pending
 // terms by the backend's "pay all" logic).
-function ArrearModal({ student, beforeYear, onClose, onSuccess }) {
+function ArrearModal({ student, beforeYear, methods = DEFAULT_PAYMENT_METHODS, onClose, onSuccess }) {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['student-arrears', student._id, beforeYear],
@@ -810,7 +915,7 @@ function ArrearModal({ student, beforeYear, onClose, onSuccess }) {
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Method</div>
                         <AntSelect style={{ width: '100%' }} value={inp.method || 'cash'}
                           onChange={v => setInput(it.feeId, { method: v })}
-                          options={PAYMENT_METHODS} />
+                          options={methods} />
                       </div>
                       <button className="btn btn-success" disabled={busyId === it.feeId || (amt <= 0 && disc <= 0) || amt > it.pendingAmount - disc}
                         onClick={() => collectYear(it)} style={{ whiteSpace: 'nowrap' }}>
@@ -833,7 +938,7 @@ function ArrearModal({ student, beforeYear, onClose, onSuccess }) {
   );
 }
 
-function CollectPaymentModal({ fee, onClose, onSuccess }) {
+function CollectPaymentModal({ fee, methods = DEFAULT_PAYMENT_METHODS, onClose, onSuccess }) {
   const pendingTerms = (fee.terms || []).filter(t => t.pendingAmount > 0);
   const [selectedTerm, setSelectedTerm] = useState(pendingTerms.length === 1 ? pendingTerms[0].name : 'all');
   const [method, setMethod] = useState('cash');
@@ -1055,7 +1160,7 @@ function CollectPaymentModal({ fee, onClose, onSuccess }) {
           style={{ width: '100%' }}
           value={method}
           onChange={val => setMethod(val)}
-          options={PAYMENT_METHODS}
+          options={methods}
         />
       </div>
     </Modal>
