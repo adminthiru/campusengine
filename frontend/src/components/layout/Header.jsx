@@ -348,8 +348,7 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
                   { label: 'My Profile', path: '/settings/profile' },
                   { label: 'Change Password', path: '/settings/password' },
                   ...(user?.role !== 'super_admin' ? [{ label: 'Subscription', path: '/settings/subscription' }] : []),
-                  { label: 'School Settings', path: '/settings', skip: ['student', 'parent', 'maintenance', 'teacher'].includes(user?.role) },
-                ].filter(i => !i.skip).map(item => (
+                ].map(item => (
                   <button key={item.path} onClick={() => { navigate(item.path); setProfileOpen(false); }}
                     className="text-14-regular" style={{ width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', color: 'var(--text-primary)' }}
                     onMouseEnter={e => e.target.style.background = '#f8fafc'}
