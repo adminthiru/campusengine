@@ -1229,6 +1229,18 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit, onRejoin
   });
   const attSummary = attData?.summary;
 
+  // Working days from the canonical endpoint (same as Attendance module header)
+  const headerClassId = student.currentClass?._id || student.currentClass;
+  const { data: attWdData } = useQuery({
+    queryKey: ['working-days', attMonth, attYear, String(headerClassId || '')],
+    queryFn: () => api.get(`/attendance/working-days?month=${attMonth}&year=${attYear}${headerClassId ? '&classId=' + headerClassId : ''}`),
+    enabled: !!student._id,
+    staleTime: 0,
+  });
+  const attWorkingDays = attWdData?.workingDays ?? attSummary?.workingDays ?? 0;
+  const attPresent     = attSummary?.present ?? 0;
+  const attPct         = attWorkingDays ? Math.min(100, Math.round((attPresent / attWorkingDays) * 100)) : 0;
+
   // Fetch all fees once to know which years have a pending balance
   const { data: allFeesData } = useQuery({
     queryKey: ['student-fees-all', student._id],
@@ -1381,8 +1393,8 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit, onRejoin
           </div>
 
           {/* Attendance circle */}
-          {attSummary && (
-            <AttendanceCircle percentage={attSummary.percentage} present={attSummary.present} total={attSummary.total} />
+          {(attSummary || attWdData) && (
+            <AttendanceCircle percentage={attPct} present={attPresent} total={attWorkingDays} />
           )}
 
         </div>
@@ -1663,7 +1675,24 @@ function AttendanceTab({ student, classYear }) {
     enabled:  !!student._id,
     staleTime: 0,
   });
-  const overall = summaryData?.summary;
+
+  // Working days from the canonical endpoint so TOTAL DAYS matches the Attendance module
+  const tabClassId = student.currentClass?._id || student.currentClass;
+  const { data: tabWdData } = useQuery({
+    queryKey: ['working-days', month, year, String(tabClassId || '')],
+    queryFn:  () => api.get(`/attendance/working-days?month=${month}&year=${year}${tabClassId ? '&classId=' + tabClassId : ''}`),
+    enabled:  !!student._id,
+    staleTime: 0,
+  });
+
+  const tabWd = tabWdData?.workingDays ?? summaryData?.summary?.workingDays ?? 0;
+  const s     = summaryData?.summary;
+  const overall = s ? {
+    ...s,
+    total:      tabWd,
+    workingDays: tabWd,
+    percentage: tabWd ? Math.min(100, Math.round(((s.present + (s.half_day ?? 0) * 0.5) / tabWd) * 100)) : 0,
+  } : null;
 
   const { data: recData, isLoading } = useQuery({
     queryKey: ['student-att-records', student._id, month, year],
