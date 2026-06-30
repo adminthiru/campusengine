@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { Select as AntSelect, Dropdown } from 'antd';
-import { Plus, Download, MessageSquare, CreditCard, IndianRupee, Trash2, Edit2, Users, User, RotateCcw, Tag, RefreshCw, X, ChevronDown } from 'lucide-react';
+import { Plus, Download, MessageSquare, CreditCard, IndianRupee, Trash2, Edit2, Users, User, RotateCcw, Tag, RefreshCw, X, ChevronDown, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useYear } from '../../store/YearContext';
@@ -52,6 +52,8 @@ export default function Fees() {
   const [clearDiscTarget, setClearDiscTarget] = useState(null); // { feeId, termName, amount }
   const [selected, setSelected] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [arrearOnly, setArrearOnly] = useState(false);
+  const [arrearTarget, setArrearTarget] = useState(null); // student for the arrear popup
 
   const { data: classData } = useQuery({ queryKey: ['classes'], queryFn: () => api.get('/classes') });
   const classes = classData?.classes || [];
@@ -62,11 +64,19 @@ export default function Fees() {
   const { selectedYear } = useYear();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['fees', page, statusFilter, classFilter, search, selectedYear],
-    queryFn: () => api.get(`/fees?page=${page}&limit=20&status=${statusFilter}&classId=${classFilter}&search=${encodeURIComponent(search)}&academicYear=${encodeURIComponent(selectedYear)}`)
+    queryKey: ['fees', page, statusFilter, classFilter, search, selectedYear, arrearOnly],
+    queryFn: () => api.get(`/fees?page=${page}&limit=20&status=${statusFilter}&classId=${classFilter}&search=${encodeURIComponent(search)}&academicYear=${encodeURIComponent(selectedYear)}${arrearOnly ? '&arrearOnly=true' : ''}`)
   });
   const fees = data?.fees || [];
   const total = data?.total || 0;
+
+  // Map of studentId → prior-year arrear info { total, years }. Drives the
+  // "Collect Arrear" button per row and the arrear filter chip.
+  const { data: arrearsData } = useQuery({
+    queryKey: ['fees-arrears-summary', selectedYear],
+    queryFn: () => api.get(`/fees/arrears-summary?academicYear=${encodeURIComponent(selectedYear)}`),
+  });
+  const arrearsMap = arrearsData?.arrears || {};
 
   // Amount collected per payment method (across all matching records).
   const [methodFilter, setMethodFilter] = useState('all');
@@ -292,6 +302,14 @@ export default function Fees() {
         <div style={{ minWidth: 260 }}>
           <SearchInput value={search} onChange={v => { setSearch(v); setPage(1); }} placeholder="Search by student name or admission no..." />
         </div>
+        <button
+          className={`btn btn-sm ${arrearOnly ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => { setArrearOnly(v => !v); setPage(1); }}
+          style={arrearOnly ? undefined : { color: '#b45309', borderColor: '#fcd34d' }}
+          title="Show only students carrying fees from previous years"
+        >
+          <AlertTriangle size={14} /> Arrears
+        </button>
         <AntSelect
           style={{ minWidth: 160 }}
           value={classFilter || undefined}
@@ -374,6 +392,13 @@ export default function Fees() {
                         {fee.pendingAmount > 0 && (
                           <button className="btn btn-success btn-sm" onClick={() => setShowCollect(fee)} style={{ padding: '4px 12px', fontSize: 12 }}>Collect Fee</button>
                         )}
+                        {arrearsMap[fee.student?._id] && (
+                          <button className="btn btn-sm" onClick={() => setArrearTarget(fee.student)}
+                            style={{ padding: '4px 12px', fontSize: 12, background: '#fffbeb', color: '#b45309', border: '1px solid #fcd34d', fontWeight: 600, whiteSpace: 'nowrap' }}
+                            title={`Arrears from ${arrearsMap[fee.student._id].years} previous year(s): ₹${(arrearsMap[fee.student._id].total || 0).toLocaleString('en-IN')}`}>
+                            <AlertTriangle size={13} /> Collect Arrear
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -437,6 +462,16 @@ export default function Fees() {
           fee={showCollect}
           onClose={() => setShowCollect(null)}
           onSuccess={() => { qc.invalidateQueries(['fees']); setShowCollect(null); }}
+        />
+      )}
+
+      {/* Collect Arrear Modal — prior-year pending fees, class-wise */}
+      {arrearTarget && (
+        <ArrearModal
+          student={arrearTarget}
+          beforeYear={selectedYear}
+          onClose={() => setArrearTarget(null)}
+          onSuccess={() => { qc.invalidateQueries(['fees']); qc.invalidateQueries(['fees-arrears-summary']); qc.invalidateQueries(['fees-payment-summary']); }}
         />
       )}
 
@@ -649,6 +684,118 @@ function FeeItemsEditor({ items, onChange, readonlyTypes = false }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// Collect arrears: prior-year pending fees shown class/year-wise. Each year can
+// be collected independently (amount distributed across that year's pending
+// terms by the backend's "pay all" logic).
+function ArrearModal({ student, beforeYear, onClose, onSuccess }) {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ['student-arrears', student._id, beforeYear],
+    queryFn: () => api.get(`/fees/arrears/${student._id}?beforeYear=${encodeURIComponent(beforeYear)}`),
+  });
+  const items = data?.items || [];
+  const grandTotal = data?.total || 0;
+
+  // Per-year input state keyed by feeId: { amount, method }
+  const [inputs, setInputs] = useState({});
+  const [busyId, setBusyId] = useState(null);
+
+  const getInput = (it) => inputs[it.feeId] || { amount: String(it.pendingAmount), method: 'cash' };
+  const setInput = (feeId, patch) => setInputs(p => ({ ...p, [feeId]: { ...(p[feeId] || {}), ...patch } }));
+
+  const collectYear = async (it) => {
+    const inp = getInput(it);
+    const amt = Math.max(0, parseFloat(inp.amount) || 0);
+    if (amt <= 0) return toast.error('Enter an amount');
+    if (amt > it.pendingAmount) return toast.error(`Cannot exceed ₹${it.pendingAmount.toLocaleString('en-IN')}`);
+    setBusyId(it.feeId);
+    try {
+      await api.post('/fees/collect', { feeId: it.feeId, amount: amt, method: inp.method || 'cash' });
+      toast.success(`₹${amt.toLocaleString('en-IN')} collected for ${it.className || it.academicYear}`);
+      qc.invalidateQueries(['student-arrears', student._id, beforeYear]);
+      onSuccess?.();
+    } catch (err) {
+      toast.error(err.message || 'Failed to collect');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Collect Arrears" size="lg"
+      footer={<button className="btn btn-secondary" onClick={onClose}>Close</button>}>
+      <div style={{ marginBottom: 14 }}>
+        <div className="text-14-semibold">{data?.student?.name || student.name}</div>
+        <div className="text-13-regular" style={{ color: 'var(--text-muted)' }}>
+          {data?.student?.admissionNumber || student.admissionNumber} · Pending from previous years
+        </div>
+      </div>
+
+      {isLoading ? <PageLoader /> : items.length === 0 ? (
+        <EmptyState icon={CreditCard} message="No arrears found." />
+      ) : (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 10, padding: '10px 14px', marginBottom: 14 }}>
+            <span className="text-13-medium" style={{ color: '#92400e' }}>Total Arrears</span>
+            <span style={{ fontSize: 16, fontWeight: 700, color: '#b45309' }}>₹{grandTotal.toLocaleString('en-IN')}</span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {items.map(it => {
+              const inp = getInput(it);
+              const amt = Math.max(0, parseFloat(inp.amount) || 0);
+              return (
+                <div key={it.feeId} style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
+                    <div>
+                      <div className="text-14-semibold">{it.className || '—'}</div>
+                      <div className="text-12-regular" style={{ color: 'var(--text-muted)' }}>{it.academicYear}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Pending</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: '#ef4444' }}>₹{it.pendingAmount.toLocaleString('en-IN')}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ padding: '8px 14px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                      {it.terms.map(t => (
+                        <span key={t.name} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, fontWeight: 600, background: '#fee2e2', color: '#dc2626' }}>
+                          {t.name}: ₹{t.pendingAmount.toLocaleString('en-IN')}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', padding: '10px 14px', borderTop: '1px solid #f1f5f9' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Amount (₹)</div>
+                      <input className="form-control no-spinner" type="number" min={1} max={it.pendingAmount}
+                        value={inp.amount} onWheel={e => e.currentTarget.blur()}
+                        onChange={e => setInput(it.feeId, { amount: e.target.value })}
+                        style={{ textAlign: 'right', fontWeight: 600 }} />
+                    </div>
+                    <div style={{ width: 150 }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Method</div>
+                      <AntSelect style={{ width: '100%' }} value={inp.method || 'cash'}
+                        onChange={v => setInput(it.feeId, { method: v })}
+                        options={PAYMENT_METHODS} />
+                    </div>
+                    <button className="btn btn-success" disabled={busyId === it.feeId || amt <= 0 || amt > it.pendingAmount}
+                      onClick={() => collectYear(it)} style={{ whiteSpace: 'nowrap' }}>
+                      {busyId === it.feeId ? '…' : `Collect ₹${amt.toLocaleString('en-IN')}`}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </Modal>
   );
 }
 

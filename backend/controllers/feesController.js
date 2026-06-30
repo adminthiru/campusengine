@@ -287,7 +287,7 @@ const verifyRazorpayPayment = async (req, res) => {
 // Get fee records
 const getFees = async (req, res) => {
   try {
-    const { studentId, classId, status, academicYear, page = 1, limit = 20, search, createdAfter } = req.query;
+    const { studentId, classId, status, academicYear, page = 1, limit = 20, search, createdAfter, arrearOnly } = req.query;
     const query = { school: req.user.school };
     if (studentId) query.student = studentId;
     if (status) query.status = status;
@@ -313,6 +313,20 @@ const getFees = async (req, res) => {
       }
     }
 
+    // Arrear filter: limit to students who carry pending fees from a PRIOR
+    // academic year (relative to the selected year).
+    if (arrearOnly === 'true' && academicYear) {
+      const arrearStudentIds = await FeeCollection.find({
+        school: req.user.school, academicYear: { $lt: academicYear }, pendingAmount: { $gt: 0 },
+      }).distinct('student');
+      const arrearSet = new Set(arrearStudentIds.map(id => String(id)));
+      if (query.student?.$in) {
+        query.student.$in = query.student.$in.filter(id => arrearSet.has(String(id)));
+      } else {
+        query.student = { $in: arrearStudentIds };
+      }
+    }
+
     const total = await FeeCollection.countDocuments(query);
     const fees = await FeeCollection.find(query)
       .populate({ path: 'student', select: 'name admissionNumber rollNumber phone currentClass status classHistory', populate: { path: 'currentClass', select: 'name section' } })
@@ -330,6 +344,69 @@ const getFees = async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
+};
+
+// ── Arrears: pending fees carried over from PRIOR academic years ─────────────
+// Summary map { studentId: { total, years } } for every student who has any
+// pending fee in a year before the selected one. Drives the "Collect Arrear"
+// button + the arrear filter in the list.
+const getArrearsSummary = async (req, res) => {
+  try {
+    const { academicYear } = req.query;
+    if (!academicYear) return res.json({ success: true, arrears: {} });
+    const fees = await FeeCollection.find({
+      school: req.user.school,
+      academicYear: { $lt: academicYear },
+      pendingAmount: { $gt: 0 },
+    }).select('student academicYear pendingAmount').lean();
+    const map = {};
+    for (const f of fees) {
+      const sid = String(f.student);
+      if (!map[sid]) map[sid] = { total: 0, years: new Set() };
+      map[sid].total += f.pendingAmount || 0;
+      map[sid].years.add(f.academicYear);
+    }
+    const arrears = {};
+    for (const [sid, v] of Object.entries(map)) arrears[sid] = { total: v.total, years: v.years.size };
+    res.json({ success: true, arrears });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+};
+
+// Detailed class-wise arrear breakdown for one student: every prior-year fee
+// record with a pending balance, labelled with the class the student was in
+// that year (from classHistory).
+const getStudentArrears = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { beforeYear } = req.query;
+    const schoolId = req.user.school;
+    const q = { school: schoolId, student: studentId, pendingAmount: { $gt: 0 } };
+    if (beforeYear) q.academicYear = { $lt: beforeYear };
+    const [fees, student] = await Promise.all([
+      FeeCollection.find(q).sort({ academicYear: 1 }).lean(),
+      Student.findById(studentId).select('name admissionNumber classHistory currentClass')
+        .populate('currentClass', 'name section').lean(),
+    ]);
+    const labelFor = (ay) => {
+      const h = (student?.classHistory || []).find(x => x.academicYear === ay);
+      if (h?.className) return `${h.className}${h.section ? ' - ' + h.section : ''}`;
+      const c = student?.currentClass;
+      return c?.name ? `${c.name}${c.section ? ' - ' + c.section : ''}` : '';
+    };
+    const items = fees.map(f => ({
+      feeId: f._id,
+      academicYear: f.academicYear,
+      className: labelFor(f.academicYear),
+      netAmount: f.netAmount || 0,
+      paidAmount: f.paidAmount || 0,
+      pendingAmount: f.pendingAmount || 0,
+      terms: (f.terms || []).filter(t => (t.pendingAmount || 0) > 0).map(t => ({
+        name: t.name, netAmount: t.netAmount || 0, paidAmount: t.paidAmount || 0, pendingAmount: t.pendingAmount || 0,
+      })),
+    }));
+    const total = items.reduce((s, i) => s + i.pendingAmount, 0);
+    res.json({ success: true, student: { name: student?.name, admissionNumber: student?.admissionNumber }, items, total });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
 // Amount collected per payment method (across ALL matching records, not just a page)
@@ -842,4 +919,4 @@ const syncClassStudents = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
-module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, clearTermDiscount, createRazorpayOrder, verifyRazorpayPayment, getFees, getPaymentSummary, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm, getUnsyncedCount, syncClassStudents, applyClassFeeStructure };
+module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, clearTermDiscount, createRazorpayOrder, verifyRazorpayPayment, getFees, getPaymentSummary, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm, getUnsyncedCount, syncClassStudents, applyClassFeeStructure, getArrearsSummary, getStudentArrears };

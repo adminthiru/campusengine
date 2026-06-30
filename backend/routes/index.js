@@ -1018,6 +1018,8 @@ router.get('/fees', protect, checkSubscription, feesCtrl.getFees);
 router.get('/fees/payment-summary', protect, checkSubscription, feesCtrl.getPaymentSummary);
 router.get('/fees/report', protect, checkSubscription, feesCtrl.getFeesReport);
 router.get('/fees/unsynced-count', protect, checkSubscription, feesCtrl.getUnsyncedCount);
+router.get('/fees/arrears-summary', protect, checkSubscription, feesCtrl.getArrearsSummary);
+router.get('/fees/arrears/:studentId', protect, checkSubscription, feesCtrl.getStudentArrears);
 router.post('/fees/sync', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.syncClassStudents);
 router.post('/fees/apply-structure', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.applyClassFeeStructure);
 router.post('/fees', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), feesCtrl.createFeeRecord);
