@@ -1657,12 +1657,12 @@ function AttendanceTab({ student, classYear }) {
     setMonth(initCalMonth);
   }
 
-  const hasMultiplePeriods = (student.classHistory?.length || 0) > 1;
-  const ayParam = (classYear && hasMultiplePeriods) ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
+  const ayParam = classYear ? `&academicYear=${encodeURIComponent(classYear.academicYear)}` : '';
   const { data: summaryData } = useQuery({
-    queryKey: ['student-att-summary-tab', student._id, hasMultiplePeriods ? classYear?.academicYear : 'all'],
+    queryKey: ['student-att-summary-tab', student._id, classYear?.academicYear],
     queryFn:  () => api.get(`/attendance/summary?studentId=${student._id}${ayParam}`),
     enabled:  !!student._id,
+    staleTime: 0,
   });
   const overall = summaryData?.summary;
 
