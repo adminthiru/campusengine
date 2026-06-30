@@ -286,14 +286,16 @@ const getStudentAttendanceSummary = async (req, res) => {
       }
     });
 
-    // Total days = calendar working days up to yesterday for the current month
-    // (today's attendance may not have been recorded yet, so excluding today
-    // prevents the denominator from running ahead of actual marked days).
+    // For month-specific queries the caller wants the full month's working days
+    // (same value the Attendance module shows in its header). For year-spanning
+    // queries, cap the current month at yesterday so unrecorded today doesn't
+    // inflate the denominator.
+    const isMonthMode = !!(month && year);
     const todayDate = new Date();
     const todayY = todayDate.getFullYear(), todayM = todayDate.getMonth() + 1, todayD = todayDate.getDate();
     let workingDays = 0;
     for (const { y, m } of monthsToCount) {
-      const maxDay = (y === todayY && m === todayM) ? todayD - 1 : null;
+      const maxDay = (!isMonthMode && y === todayY && m === todayM) ? todayD - 1 : null;
       const r = await getWorkingDaysForMonth(schoolId, y, m, swd, satSchedule, maxDay);
       workingDays += r.workingDays;
     }
