@@ -315,7 +315,7 @@ const getFees = async (req, res) => {
 
     const total = await FeeCollection.countDocuments(query);
     const fees = await FeeCollection.find(query)
-      .populate({ path: 'student', select: 'name admissionNumber rollNumber phone currentClass status', populate: { path: 'currentClass', select: 'name section' } })
+      .populate({ path: 'student', select: 'name admissionNumber rollNumber phone currentClass status classHistory', populate: { path: 'currentClass', select: 'name section' } })
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(Number(limit));

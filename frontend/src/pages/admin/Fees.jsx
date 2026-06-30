@@ -20,6 +20,16 @@ const FEE_COLS = [
 
 const emptyItem = () => ({ type: '', amount: '' });
 
+// Class label for the row: show the class the student was in DURING the fee's
+// academic year (from classHistory), not their current class — a promoted
+// student's currentClass reflects only their latest year.
+const classLabelForYear = (student, academicYear) => {
+  const h = (student?.classHistory || []).find(x => x.academicYear === academicYear);
+  if (h?.className) return `${h.className}${h.section ? ' - ' + h.section : ''}`;
+  const c = student?.currentClass;
+  return c?.name ? `${c.name}${c.section ? ' - ' + c.section : ''}` : '—';
+};
+
 const PAYMENT_METHODS = [
   { value: 'cash',          label: 'Cash' },
   { value: 'bank_transfer', label: 'Bank Transfer' },
@@ -337,7 +347,7 @@ export default function Fees() {
                     <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={selected.includes(fee._id)} onChange={e => setSelected(p => e.target.checked ? [...p, fee._id] : p.filter(i => i !== fee._id))} /></td>
                     <td className="text-14-medium">
                       <div>{fee.student?.name}</div>
-                      <div className="text-12-regular" style={{ color: 'var(--text-muted)' }}>{fee.student?.admissionNumber}</div>
+                      <div className="text-12-regular" style={{ color: 'var(--text-muted)' }}>{classLabelForYear(fee.student, fee.academicYear)}</div>
                     </td>
                     {col('mobile') && <td className="text-14-regular" style={{ color: 'var(--text-secondary)' }}>{fee.student?.phone || '—'}</td>}
                     {col('academicYear') && <td className="text-14-regular">{fee.academicYear}</td>}
