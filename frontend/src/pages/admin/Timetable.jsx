@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Clock, Plus, Save, AlertTriangle, BookOpen, Users, UserX, ChevronRight, Check, X, GripVertical } from 'lucide-react';
+import { Clock, Plus, Save, AlertTriangle, BookOpen, Users, UserX, UserCheck, ChevronRight, Check, X, GripVertical } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Select as AntSelect, DatePicker, TimePicker } from 'antd';
 import dayjs from 'dayjs';
@@ -537,6 +537,7 @@ function TeacherView({ teachers, academicYear, periodsPerDay }) {
         ) : (
           <>
             <TeacherScheduleGrid teacherId={selectedId} teacher={selectedTeacher} academicYear={academicYear} periodsPerDay={periodsPerDay} />
+            <CoveringPanel teacherId={selectedId} teacher={selectedTeacher} />
             <SubstitutionPanel teacherId={selectedId} teacher={selectedTeacher} academicYear={academicYear} periodsPerDay={periodsPerDay} />
           </>
         )}
@@ -645,6 +646,52 @@ function TeacherScheduleGrid({ teacherId, teacher, academicYear, periodsPerDay }
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+// ─── Covering Panel — periods this teacher is substituting for absent colleagues ─
+function CoveringPanel({ teacherId, teacher }) {
+  const today = dayjs().format('YYYY-MM-DD');
+  const { data, isLoading } = useQuery({
+    queryKey: ['covering-subs', teacherId, today],
+    queryFn: () => api.get(`/timetable/substitutions?substituteTeacherId=${teacherId}&from=${today}`),
+    enabled: !!teacherId,
+  });
+  const subs = data?.substitutions || [];
+
+  return (
+    <div className="card" style={{ overflow: 'hidden', padding: 0, marginBottom: 16 }}>
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <UserCheck size={18} color="#16a34a" />
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Covering for Others</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Upcoming periods {teacher?.name} will substitute</div>
+        </div>
+      </div>
+      {isLoading ? (
+        <div style={{ padding: 24 }}><PageLoader /></div>
+      ) : subs.length === 0 ? (
+        <div style={{ padding: 8 }}><EmptyState icon={UserCheck} message="No substitute periods assigned." /></div>
+      ) : (
+        <div style={{ padding: 8 }}>
+          {subs.map(s => {
+            const cls = s.classRef ? `${s.classRef.name}${s.classRef.section ? ` ${s.classRef.section}` : ''}` : '';
+            return (
+              <div key={s._id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 12px', borderBottom: '1px solid #f1f5f9' }}>
+                <div style={{ width: 44, textAlign: 'center', flexShrink: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--primary)' }}>P{s.displayPeriod || s.periodNumber}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{dayjs(s.date).format('ddd D MMM')}</div>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: s.subject?.color || 'var(--text-primary)' }}>{s.subject?.name || 'Class'}{cls ? ` · ${cls}` : ''}</div>
+                  {s.absentTeacher?.name && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Covering for {s.absentTeacher.name}</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
