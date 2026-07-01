@@ -106,7 +106,8 @@ const createOrder = async (req, res) => {
   } catch (err) {
     // Razorpay SDK errors carry the reason under err.error.description, not err.message.
     const msg = err?.error?.description || err?.message || 'Could not start payment';
-    console.error('[subscription/create-order] failed:', err?.statusCode || '', err?.error || err?.message || err);
+    const { keyId } = await getGatewayKeys().catch(() => ({ keyId: '' }));
+    console.error(`[subscription/create-order] failed (using key …${(keyId || '').slice(-4)}):`, err?.statusCode || '', err?.error || err?.message || err);
     res.status(500).json({ success: false, message: `Payment gateway: ${msg}` });
   }
 };
