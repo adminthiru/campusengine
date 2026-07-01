@@ -61,6 +61,7 @@ export default function Plans() {
                 <span style={{ background: 'var(--bg-muted, #f1f5f9)', borderRadius: 6, padding: '2px 7px' }}>🧩 {(p.modules || []).length ? `${p.modules.length} modules` : 'All modules'}</span>
                 <span style={{ background: 'var(--bg-muted, #f1f5f9)', borderRadius: 6, padding: '2px 7px' }}>👥 {p.limits?.maxStudents ? p.limits.maxStudents.toLocaleString('en-IN') : '∞'}</span>
                 <span style={{ background: 'var(--bg-muted, #f1f5f9)', borderRadius: 6, padding: '2px 7px' }}>🧑‍🏫 {p.limits?.maxStaff ? p.limits.maxStaff.toLocaleString('en-IN') : '∞'}</span>
+                {p.trialDays > 0 && <span style={{ background: '#fffbeb', color: '#b45309', borderRadius: 6, padding: '2px 7px' }}>🎁 {p.trialDays}-day trial</span>}
               </div>
               {(p.features || []).map(f => <div key={f} style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4, color: 'var(--text-secondary)' }}><Check size={12} color="#10b981" /> {f}</div>)}
               <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
@@ -83,6 +84,7 @@ function PlanModal({ plan, onClose, onSaved }) {
     name: plan?.name || '', code: plan?.code || '',
     monthlyPrice: plan?.monthlyPrice ?? plan?.price ?? '', monthlyDiscount: plan?.monthlyDiscount ?? '',
     yearlyPrice: plan?.yearlyPrice ?? '', yearlyDiscount: plan?.yearlyDiscount ?? '',
+    trialDays: plan?.trialDays ?? '',
     description: plan?.description || '', features: (plan?.features || []).join('\n'), isActive: plan?.isActive ?? true,
     modules: plan?.modules || [],
     maxStudents: plan?.limits?.maxStudents ?? 0, maxStaff: plan?.limits?.maxStaff ?? 0,
@@ -100,6 +102,7 @@ function PlanModal({ plan, onClose, onSaved }) {
         name: f.name, code: f.code,
         monthlyPrice: Number(f.monthlyPrice) || 0, monthlyDiscount: Number(f.monthlyDiscount) || 0,
         yearlyPrice: Number(f.yearlyPrice) || 0, yearlyDiscount: Number(f.yearlyDiscount) || 0,
+        trialDays: Number(f.trialDays) || 0,
         description: f.description, isActive: f.isActive,
         features: f.features.split('\n').map(s => s.trim()).filter(Boolean),
         modules: f.modules,
@@ -112,7 +115,8 @@ function PlanModal({ plan, onClose, onSaved }) {
   });
   const submit = () => {
     if (!f.name || !f.code) return toast.error('Name and code are required');
-    if ((Number(f.monthlyPrice) || 0) <= 0 && (Number(f.yearlyPrice) || 0) <= 0) return toast.error('Enter a monthly and/or yearly price');
+    if ((Number(f.monthlyPrice) || 0) <= 0 && (Number(f.yearlyPrice) || 0) <= 0 && (Number(f.trialDays) || 0) <= 0)
+      return toast.error('Enter a monthly/yearly price, or set free-trial days');
     save.mutate();
   };
   return (
@@ -144,6 +148,13 @@ function PlanModal({ plan, onClose, onSaved }) {
           Charged yearly: <strong style={{ color: 'var(--primary)' }}>₹{yNet.toLocaleString('en-IN')}</strong>{(Number(f.yearlyDiscount) || 0) > 0 && <span> (₹{(Number(f.yearlyPrice) || 0).toLocaleString('en-IN')} − ₹{(Number(f.yearlyDiscount) || 0).toLocaleString('en-IN')})</span>}
         </div>
       )}
+      {/* Free trial */}
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '4px 0 6px' }}>Free Trial</div>
+      <div className="form-group">
+        <label className="form-label">Free-trial days</label>
+        <input className="form-control" type="number" min="0" value={f.trialDays} onChange={e => set('trialDays', e.target.value)} placeholder="0" style={{ maxWidth: 200 }} />
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Days of free access this plan grants. 0 = no trial. You can extend a tenant's trial later from Tenants.</div>
+      </div>
       <div className="form-group"><label className="form-label">Description</label><input className="form-control" value={f.description} onChange={e => set('description', e.target.value)} /></div>
 
       {/* Usage limits */}

@@ -317,15 +317,17 @@ const getActivePlans = async (req, res) => {
 
 const createPlan = async (req, res) => {
   try {
-    const { name, code, monthlyPrice, monthlyDiscount, yearlyPrice, yearlyDiscount, description, features, modules, limits, sortOrder, isActive } = req.body;
+    const { name, code, monthlyPrice, monthlyDiscount, yearlyPrice, yearlyDiscount, trialDays, description, features, modules, limits, sortOrder, isActive } = req.body;
     if (!name || !code) return res.status(400).json({ success: false, message: 'Name and code are required' });
-    if ((Number(monthlyPrice) || 0) <= 0 && (Number(yearlyPrice) || 0) <= 0)
-      return res.status(400).json({ success: false, message: 'Enter a monthly and/or yearly price' });
+    // A plan must have a price OR be a free-trial plan (trialDays > 0).
+    if ((Number(monthlyPrice) || 0) <= 0 && (Number(yearlyPrice) || 0) <= 0 && (Number(trialDays) || 0) <= 0)
+      return res.status(400).json({ success: false, message: 'Enter a monthly/yearly price, or set free-trial days' });
     if (await SubscriptionPlan.findOne({ code })) return res.status(400).json({ success: false, message: 'Plan code already exists' });
     const plan = await SubscriptionPlan.create({
       name, code,
       monthlyPrice: Number(monthlyPrice) || 0, monthlyDiscount: Number(monthlyDiscount) || 0,
       yearlyPrice: Number(yearlyPrice) || 0, yearlyDiscount: Number(yearlyDiscount) || 0,
+      trialDays: Number(trialDays) || 0,
       description, features, modules, limits, sortOrder, isActive,
     });
     res.json({ success: true, plan });
@@ -337,7 +339,7 @@ const updatePlan = async (req, res) => {
     // Use save() (not findByIdAndUpdate) so the pre-save price mirror runs.
     const plan = await SubscriptionPlan.findById(req.params.id);
     if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
-    const fields = ['name', 'monthlyPrice', 'monthlyDiscount', 'yearlyPrice', 'yearlyDiscount', 'description', 'features', 'modules', 'limits', 'sortOrder', 'isActive'];
+    const fields = ['name', 'monthlyPrice', 'monthlyDiscount', 'yearlyPrice', 'yearlyDiscount', 'trialDays', 'description', 'features', 'modules', 'limits', 'sortOrder', 'isActive'];
     for (const k of fields) if (req.body[k] !== undefined) plan[k] = req.body[k];
     await plan.save();
     // Cascade entitlements to every school currently on this plan so live tenants

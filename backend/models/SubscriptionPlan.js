@@ -11,6 +11,9 @@ const subscriptionPlanSchema = new mongoose.Schema({
   monthlyDiscount: { type: Number, default: 0 },   // flat ₹ off the monthly price
   yearlyPrice:     { type: Number, default: 0 },
   yearlyDiscount:  { type: Number, default: 0 },   // flat ₹ off the yearly price
+  // Free-trial length this plan grants (days). 0 = not a trial plan. The super
+  // admin can extend a tenant's trial later from the Tenants page.
+  trialDays: { type: Number, default: 0 },
   // Legacy single-price field, kept for back-compat / display fallback; set to
   // the monthly net on save.
   price: { type: Number, default: 0 },
