@@ -324,6 +324,26 @@ export default function Attendance() {
   const usedLeave    = leaveBalData?.used    || {};  // this month only
   const usedLeaveYtd = leaveBalData?.usedYtd || {};  // year to date
 
+  // Substitution assignments on the selected date — so the employee row can show
+  // periods a teacher is covering for an absent colleague.
+  const { data: subsData } = useQuery({
+    queryKey: ['day-substitutions', date],
+    enabled: tab === 'employee' && !!date,
+    queryFn: () => api.get(`/timetable/substitutions?date=${date}`),
+  });
+  // substituteTeacherId → [{ period, className, subjectName }]
+  const subsByTeacher = {};
+  (subsData?.substitutions || []).forEach(s => {
+    const tid = s.substituteTeacher?._id || s.substituteTeacher;
+    if (!tid) return;
+    (subsByTeacher[tid] ||= []).push({
+      period: s.displayPeriod || s.periodNumber,
+      className: s.classRef ? `${s.classRef.name}${s.classRef.section ? ` ${s.classRef.section}` : ''}` : '',
+      subjectName: s.subject?.name || '',
+    });
+  });
+  Object.values(subsByTeacher).forEach(list => list.sort((a, b) => a.period - b.period));
+
   // Limits: respect carry-forward — if ON, entitlement grows each month of the
   // ACADEMIC year. e.g. an April-start year in July = 4 months accrued (not 7),
   // so a 1/month leave shows 4/4 — matching the header's academic year.
@@ -983,7 +1003,21 @@ export default function Attendance() {
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <Avatar src={person.photo} name={person.name} size={30} />
-                          <span className="text-14-medium">{person.name}</span>
+                          <div>
+                            <span className="text-14-medium">{person.name}</span>
+                            {tab === 'employee' && subsByTeacher[person._id]?.length > 0 && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 3 }}>
+                                {subsByTeacher[person._id].map((s, i) => (
+                                  <span key={i} title={`Substitute · ${s.subjectName}${s.className ? ` · ${s.className}` : ''}`}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '1px 8px',
+                                      borderRadius: 20, background: '#eff6ff', color: '#1d4ed8', fontSize: 11, fontWeight: 600,
+                                      border: '1px solid #bfdbfe' }}>
+                                    <UserCheck size={11} /> Sub P{s.period}{s.className ? ` · ${s.className}` : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>

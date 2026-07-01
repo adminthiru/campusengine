@@ -1071,12 +1071,18 @@ router.delete('/timetable/period', protect, checkSubscription, ttCtrl.deletePeri
 router.get('/timetable/substitutions', protect, checkSubscription, async (req, res) => {
   try {
     const Substitution = require('../models/Substitution');
-    const { date, absentTeacherId } = req.query;
-    if (!date || !absentTeacherId) return res.status(400).json({ success: false, message: 'date and absentTeacherId required' });
+    const { date, absentTeacherId, substituteTeacherId } = req.query;
+    if (!date) return res.status(400).json({ success: false, message: 'date required' });
     const start = new Date(date + 'T00:00:00.000Z');
     const end = new Date(date + 'T23:59:59.999Z');
-    const subs = await Substitution.find({ school: req.user.school, absentTeacher: absentTeacherId, date: { $gte: start, $lte: end } })
+    // absentTeacherId → subs assigned away FROM a teacher (substitution planner).
+    // substituteTeacherId → subs a teacher is covering. Neither → all subs that day.
+    const filter = { school: req.user.school, date: { $gte: start, $lte: end } };
+    if (absentTeacherId) filter.absentTeacher = absentTeacherId;
+    if (substituteTeacherId) filter.substituteTeacher = substituteTeacherId;
+    const subs = await Substitution.find(filter)
       .populate('substituteTeacher', 'name designation department')
+      .populate('absentTeacher', 'name')
       .populate('classRef', 'name section')
       .populate('subject', 'name color');
 
