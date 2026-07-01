@@ -1515,7 +1515,7 @@ export function SubscriptionSettings() {
 
   const endDate = isActive ? sub.currentPeriodEnd : sub.trialEndDate;
   const daysLeft = endDate ? Math.max(0, Math.ceil((new Date(endDate) - new Date()) / 86400000)) : 0;
-  const amount = sub.amount || plans.find(p => String(p._id) === String(sub.plan))?.price || 200;
+  const amount = sub.amount || plans.find(p => String(p._id) === String(sub.plan))?.price || 0;
   const cycleLabel = sub.billingCycle === 'yearly' ? '/year' : '/month';
 
   // Persist the chosen plan, then open the checkout for the chosen cycle.
@@ -1558,7 +1558,9 @@ export function SubscriptionSettings() {
                 : sub.status === 'trial' && endDate ? `Trial ends ${new Date(endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
             </div>
           </div>
-          <span className="text-24-bold" style={{ color: '#1a56e8' }}>₹{amount.toLocaleString('en-IN')}<span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>{cycleLabel}</span></span>
+          {amount > 0
+            ? <span className="text-24-bold" style={{ color: '#1a56e8' }}>₹{amount.toLocaleString('en-IN')}<span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>{cycleLabel}</span></span>
+            : <span className="text-16-bold" style={{ color: '#16a34a' }}>Free</span>}
         </div>
       </div>
 
