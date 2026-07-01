@@ -172,6 +172,13 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
     ? Math.max(0, Math.ceil((new Date(user.subscription.trialEndDate) - new Date()) / (1000 * 60 * 60 * 24)))
     : null;
 
+  // Paid-subscription renewal reminder: days until the active period ends
+  // (shown ≤7 days out, or once expired). Super admins are exempt.
+  const renewDaysLeft = user?.role !== 'super_admin' && user?.subscription?.status === 'active' && user?.subscription?.currentPeriodEnd
+    ? Math.ceil((new Date(user.subscription.currentPeriodEnd) - new Date()) / (1000 * 60 * 60 * 24))
+    : null;
+  const showRenew = renewDaysLeft !== null && renewDaysLeft <= 7;
+
   return (
     <>
       {/* Trial Banner */}
@@ -189,6 +196,25 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
             className="text-12-semibold" style={{ background: 'white', color: '#1a56e8', border: 'none', padding: '3px 14px', borderRadius: 20, cursor: 'pointer' }}
           >
             Subscribe Now
+          </button>
+        </div>
+      )}
+
+      {/* Renewal Banner (paid plans nearing / past their period end) */}
+      {showRenew && (
+        <div className="text-14-medium" style={{
+          background: renewDaysLeft <= 0 ? '#ef4444' : '#f59e0b',
+          color: 'white', padding: '8px 24px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12
+        }}>
+          {renewDaysLeft <= 0
+            ? '⚠️ Your plan has expired! Renew to keep using all features.'
+            : `⏳ Your plan expires in ${renewDaysLeft} day${renewDaysLeft !== 1 ? 's' : ''}. Renew to avoid interruption.`}
+          <button
+            onClick={() => navigate('/settings/subscription')}
+            className="text-12-semibold" style={{ background: 'white', color: '#1a56e8', border: 'none', padding: '3px 14px', borderRadius: 20, cursor: 'pointer' }}
+          >
+            Renew Now
           </button>
         </div>
       )}

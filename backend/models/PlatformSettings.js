@@ -38,7 +38,12 @@ platformSettingsSchema.pre('save', function () {
 
 // Decrypted gateway keys for internal use (Razorpay order/verify).
 platformSettingsSchema.methods.gatewayKeys = function () {
-  return { enabled: this.gateway?.enabled !== false, keyId: decrypt(this.gateway?.keyId), keySecret: decrypt(this.gateway?.keySecret) };
+  const keyId = decrypt(this.gateway?.keyId) || process.env.RAZORPAY_KEY_ID || '';
+  const keySecret = decrypt(this.gateway?.keySecret) || process.env.RAZORPAY_KEY_SECRET || '';
+  // Enabled when the super admin turned it on, OR when both keys are present via
+  // env (.env-driven / self-host setup) — so it works without toggling the UI.
+  const enabled = this.gateway?.enabled === true || (!!keyId && !!keySecret);
+  return { enabled, keyId, keySecret };
 };
 
 // Super-admin editing view — decrypted, but WITHOUT the secret (only a hasSecret flag).
@@ -58,7 +63,7 @@ platformSettingsSchema.methods.adminView = function () {
 // School-facing methods — decrypted bank/UPI for display, never the gateway secret.
 platformSettingsSchema.methods.schoolMethods = function () {
   return {
-    gateway: { enabled: !!this.gateway?.enabled && !!(decrypt(this.gateway?.keyId) || process.env.RAZORPAY_KEY_ID) },
+    gateway: { enabled: this.gatewayKeys().enabled },
     bankTransfer: this.bankTransfer?.enabled
       ? { enabled: true, accountName: decrypt(this.bankTransfer.accountName), accountNumber: decrypt(this.bankTransfer.accountNumber), ifsc: decrypt(this.bankTransfer.ifsc), bankName: decrypt(this.bankTransfer.bankName), branch: decrypt(this.bankTransfer.branch) }
       : { enabled: false },

@@ -1711,6 +1711,10 @@ function CheckoutModal({ plan, methods, onClose, onPaid }) {
         },
         modal: { ondismiss: () => setPaying(false) },
       });
+      rzp.on('payment.failed', (resp) => {
+        toast.error(resp?.error?.description || 'Payment failed. Please try again.');
+        setPaying(false);
+      });
       rzp.open();
     } catch (e) { toast.error(e?.response?.data?.message || 'Failed to start payment'); setPaying(false); }
   };
