@@ -67,6 +67,7 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifs, setNotifs] = useState(user?.notifications || []);
   const [pendingLeaves, setPendingLeaves] = useState([]);
+  const [pendingStaffLeaves, setPendingStaffLeaves] = useState([]);
   const [actingId, setActingId] = useState(null);
   const notifRef = useRef();
   const profileRef = useRef();
@@ -93,26 +94,49 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
     };
   };
 
+  // Same, for staff/teacher leave requests.
+  const staffLeaveToItem = (lv) => {
+    const fmtD = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const dateLabel = String(lv.fromDate) === String(lv.toDate) ? fmtD(lv.fromDate) : `${fmtD(lv.fromDate)} – ${fmtD(lv.toDate)}`;
+    return {
+      _id: `staffleave-${lv._id}`,
+      synthetic: true,
+      title: 'Leave Request',
+      message: `${lv.employee?.name || 'A staff member'} requested ${lv.leaveType || 'leave'} on ${dateLabel}.${lv.reason ? ` Reason: ${lv.reason}` : ''}`,
+      createdAt: lv.createdAt,
+      read: false,
+      action: 'staff_leave',
+      refId: lv._id,
+      actionStatus: 'pending',
+    };
+  };
+
   // Stored notifications + any pending leaves not already represented by a
   // stored leave notification (deduped by leave id), newest first.
   const storedLeaveRefIds = new Set(
     notifs.filter(n => n.action === 'student_leave' && n.refId).map(n => String(n.refId))
   );
+  const storedStaffLeaveRefIds = new Set(
+    notifs.filter(n => n.action === 'staff_leave' && n.refId).map(n => String(n.refId))
+  );
   const items = [
     ...notifs,
     ...pendingLeaves.filter(lv => !storedLeaveRefIds.has(String(lv._id))).map(leaveToItem),
+    ...pendingStaffLeaves.filter(lv => !storedStaffLeaveRefIds.has(String(lv._id))).map(staffLeaveToItem),
   ].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
   const unread = items.filter(n => !n.read).length;
 
   const fetchNotifs = async () => {
     try {
-      const [nRes, lRes] = await Promise.all([
+      const [nRes, lRes, sRes] = await Promise.all([
         api.get('/notifications'),
         isLeaveApprover ? api.get('/student-leaves?status=pending').catch(() => null) : Promise.resolve(null),
+        isLeaveApprover ? api.get('/leaves?status=pending').catch(() => null) : Promise.resolve(null),
       ]);
       if (Array.isArray(nRes?.notifications)) setNotifs(nRes.notifications);
       if (lRes && Array.isArray(lRes.leaves)) setPendingLeaves(lRes.leaves);
+      if (sRes && Array.isArray(sRes.leaves)) setPendingStaffLeaves(sRes.leaves);
     } catch { /* keep current */ }
   };
 
@@ -147,7 +171,8 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
     if (actingId) return;
     setActingId(n._id);
     try {
-      await api.put(`/student-leaves/${n.refId}`, { status });
+      const url = n.action === 'staff_leave' ? `/leaves/${n.refId}` : `/student-leaves/${n.refId}`;
+      await api.put(url, { status });
       toast.success(`Leave ${status === 'approved' ? 'approved' : 'rejected'}`);
       await fetchNotifs();
     } catch (err) {
@@ -289,7 +314,7 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
                     </div>
                   )}
                   {items.slice(0, 20).map(n => {
-                    const isLeave = n.action === 'student_leave';
+                    const isLeave = n.action === 'student_leave' || n.action === 'staff_leave';
                     return (
                     <div
                       key={n._id}
