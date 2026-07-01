@@ -5,15 +5,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { Select as AntSelect, DatePicker } from 'antd';
 import dayjs from 'dayjs';
-import { Plus, FileText, Download, Edit2, Trash2, ChevronRight, CheckCircle } from 'lucide-react';
+import { Plus, FileText, Download, Edit2, Trash2, ChevronRight, CheckCircle, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, StatusBadge, PageLoader, EmptyState, FormRow, SearchInput } from '../../components/ui';
 import { useAuth } from '../../store/AuthContext';
 import { useYear } from '../../store/YearContext';
+import { usePermissions } from '../../store/usePermissions';
 
 export function Exams() {
   const { user } = useAuth();
+  const { can } = usePermissions();
   const { selectedYear } = useYear();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -110,14 +112,16 @@ export function Exams() {
           <p className="page-subtitle">{exams.length} exams</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {selected.length > 0 && (
+          {can('exams', 'delete') && selected.length > 0 && (
             <button className="btn btn-danger" onClick={() => setBulkDeleteConfirm(true)}>
               <Trash2 size={15} /> Delete ({selected.length})
             </button>
           )}
-          <button className="btn btn-primary" onClick={openCreate}>
-            <Plus size={16} /> Create Exam
-          </button>
+          {can('exams', 'add') && (
+            <button className="btn btn-primary" onClick={openCreate}>
+              <Plus size={16} /> Create Exam
+            </button>
+          )}
         </div>
       </div>
 
@@ -195,9 +199,11 @@ export function Exams() {
                       )}
                     </td>
                     <td onClick={e => e.stopPropagation()}>
-                      <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => openEdit(exam)}>
-                        <Edit2 size={14} />
-                      </button>
+                      {can('exams', 'edit') && (
+                        <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => openEdit(exam)}>
+                          <Edit2 size={14} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

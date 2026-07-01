@@ -9,6 +9,7 @@ import {
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, EmptyState, PageLoader, StatCard, FormRow, DateInput } from '../../components/ui';
+import { usePermissions } from '../../store/usePermissions';
 import { format } from 'date-fns';
 
 // ── Metadata ─────────────────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ function OccBar({ occupied, capacity }) {
 
 export default function Hostel() {
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const [tab, setTab] = useState('dashboard');
 
   // filters
@@ -142,9 +144,9 @@ export default function Hostel() {
           <p className="page-subtitle">Hostels, rooms, bed allocation &amp; wardens</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary" onClick={() => setHostelModal({})}><Plus size={16} /> Add Hostel</button>
-          <button className="btn btn-secondary" onClick={() => setRoomModal({})}><Plus size={16} /> Add Room</button>
-          <button className="btn btn-primary" onClick={() => setAllocModal(true)}><BedDouble size={16} /> Allocate Student</button>
+          {can('hostel', 'add') && <button className="btn btn-secondary" onClick={() => setHostelModal({})}><Plus size={16} /> Add Hostel</button>}
+          {can('hostel', 'add') && <button className="btn btn-secondary" onClick={() => setRoomModal({})}><Plus size={16} /> Add Room</button>}
+          {can('hostel', 'add') && <button className="btn btn-primary" onClick={() => setAllocModal(true)}><BedDouble size={16} /> Allocate Student</button>}
         </div>
       </div>
 
@@ -176,7 +178,7 @@ export default function Hostel() {
             <div className="card">
               <h3 className="text-16-bold" style={{ marginBottom: 16 }}>Occupancy Summary</h3>
               {(dashData?.occupancySummary || []).length === 0
-                ? <EmptyState icon={Building2} message="No hostels yet." action={<button className="btn btn-primary btn-sm" onClick={() => setHostelModal({})}><Plus size={14} /> Add Hostel</button>} />
+                ? <EmptyState icon={Building2} message="No hostels yet." action={can('hostel', 'add') && <button className="btn btn-primary btn-sm" onClick={() => setHostelModal({})}><Plus size={14} /> Add Hostel</button>} />
                 : (dashData.occupancySummary).map(h => (
                   <div key={h._id} style={{ marginBottom: 16 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -200,7 +202,7 @@ export default function Hostel() {
                     <span style={{ fontSize: 13, fontWeight: 700, color: '#16a34a' }}>{r.available} bed{r.available === 1 ? '' : 's'} free</span>
                   </div>
                 ))}
-              <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} onClick={() => setAllocModal(true)}><BedDouble size={14} /> Allocate Student</button>
+              {can('hostel', 'add') && <button className="btn btn-primary btn-sm" style={{ marginTop: 14 }} onClick={() => setAllocModal(true)}><BedDouble size={14} /> Allocate Student</button>}
             </div>
           </div>
         </>
@@ -209,7 +211,7 @@ export default function Hostel() {
       {/* ── HOSTELS ── */}
       {tab === 'hostels' && (
         hostels.length === 0 ? (
-          <div className="card"><EmptyState icon={Building2} message="No hostels yet. Create your first hostel block." action={<button className="btn btn-primary btn-sm" onClick={() => setHostelModal({})}><Plus size={14} /> Add Hostel</button>} /></div>
+          <div className="card"><EmptyState icon={Building2} message="No hostels yet. Create your first hostel block." action={can('hostel', 'add') && <button className="btn btn-primary btn-sm" onClick={() => setHostelModal({})}><Plus size={14} /> Add Hostel</button>} /></div>
         ) : (
           <div className="grid-3">
             {hostels.map(h => (
@@ -228,8 +230,8 @@ export default function Hostel() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                    <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => setHostelModal({ data: h })}><Edit2 size={14} /></button>
-                    <button className="btn btn-danger btn-sm btn-icon" title="Delete" onClick={() => setDeleteHostelId(h._id)}><Trash2 size={14} /></button>
+                    {can('hostel', 'edit') && <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => setHostelModal({ data: h })}><Edit2 size={14} /></button>}
+                    {can('hostel', 'delete') && <button className="btn btn-danger btn-sm btn-icon" title="Delete" onClick={() => setDeleteHostelId(h._id)}><Trash2 size={14} /></button>}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 16, fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 14, flexWrap: 'wrap' }}>
@@ -255,7 +257,7 @@ export default function Hostel() {
             <AntSelect style={{ minWidth: 120 }} value={roomStatus || undefined} placeholder="All Status" allowClear onChange={v => setRoomStatus(v ?? '')}
               options={Object.entries(ROOM_STATUS).map(([value, m]) => ({ value, label: m.label }))} />
             <input className="form-control" style={{ maxWidth: 120 }} type="number" placeholder="Floor" value={roomFloor} onChange={e => setRoomFloor(e.target.value)} />
-            <button className="btn btn-primary btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setRoomModal({})}><Plus size={14} /> Add Room</button>
+            {can('hostel', 'add') && <button className="btn btn-primary btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setRoomModal({})}><Plus size={14} /> Add Room</button>}
           </div>
           {loadingRooms ? <PageLoader /> : (
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -263,7 +265,7 @@ export default function Hostel() {
                 <table>
                   <thead><tr><th>Room</th><th>Hostel</th><th>Floor</th><th>Type</th><th>Capacity</th><th>Occupied</th><th>Available</th><th>Status</th><th style={{ textAlign: 'right' }}>Actions</th></tr></thead>
                   <tbody>
-                    {rooms.length === 0 && <tr><td colSpan={9}><EmptyState icon={DoorOpen} message="No rooms match the filters." action={<button className="btn btn-primary btn-sm" onClick={() => setRoomModal({})}><Plus size={14} /> Add Room</button>} /></td></tr>}
+                    {rooms.length === 0 && <tr><td colSpan={9}><EmptyState icon={DoorOpen} message="No rooms match the filters." action={can('hostel', 'add') && <button className="btn btn-primary btn-sm" onClick={() => setRoomModal({})}><Plus size={14} /> Add Room</button>} /></td></tr>}
                     {rooms.map(r => (
                       <tr key={r._id}>
                         <td className="text-14-medium">{r.roomNumber}</td>
@@ -277,8 +279,8 @@ export default function Hostel() {
                         <td>
                           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                             <button className="btn btn-secondary btn-sm btn-icon" title="View students" onClick={() => setRoomStudents(r)}><Users size={14} /></button>
-                            <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => setRoomModal({ data: r })}><Edit2 size={14} /></button>
-                            <button className="btn btn-danger btn-sm btn-icon" title="Delete" onClick={() => setDeleteRoomId(r._id)}><Trash2 size={14} /></button>
+                            {can('hostel', 'edit') && <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => setRoomModal({ data: r })}><Edit2 size={14} /></button>}
+                            {can('hostel', 'delete') && <button className="btn btn-danger btn-sm btn-icon" title="Delete" onClick={() => setDeleteRoomId(r._id)}><Trash2 size={14} /></button>}
                           </div>
                         </td>
                       </tr>
@@ -297,7 +299,7 @@ export default function Hostel() {
           <div className="filter-bar">
             <AntSelect style={{ minWidth: 150 }} value={allocStatus} onChange={setAllocStatus}
               options={Object.entries(ALLOC_STATUS).map(([value, m]) => ({ value, label: m.label }))} />
-            <button className="btn btn-primary btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setAllocModal(true)}><BedDouble size={14} /> Allocate Student</button>
+            {can('hostel', 'add') && <button className="btn btn-primary btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setAllocModal(true)}><BedDouble size={14} /> Allocate Student</button>}
           </div>
           {loadingAllocs ? <PageLoader /> : (
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -305,7 +307,7 @@ export default function Hostel() {
                 <table>
                   <thead><tr><th>Student</th><th>Class</th><th>Hostel</th><th>Room</th><th>Bed</th><th>Date</th><th>Status</th><th style={{ textAlign: 'right' }}>Actions</th></tr></thead>
                   <tbody>
-                    {allocations.length === 0 && <tr><td colSpan={8}><EmptyState icon={BedDouble} message={`No ${allocStatus} allocations.`} action={<button className="btn btn-primary btn-sm" onClick={() => setAllocModal(true)}><BedDouble size={14} /> Allocate Student</button>} /></td></tr>}
+                    {allocations.length === 0 && <tr><td colSpan={8}><EmptyState icon={BedDouble} message={`No ${allocStatus} allocations.`} action={can('hostel', 'add') && <button className="btn btn-primary btn-sm" onClick={() => setAllocModal(true)}><BedDouble size={14} /> Allocate Student</button>} /></td></tr>}
                     {allocations.map(a => (
                       <tr key={a._id}>
                         <td>
@@ -320,7 +322,7 @@ export default function Hostel() {
                         <td><Pill meta={ALLOC_STATUS[a.status]} /></td>
                         <td>
                           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                            {a.status === 'active' && <>
+                            {a.status === 'active' && can('hostel', 'edit') && <>
                               <button className="btn btn-secondary btn-sm btn-icon" title="Transfer" onClick={() => setTransferTarget(a)}><ArrowLeftRight size={14} /></button>
                               <button className="btn btn-secondary btn-sm btn-icon" title="Vacate" onClick={() => setVacateTarget(a)}><LogOut size={14} /></button>
                             </>}
@@ -340,7 +342,7 @@ export default function Hostel() {
       {tab === 'wardens' && (
         <>
           <div className="filter-bar">
-            <button className="btn btn-primary btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setWardenModal(true)}><Plus size={14} /> Assign Warden</button>
+            {can('hostel', 'add') && <button className="btn btn-primary btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setWardenModal(true)}><Plus size={14} /> Assign Warden</button>}
           </div>
           {loadingWardens ? <PageLoader /> : (
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -348,14 +350,14 @@ export default function Hostel() {
                 <table>
                   <thead><tr><th>Warden</th><th>Role</th><th>Hostel</th><th>Contact</th><th style={{ textAlign: 'right' }}>Actions</th></tr></thead>
                   <tbody>
-                    {wardens.length === 0 && <tr><td colSpan={5}><EmptyState icon={UserCog} message="No wardens assigned yet." action={<button className="btn btn-primary btn-sm" onClick={() => setWardenModal(true)}><Plus size={14} /> Assign Warden</button>} /></td></tr>}
+                    {wardens.length === 0 && <tr><td colSpan={5}><EmptyState icon={UserCog} message="No wardens assigned yet." action={can('hostel', 'add') && <button className="btn btn-primary btn-sm" onClick={() => setWardenModal(true)}><Plus size={14} /> Assign Warden</button>} /></td></tr>}
                     {wardens.map(w => (
                       <tr key={w._id}>
                         <td className="text-14-medium">{w.employee?.name || '—'}<div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{w.employee?.designation || w.employee?.employeeId}</div></td>
                         <td style={{ fontSize: 13 }}>{WARDEN_ROLE[w.role] || w.role}</td>
                         <td><span style={{ fontSize: 13 }}>{w.hostel?.name || '—'}</span></td>
                         <td style={{ fontSize: 13 }}>{w.employee?.phone || '—'}</td>
-                        <td><div style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn btn-danger btn-sm btn-icon" title="Remove" onClick={() => setRemoveWardenId(w._id)}><Trash2 size={14} /></button></div></td>
+                        <td><div style={{ display: 'flex', justifyContent: 'flex-end' }}>{can('hostel', 'delete') && <button className="btn btn-danger btn-sm btn-icon" title="Remove" onClick={() => setRemoveWardenId(w._id)}><Trash2 size={14} /></button>}</div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -652,6 +654,7 @@ function VacateModal({ alloc, onClose, onSaved }) {
 
 // ── Room students ────────────────────────────────────────────────────────────
 function RoomStudentsModal({ room, onClose, onTransfer, onVacate }) {
+  const { can } = usePermissions();
   const { data, isLoading } = useQuery({ queryKey: ['hostel-room-students', room._id], queryFn: () => api.get(`/hostel/rooms/${room._id}/students`) });
   const list = data?.students || [];
   return (
@@ -671,8 +674,8 @@ function RoomStudentsModal({ room, onClose, onTransfer, onVacate }) {
                   <div className="text-14-medium">{a.student?.name}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{a.student?.admissionNumber} · {clsLabel(a.student?.currentClass)}</div>
                 </div>
-                <button className="btn btn-secondary btn-sm btn-icon" title="Transfer" onClick={() => onTransfer(a)}><ArrowLeftRight size={14} /></button>
-                <button className="btn btn-secondary btn-sm btn-icon" title="Vacate" onClick={() => onVacate(a)}><LogOut size={14} /></button>
+                {can('hostel', 'edit') && <button className="btn btn-secondary btn-sm btn-icon" title="Transfer" onClick={() => onTransfer(a)}><ArrowLeftRight size={14} /></button>}
+                {can('hostel', 'edit') && <button className="btn btn-secondary btn-sm btn-icon" title="Vacate" onClick={() => onVacate(a)}><LogOut size={14} /></button>}
               </div>
             ))}
           </div>

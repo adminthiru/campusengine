@@ -8,6 +8,7 @@ import { Plus, Download, Eye, Trash2, Users, ClipboardList, ChevronLeft, Chevron
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useAuth } from '../../store/AuthContext';
+import { usePermissions } from '../../store/usePermissions';
 import { Modal, ConfirmDialog, StatusBadge, Pagination, SearchInput, Avatar, EmptyState, PageLoader, FormRow, ColumnSelector, useColumnSelector } from '../../components/ui';
 import { BulkUploadModal } from '../../components/ui/BulkUploadModal';
 
@@ -101,6 +102,7 @@ function AttendanceCircle({ percentage, present, total }) {
 export default function Employees() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { can } = usePermissions();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
@@ -313,10 +315,12 @@ export default function Employees() {
           <p className="page-subtitle">{total} staff members</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-        <button className="btn btn-secondary" onClick={() => setShowBulkModal(true)}>
-          <Upload size={16} /> Bulk Upload
-        </button>
-        {atStaffCap ? (
+        {can('employees', 'add') && (
+          <button className="btn btn-secondary" onClick={() => setShowBulkModal(true)}>
+            <Upload size={16} /> Bulk Upload
+          </button>
+        )}
+        {can('employees', 'add') && (atStaffCap ? (
           <a href="/settings/subscription" className="btn btn-secondary" title={`Plan limit reached (${total}/${staffCap})`} style={{ textDecoration: 'none' }}>
             <Plus size={16} /> {total}/{staffCap} — Upgrade to add more
           </a>
@@ -324,7 +328,7 @@ export default function Employees() {
           <button className="btn btn-primary" onClick={openAdd}>
             <Plus size={16} /> Add Employee
           </button>
-        )}
+        ))}
         </div>
       </div>
 
@@ -338,7 +342,7 @@ export default function Employees() {
           onChange={val => setRoleFilter(val ?? '')}
           options={roles.map(r => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
         />
-        {selected.length > 0 && (
+        {selected.length > 0 && can('employees', 'delete') && (
           <button className="btn btn-danger btn-sm" onClick={() => setBulkDeleteConfirm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Trash2 size={15} /> Delete ({selected.length})
           </button>
@@ -379,7 +383,7 @@ export default function Employees() {
               <tbody>
                 {employees.length === 0 && (
                   <tr><td colSpan={21}>
-                    <EmptyState icon={Users} message="No employees yet. Add your first staff member!" action={<button className="btn btn-primary btn-sm" onClick={openAdd}><Plus size={14} /> Add Employee</button>} />
+                    <EmptyState icon={Users} message="No employees yet. Add your first staff member!" action={can('employees', 'add') ? <button className="btn btn-primary btn-sm" onClick={openAdd}><Plus size={14} /> Add Employee</button> : undefined} />
                   </td></tr>
                 )}
                 {employees.map(emp => (
@@ -414,9 +418,11 @@ export default function Employees() {
                     {col('country') && <td style={{ fontSize: 13 }}>{emp.country || '—'}</td>}
                     {col('status') && <td><StatusBadge status={emp.status} /></td>}
                     <td style={{ position: 'sticky', right: 0, zIndex: 2, background: 'white', boxShadow: '-2px 0 5px rgba(0,0,0,0.08)' }} onClick={e => e.stopPropagation()}>
-                      <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openEdit(emp)}>
-                        <Edit size={15} />
-                      </button>
+                      {can('employees', 'edit') && (
+                        <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openEdit(emp)}>
+                          <Edit size={15} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1058,6 +1064,7 @@ function AddEditEmployeeModal({
 
 // ── Employee Detail Page ───────────────────────────────────────────────────────
 function EmployeeDetail({ employee, onBack, onDelete, onDownload, onEdit, onTasks }) {
+  const { can } = usePermissions();
   const [activeTab, setActiveTab] = useState('personal');
   const [zoomImage, setZoomImage] = useState(false);
   const { selectedYear, startMonth, isCurrent } = useYear();
@@ -1109,20 +1116,24 @@ function EmployeeDetail({ employee, onBack, onDelete, onDownload, onEdit, onTask
           <ArrowLeft size={16} /> Back
         </button>
         <div style={{ display: 'flex', gap: 8 }}>
-          {employee.role === 'maintenance' && (
+          {employee.role === 'maintenance' && can('employees', 'edit') && (
             <button className="btn btn-secondary btn-sm" onClick={() => onTasks(employee)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <ClipboardList size={14} /> Tasks
             </button>
           )}
-          <button className="btn btn-secondary btn-sm" onClick={() => onEdit(employee)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Edit size={14} /> Edit
-          </button>
+          {can('employees', 'edit') && (
+            <button className="btn btn-secondary btn-sm" onClick={() => onEdit(employee)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Edit size={14} /> Edit
+            </button>
+          )}
           <button className="btn btn-secondary btn-sm" onClick={() => onDownload(employee._id)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Download size={14} /> Job Offer
           </button>
-          <button className="btn btn-danger btn-sm" onClick={() => onDelete(employee._id)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Trash2 size={14} /> Delete
-          </button>
+          {can('employees', 'delete') && (
+            <button className="btn btn-danger btn-sm" onClick={() => onDelete(employee._id)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Trash2 size={14} /> Delete
+            </button>
+          )}
         </div>
       </div>
 

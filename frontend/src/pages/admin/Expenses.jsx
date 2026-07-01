@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useYear } from '../../store/YearContext';
 import { Modal, ConfirmDialog, StatusBadge, PageLoader, EmptyState, StatCard, FormRow, SearchInput, ColumnSelector, useColumnSelector } from '../../components/ui';
+import { usePermissions } from '../../store/usePermissions';
 import { format } from 'date-fns';
 
 const EXPENSE_COLS = [
@@ -20,6 +21,7 @@ const EXPENSE_COLS = [
 
 export default function Expenses() {
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const { selectedYear, isCurrent, range } = useYear();
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -147,7 +149,7 @@ export default function Expenses() {
           <p className="page-subtitle">Track school expenditures</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {selected.length > 0 && (
+          {selected.length > 0 && can('expenses', 'delete') && (
             <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
               <Trash2 size={16} /> Delete ({selected.length})
             </button>
@@ -155,12 +157,16 @@ export default function Expenses() {
           <button className="btn btn-secondary" onClick={() => setShowReport(true)}>
             <Download size={16} /> Download Report
           </button>
-          <button className="btn btn-secondary" onClick={() => setShowCatModal(true)}>
-            <Tag size={16} /> Add Category
-          </button>
-          <button className="btn btn-primary" onClick={() => { reset({ date: format(new Date(), 'yyyy-MM-dd') }); setShowModal(true); }}>
-            <Plus size={16} /> Add Expense
-          </button>
+          {can('expenses', 'add') && (
+            <button className="btn btn-secondary" onClick={() => setShowCatModal(true)}>
+              <Tag size={16} /> Add Category
+            </button>
+          )}
+          {can('expenses', 'add') && (
+            <button className="btn btn-primary" onClick={() => { reset({ date: format(new Date(), 'yyyy-MM-dd') }); setShowModal(true); }}>
+              <Plus size={16} /> Add Expense
+            </button>
+          )}
         </div>
       </div>
 
@@ -235,7 +241,7 @@ export default function Expenses() {
                     {col('amount')   && <td className="text-14-bold" style={{ color: '#ef4444' }}>₹{exp.amount.toLocaleString('en-IN')}</td>}
                     {col('method')   && <td className="text-14-regular" style={{ textTransform: 'capitalize' }}>{exp.paymentMethod?.replace('_', ' ') || '—'}</td>}
                     <td onClick={e => e.stopPropagation()}>
-                      {!exp.billNumber && (
+                      {!exp.billNumber && can('expenses', 'edit') && (
                         <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setEditExpense(exp)} title="Edit expense">
                           <Edit2 size={14} />
                         </button>
@@ -371,7 +377,7 @@ export default function Expenses() {
       />
 
       {viewExpense && (
-        <ExpenseDetailModal expense={viewExpense} onClose={() => setViewExpense(null)} onEdit={() => { setEditExpense(viewExpense); setViewExpense(null); }} />
+        <ExpenseDetailModal expense={viewExpense} canEdit={can('expenses', 'edit')} onClose={() => setViewExpense(null)} onEdit={() => { setEditExpense(viewExpense); setViewExpense(null); }} />
       )}
 
       {showReport && (
@@ -390,7 +396,7 @@ export default function Expenses() {
   );
 }
 
-function ExpenseDetailModal({ expense: exp, onClose, onEdit }) {
+function ExpenseDetailModal({ expense: exp, canEdit = true, onClose, onEdit }) {
   const fields = [
     { label: 'Title',          value: exp.title },
     { label: 'Category',       value: exp.category ? exp.category.charAt(0).toUpperCase() + exp.category.slice(1) : '—' },
@@ -406,7 +412,7 @@ function ExpenseDetailModal({ expense: exp, onClose, onEdit }) {
     <Modal open onClose={onClose} title="Expense Details"
       footer={<>
         <button className="btn btn-secondary" onClick={onClose}>Close</button>
-        {!exp.billNumber && (
+        {!exp.billNumber && canEdit && (
           <button className="btn btn-primary" onClick={onEdit}>Edit</button>
         )}
       </>}>

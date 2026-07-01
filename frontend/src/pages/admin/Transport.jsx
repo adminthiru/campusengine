@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { Select as AntSelect } from 'antd';
 import api from '../../utils/api';
 import { PageLoader, EmptyState, StatCard, Modal, FormRow, ConfirmDialog } from '../../components/ui';
+import { usePermissions } from '../../store/usePermissions';
 
 const VEHICLE_TYPES = [
   { value: 'bus',   label: 'Bus',   color: '#1a56e8', bg: '#eff6ff' },
@@ -28,6 +29,7 @@ function TypeBadge({ type }) {
 
 export default function Transport() {
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const [showModal, setShowModal] = useState(false);
   const [editVehicle, setEditVehicle] = useState(null);
   const [viewVehicle, setViewVehicle] = useState(null);
@@ -84,14 +86,16 @@ export default function Transport() {
           <p className="page-subtitle">Manage school vehicles and routes</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {selected.length > 0 && (
+          {selected.length > 0 && can('transport', 'delete') && (
             <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
               <Trash2 size={16} /> Delete ({selected.length})
             </button>
           )}
-          <button className="btn btn-primary" onClick={() => { setEditVehicle(null); setShowModal(true); }}>
-            <Plus size={16} /> Add Vehicle
-          </button>
+          {can('transport', 'add') && (
+            <button className="btn btn-primary" onClick={() => { setEditVehicle(null); setShowModal(true); }}>
+              <Plus size={16} /> Add Vehicle
+            </button>
+          )}
         </div>
       </div>
 
@@ -172,10 +176,12 @@ export default function Transport() {
                           onClick={() => downloadStudentList(v)} title="Download student list (PDF)">
                           <Download size={14} />
                         </button>
-                        <button className="btn btn-secondary btn-sm btn-icon"
-                          onClick={() => { setEditVehicle(v); setShowModal(true); }} title="Edit">
-                          <Edit2 size={14} />
-                        </button>
+                        {can('transport', 'edit') && (
+                          <button className="btn btn-secondary btn-sm btn-icon"
+                            onClick={() => { setEditVehicle(v); setShowModal(true); }} title="Edit">
+                            <Edit2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -216,6 +222,7 @@ export default function Transport() {
 }
 
 function VehicleDetailModal({ vehicle: v, onClose, onEdit }) {
+  const { can } = usePermissions();
   const [tab, setTab] = useState('details');
 
   const qc = useQueryClient();
@@ -276,7 +283,7 @@ function VehicleDetailModal({ vehicle: v, onClose, onEdit }) {
     <Modal open onClose={onClose} title="Vehicle Details" size="lg"
       footer={<>
         <button className="btn btn-secondary" onClick={onClose}>Close</button>
-        <button className="btn btn-primary" onClick={onEdit}><Edit2 size={14} /> Edit</button>
+        {can('transport', 'edit') && <button className="btn btn-primary" onClick={onEdit}><Edit2 size={14} /> Edit</button>}
       </>}>
 
       {/* Header card */}
@@ -351,7 +358,7 @@ function VehicleDetailModal({ vehicle: v, onClose, onEdit }) {
             <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
               {liveCount} assigned{v.capacity ? ` · ${v.capacity} seats` : ''}
             </div>
-            {!adding && (
+            {!adding && can('transport', 'edit') && (
               <button className="btn btn-secondary btn-sm" onClick={() => setAdding(true)}><Plus size={14} /> Add Students</button>
             )}
           </div>
@@ -407,10 +414,12 @@ function VehicleDetailModal({ vehicle: v, onClose, onEdit }) {
                       {s.phone ? <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Phone size={12} />{s.phone}</span> : '—'}
                     </td>
                     <td style={{ width: 44 }}>
-                      <button className="btn btn-sm btn-icon" title="Remove from vehicle" onClick={() => removeMut.mutate(s._id)} disabled={removeMut.isPending}
-                        style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
-                        <Trash2 size={13} />
-                      </button>
+                      {can('transport', 'delete') && (
+                        <button className="btn btn-sm btn-icon" title="Remove from vehicle" onClick={() => removeMut.mutate(s._id)} disabled={removeMut.isPending}
+                          style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

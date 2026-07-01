@@ -6,6 +6,7 @@ import { Plus, Trash2, Edit2, Package, Wrench, CheckCircle, AlertTriangle, Boxes
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { Modal, ConfirmDialog, Pagination, SearchInput, PageLoader, EmptyState, StatCard, FormRow, Avatar } from '../../components/ui';
+import { usePermissions } from '../../store/usePermissions';
 import { format } from 'date-fns';
 
 const DEFAULT_CATEGORIES = ['Computers', 'Lab Equipment', 'Furniture', 'Electronics', 'Projectors', 'Sports', 'Musical', 'Books & Media', 'Network', 'Other'];
@@ -50,6 +51,7 @@ function Pill({ meta }) {
 
 export default function Inventory() {
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const [tab, setTab] = useState('items');
   const [selectedCategory, setSelectedCategory] = useState(null); // null = category grid; string = drill-in
   const [page, setPage] = useState(1);
@@ -184,25 +186,31 @@ export default function Inventory() {
           <p className="page-subtitle">School assets, lab equipment &amp; repairs</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {tab === 'items' && selectedRepairable.length > 0 && (
+          {tab === 'items' && selectedRepairable.length > 0 && can('inventory', 'edit') && (
             <button className="btn btn-secondary" onClick={() => setSendRepairItems(selectedRepairable)}>
               <Wrench size={16} /> Send to Repair ({selectedRepairable.length})
             </button>
           )}
-          {selected.length > 0 && tab === 'items' && (
+          {selected.length > 0 && tab === 'items' && can('inventory', 'delete') && (
             <button className="btn btn-danger" onClick={() => setBulkDeleteConfirm(true)}>
               <Trash2 size={16} /> Delete ({selected.length})
             </button>
           )}
-          <button className="btn btn-secondary" onClick={() => setShowConfig(true)}>
-            <Tag size={16} /> Categories &amp; Locations
-          </button>
-          <button className="btn btn-secondary" onClick={() => { setEditRequest(null); setShowRequestModal(true); }}>
-            <ShoppingCart size={16} /> Create Purchase Request
-          </button>
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-            <Plus size={16} /> Add Items
-          </button>
+          {can('inventory', 'add') && (
+            <button className="btn btn-secondary" onClick={() => setShowConfig(true)}>
+              <Tag size={16} /> Categories &amp; Locations
+            </button>
+          )}
+          {can('inventory', 'add') && (
+            <button className="btn btn-secondary" onClick={() => { setEditRequest(null); setShowRequestModal(true); }}>
+              <ShoppingCart size={16} /> Create Purchase Request
+            </button>
+          )}
+          {can('inventory', 'add') && (
+            <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+              <Plus size={16} /> Add Items
+            </button>
+          )}
         </div>
       </div>
 
@@ -285,7 +293,7 @@ export default function Inventory() {
                   <tbody>
                     {items.length === 0 && (
                       <tr><td colSpan={9}>
-                        <EmptyState icon={Package} message="No items match the current filters." action={<button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}><Plus size={14} /> Add Items</button>} />
+                        <EmptyState icon={Package} message="No items match the current filters." action={can('inventory', 'add') && <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}><Plus size={14} /> Add Items</button>} />
                       </td></tr>
                     )}
                     {items.map(it => (
@@ -306,13 +314,13 @@ export default function Inventory() {
                         <td><Pill meta={STATUS_META[it.status]} /></td>
                         <td onClick={e => e.stopPropagation()}>
                           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                            {it.status !== 'in_repair' && it.status !== 'disposed' && it.status !== 'purchase_requested' && (
+                            {can('inventory', 'edit') && it.status !== 'in_repair' && it.status !== 'disposed' && it.status !== 'purchase_requested' && (
                               <button className="btn btn-secondary btn-sm btn-icon" title="Send to repair" onClick={() => setSendRepairItems([it])}><Wrench size={14} /></button>
                             )}
-                            {it.type === 'asset' && it.status !== 'in_repair' && it.status !== 'disposed' && it.status !== 'purchase_requested' && (
+                            {can('inventory', 'edit') && it.type === 'asset' && it.status !== 'in_repair' && it.status !== 'disposed' && it.status !== 'purchase_requested' && (
                               <button className="btn btn-secondary btn-sm btn-icon" title="Mark damaged" onClick={() => setDamagedTarget({ itemId: it._id, name: it.name })} style={{ color: '#dc2626' }}><AlertTriangle size={14} /></button>
                             )}
-                            <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => { setEditItem(it); setShowItemModal(true); }}><Edit2 size={14} /></button>
+                            {can('inventory', 'edit') && <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => { setEditItem(it); setShowItemModal(true); }}><Edit2 size={14} /></button>}
                           </div>
                         </td>
                       </tr>
@@ -328,7 +336,7 @@ export default function Inventory() {
           // ── Category grid (landing) ──
           loadingSummary ? <PageLoader /> : (
             categorySummary.length === 0 ? (
-              <div className="card"><EmptyState icon={Package} message="No items added yet." action={<button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}><Plus size={14} /> Add Items</button>} /></div>
+              <div className="card"><EmptyState icon={Package} message="No items added yet." action={can('inventory', 'add') && <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}><Plus size={14} /> Add Items</button>} /></div>
             ) : (
               <div className="grid-3">
                 {categorySummary.map(c => (
@@ -401,12 +409,12 @@ export default function Inventory() {
                         </td>
                         <td>
                           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                            {active && !r.linkedVisit && (
+                            {active && !r.linkedVisit && can('inventory', 'edit') && (
                               <button className="btn btn-secondary btn-sm" onClick={() => setLogVisitTarget({ itemId: r.itemId, repair: r })}>
                                 <Link2 size={13} /> Log Visit
                               </button>
                             )}
-                            {active && (
+                            {active && can('inventory', 'edit') && (
                               <button className="btn btn-success btn-sm" onClick={() => setCompleteTarget({ itemId: r.itemId, repair: r })}>
                                 <CheckCircle size={13} /> Complete
                               </button>
@@ -447,7 +455,7 @@ export default function Inventory() {
                   <tbody>
                     {requests.length === 0 && (
                       <tr><td colSpan={7}>
-                        <EmptyState icon={ShoppingCart} message="No purchase requests." action={<button className="btn btn-primary btn-sm" onClick={() => { setEditRequest(null); setShowRequestModal(true); }}><Plus size={14} /> Create Purchase Request</button>} />
+                        <EmptyState icon={ShoppingCart} message="No purchase requests." action={can('inventory', 'add') && <button className="btn btn-primary btn-sm" onClick={() => { setEditRequest(null); setShowRequestModal(true); }}><Plus size={14} /> Create Purchase Request</button>} />
                       </td></tr>
                     )}
                     {requests.map(r => {
@@ -465,10 +473,10 @@ export default function Inventory() {
                           <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{r.createdAt ? format(new Date(r.createdAt), 'dd MMM yyyy') : '—'}</td>
                           <td onClick={e => e.stopPropagation()}>
                             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                              {canReceive && <button className="btn btn-success btn-sm" onClick={() => setReceiveTarget(r)}><PackageCheck size={13} /> Receive</button>}
-                              {(r.status === 'received' || r.status === 'cancelled') && <button className="btn btn-secondary btn-sm" title={r.status === 'received' ? 'Reverse this purchase' : 'Reopen this request'} onClick={() => setReverseTarget(r)}><RotateCcw size={13} /> Reverse</button>}
-                              <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => { setEditRequest(r); setShowRequestModal(true); }}><Edit2 size={14} /></button>
-                              <button className="btn btn-danger btn-sm btn-icon" title="Delete" onClick={() => setDeleteRequestId(r._id)}><Trash2 size={14} /></button>
+                              {canReceive && can('inventory', 'edit') && <button className="btn btn-success btn-sm" onClick={() => setReceiveTarget(r)}><PackageCheck size={13} /> Receive</button>}
+                              {(r.status === 'received' || r.status === 'cancelled') && can('inventory', 'edit') && <button className="btn btn-secondary btn-sm" title={r.status === 'received' ? 'Reverse this purchase' : 'Reopen this request'} onClick={() => setReverseTarget(r)}><RotateCcw size={13} /> Reverse</button>}
+                              {can('inventory', 'edit') && <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => { setEditRequest(r); setShowRequestModal(true); }}><Edit2 size={14} /></button>}
+                              {can('inventory', 'delete') && <button className="btn btn-danger btn-sm btn-icon" title="Delete" onClick={() => setDeleteRequestId(r._id)}><Trash2 size={14} /></button>}
                             </div>
                           </td>
                         </tr>
@@ -1120,6 +1128,7 @@ function LogVisitModal({ target, onClose, onSaved }) {
 
 // ── Item Detail Modal (with repair history) ──────────────────────────────────────
 function ItemDetailModal({ id, onClose, onEdit, onSendRepair, onLogVisit, onComplete }) {
+  const { can } = usePermissions();
   const { data, isLoading } = useQuery({ queryKey: ['inventory-item', id], queryFn: () => api.get(`/inventory/${id}`) });
   const it = data?.item;
 
@@ -1142,10 +1151,10 @@ function ItemDetailModal({ id, onClose, onEdit, onSendRepair, onLogVisit, onComp
     <Modal open onClose={onClose} title="Item Details" size="lg"
       footer={it ? <>
         <button className="btn btn-secondary" onClick={onClose}>Close</button>
-        {it.status !== 'in_repair' && it.status !== 'disposed' && (
+        {can('inventory', 'edit') && it.status !== 'in_repair' && it.status !== 'disposed' && (
           <button className="btn btn-secondary" onClick={() => onSendRepair(it)}><Wrench size={14} /> Send to Repair</button>
         )}
-        <button className="btn btn-primary" onClick={() => onEdit(it)}>Edit</button>
+        {can('inventory', 'edit') && <button className="btn btn-primary" onClick={() => onEdit(it)}>Edit</button>}
       </> : null}>
       {isLoading || !it ? <PageLoader /> : (
         <>
@@ -1189,10 +1198,10 @@ function ItemDetailModal({ id, onClose, onEdit, onSendRepair, onLogVisit, onComp
                         <Pill meta={REPAIR_STATUS_META[r.status]} />
                       </div>
                       <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
-                        {active && !r.linkedVisit && (
+                        {active && !r.linkedVisit && can('inventory', 'edit') && (
                           <button className="btn btn-secondary btn-sm" onClick={() => onLogVisit(it._id, r)}><Link2 size={13} /> Log Visit</button>
                         )}
-                        {active && (
+                        {active && can('inventory', 'edit') && (
                           <button className="btn btn-success btn-sm" onClick={() => onComplete(it._id, { ...r, itemName: it.name })}><CheckCircle size={13} /> Complete</button>
                         )}
                         {r.linkedVisit && <span style={{ fontSize: 12, color: '#16a34a', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Link2 size={12} /> Visit linked</span>}
@@ -1516,6 +1525,7 @@ function ReceiveRequestModal({ request, methods = [], onClose, onSaved }) {
 
 // ── Purchase Request Detail Modal ─────────────────────────────────────────────────
 function RequestDetailModal({ id, onClose, onEdit, onReceive, onReverse }) {
+  const { can } = usePermissions();
   const { data, isLoading } = useQuery({ queryKey: ['purchase-request', id], queryFn: () => api.get(`/purchase-requests/${id}`) });
   const r = data?.request;
   const canReceive = r && r.status !== 'received' && r.status !== 'cancelled';
@@ -1526,9 +1536,9 @@ function RequestDetailModal({ id, onClose, onEdit, onReceive, onReverse }) {
     <Modal open onClose={onClose} title="Purchase Request" size="lg"
       footer={r ? <>
         <button className="btn btn-secondary" onClick={onClose}>Close</button>
-        {(received || r.status === 'cancelled') && <button className="btn btn-secondary" onClick={() => onReverse(r)}><RotateCcw size={14} /> Reverse</button>}
-        <button className="btn btn-secondary" onClick={() => onEdit(r)}>Edit</button>
-        {canReceive && <button className="btn btn-success" onClick={() => onReceive(r)}><PackageCheck size={14} /> Receive</button>}
+        {(received || r.status === 'cancelled') && can('inventory', 'edit') && <button className="btn btn-secondary" onClick={() => onReverse(r)}><RotateCcw size={14} /> Reverse</button>}
+        {can('inventory', 'edit') && <button className="btn btn-secondary" onClick={() => onEdit(r)}>Edit</button>}
+        {canReceive && can('inventory', 'edit') && <button className="btn btn-success" onClick={() => onReceive(r)}><PackageCheck size={14} /> Receive</button>}
       </> : null}>
       {isLoading || !r ? <PageLoader /> : (
         <>

@@ -5,12 +5,14 @@ import { Select as AntSelect, Dropdown } from 'antd';
 import { Plus, Trash2, BookOpen, Users, Edit, GripVertical, Eye, ChevronLeft, ChevronRight, UserCheck, DoorOpen, MoreVertical } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
+import { usePermissions } from '../../store/usePermissions';
 import { Modal, ConfirmDialog, EmptyState, PageLoader, FormRow, StatusBadge, Select, SearchInput } from '../../components/ui';
 
 const CLASS_ORDER_KEY = 'sklproj_class_order';
 
 export function Classes() {
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const [showModal, setShowModal] = useState(false);
   const [editClass, setEditClass] = useState(null);
   const [viewClass, setViewClass] = useState(null);
@@ -112,9 +114,11 @@ export function Classes() {
           <h1 className="page-title">Classes</h1>
           <p className="page-subtitle">{orderedClasses.length} classes configured</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setEditClass(null); reset(); setSelectedSubjects([]); setSubjectTeacherMap({}); setClassTab('details'); setShowModal(true); }}>
-          <Plus size={16} /> Add Class
-        </button>
+        {can('classes', 'add') && (
+          <button className="btn btn-primary" onClick={() => { setEditClass(null); reset(); setSelectedSubjects([]); setSubjectTeacherMap({}); setClassTab('details'); setShowModal(true); }}>
+            <Plus size={16} /> Add Class
+          </button>
+        )}
       </div>
 
       {isLoading ? <PageLoader /> : (
@@ -123,7 +127,7 @@ export function Classes() {
             <div style={{ gridColumn: '1/-1' }}>
               <div className="card">
                 <EmptyState icon={BookOpen} message="No classes yet. Create your first class!"
-                  action={<button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}><Plus size={14} /> Add Class</button>} />
+                  action={can('classes', 'add') ? <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}><Plus size={14} /> Add Class</button> : undefined} />
               </div>
             </div>
           )}
@@ -162,18 +166,20 @@ export function Classes() {
                     {cls.classTeacher ? cls.classTeacher.name : <span style={{ color: 'var(--text-muted)' }}>No class teacher</span>}
                   </div>
                 </div>
-                <div style={{ flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                  <Dropdown trigger={['click']} placement="bottomRight"
-                    menu={{
-                      items: [
-                        { key: 'edit', label: 'Edit', icon: <Edit size={14} /> },
-                        { key: 'delete', label: 'Delete', danger: true, icon: <Trash2 size={14} /> },
-                      ],
-                      onClick: ({ key, domEvent }) => { domEvent.stopPropagation(); key === 'edit' ? openEdit(cls) : setDeleteId(cls._id); },
-                    }}>
-                    <button className="btn btn-secondary btn-sm btn-icon" onClick={e => e.stopPropagation()} title="More"><MoreVertical size={16} /></button>
-                  </Dropdown>
-                </div>
+                {(can('classes', 'edit') || can('classes', 'delete')) && (
+                  <div style={{ flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                    <Dropdown trigger={['click']} placement="bottomRight"
+                      menu={{
+                        items: [
+                          ...(can('classes', 'edit') ? [{ key: 'edit', label: 'Edit', icon: <Edit size={14} /> }] : []),
+                          ...(can('classes', 'delete') ? [{ key: 'delete', label: 'Delete', danger: true, icon: <Trash2 size={14} /> }] : []),
+                        ],
+                        onClick: ({ key, domEvent }) => { domEvent.stopPropagation(); key === 'edit' ? openEdit(cls) : setDeleteId(cls._id); },
+                      }}>
+                      <button className="btn btn-secondary btn-sm btn-icon" onClick={e => e.stopPropagation()} title="More"><MoreVertical size={16} /></button>
+                    </Dropdown>
+                  </div>
+                )}
               </div>
 
               {/* Enrolment */}
@@ -228,9 +234,11 @@ export function Classes() {
       <Modal open={!!viewClass} onClose={() => setViewClass(null)} title="Class Details" size="lg"
         footer={<>
           <button className="btn btn-secondary" onClick={() => setViewClass(null)}>Close</button>
-          <button className="btn btn-primary" onClick={() => { const c = viewClass; setViewClass(null); openEdit(c); }}>
-            <Edit size={14} /> Edit Class
-          </button>
+          {can('classes', 'edit') && (
+            <button className="btn btn-primary" onClick={() => { const c = viewClass; setViewClass(null); openEdit(c); }}>
+              <Edit size={14} /> Edit Class
+            </button>
+          )}
         </>}>
         {viewClass && (
           <div>
@@ -480,6 +488,7 @@ export function Classes() {
 
 export function Subjects() {
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const [showModal, setShowModal] = useState(false);
   const [editSubject, setEditSubject] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
@@ -564,14 +573,16 @@ export function Subjects() {
           <p className="page-subtitle">{subjects.length} subjects configured</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {selected.length > 0 && (
+          {selected.length > 0 && can('subjects', 'delete') && (
             <button className="btn btn-danger" onClick={() => setBulkDeleteConfirm(true)}>
               <Trash2 size={16} /> Delete ({selected.length})
             </button>
           )}
-          <button className="btn btn-primary" onClick={() => { codeAutoFill.current = true; reset(); setShowModal(true); }}>
-            <Plus size={16} /> Add Subject
-          </button>
+          {can('subjects', 'add') && (
+            <button className="btn btn-primary" onClick={() => { codeAutoFill.current = true; reset(); setShowModal(true); }}>
+              <Plus size={16} /> Add Subject
+            </button>
+          )}
         </div>
       </div>
 
@@ -604,7 +615,7 @@ export function Subjects() {
                   <tr><td colSpan={7}>
                     <EmptyState icon={BookOpen}
                       message={subjects.length === 0 ? 'No subjects yet.' : 'No subjects match your search.'}
-                      action={subjects.length === 0 ? <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}><Plus size={14} /> Add Subject</button> : undefined} />
+                      action={subjects.length === 0 && can('subjects', 'add') ? <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}><Plus size={14} /> Add Subject</button> : undefined} />
                   </td></tr>
                 )}
                 {displaySubjects.map((sub, idx) => {
@@ -626,7 +637,9 @@ export function Subjects() {
                       <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{subTeachers.length ? subTeachers.join(', ') : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                       <td>
                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                          <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openEdit(sub)}><Edit size={14} /></button>
+                          {can('subjects', 'edit') && (
+                            <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openEdit(sub)}><Edit size={14} /></button>
+                          )}
                         </div>
                       </td>
                     </tr>

@@ -6,6 +6,7 @@ import { Select as AntSelect } from 'antd';
 import api from '../../utils/api';
 import { useYear } from '../../store/YearContext';
 import { StatusBadge, PageLoader, EmptyState, StatCard, Modal, FormRow, ConfirmDialog, SearchInput } from '../../components/ui';
+import { usePermissions } from '../../store/usePermissions';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -36,6 +37,7 @@ function SalaryAttChip({ label, count, color, bg }) {
 
 export default function Salary() {
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const now = new Date();
   const { selectedYear, isCurrent, months: ayMonths } = useYear();
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -220,20 +222,22 @@ export default function Salary() {
             options={yearOptions.map(y => ({ value: y, label: String(y) }))}
             className="salary-period-select"
           />
-          {selected.length > 0 && (
+          {selected.length > 0 && can('salary', 'delete') && (
             <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
               <Trash2 size={16} /> Delete ({selected.length})
             </button>
           )}
-          <button
-            className="btn btn-secondary"
-            onClick={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending}
-            title="Add any missing employees to this month's salary"
-          >
-            <RotateCcw size={16} style={syncMutation.isPending ? { animation: 'spin 1s linear infinite' } : {}} />
-            {syncMutation.isPending ? 'Syncing...' : 'Sync Employees'}
-          </button>
+          {can('salary', 'edit') && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+              title="Add any missing employees to this month's salary"
+            >
+              <RotateCcw size={16} style={syncMutation.isPending ? { animation: 'spin 1s linear infinite' } : {}} />
+              {syncMutation.isPending ? 'Syncing...' : 'Sync Employees'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -255,7 +259,7 @@ export default function Salary() {
               onChange={val => setRoleFilter(val ?? '')}
               options={roles.map(r => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
             />
-            {needsRecalcIds.length > 0 && (
+            {needsRecalcIds.length > 0 && can('salary', 'edit') && (
               <button className="btn btn-secondary" style={{ marginLeft: 'auto' }}
                 onClick={() => calcAllMutation.mutate(needsRecalcIds)} disabled={calcAllMutation.isPending}>
                 <RotateCcw size={16} style={calcAllMutation.isPending ? { animation: 'spin 1s linear infinite' } : {}} />
@@ -308,19 +312,23 @@ export default function Salary() {
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 4 }}>
                           {(sal.grossSalary || 0) > 0 ? (
-                            <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setEditSalary(sal)} title="Edit salary">
-                              <Edit2 size={14} />
-                            </button>
+                            can('salary', 'edit') && (
+                              <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setEditSalary(sal)} title="Edit salary">
+                                <Edit2 size={14} />
+                              </button>
+                            )
                           ) : (
-                            <button className="btn btn-sm btn-icon" onClick={() => setEditSalary(sal)} title="Add salary"
-                              style={{ background: '#eff6ff', color: 'var(--primary)', border: '1px solid #bfdbfe' }}>
-                              <Plus size={14} />
-                            </button>
+                            can('salary', 'add') && (
+                              <button className="btn btn-sm btn-icon" onClick={() => setEditSalary(sal)} title="Add salary"
+                                style={{ background: '#eff6ff', color: 'var(--primary)', border: '1px solid #bfdbfe' }}>
+                                <Plus size={14} />
+                              </button>
+                            )
                           )}
                           <button className="btn btn-secondary btn-sm btn-icon" onClick={() => downloadPayslip(sal._id)} title="Download Payslip">
                             <Download size={14} />
                           </button>
-                          {sal.status === 'pending' && (
+                          {sal.status === 'pending' && can('salary', 'edit') && (
                             <button className="btn btn-success btn-sm" onClick={() => setPayModal(sal)} style={{ padding: '4px 10px' }}>Pay</button>
                           )}
                         </div>
@@ -408,6 +416,7 @@ export default function Salary() {
       {viewSalary && (
         <ViewSalaryModal
           sal={viewSalary}
+          canEdit={can('salary', 'edit')}
           onClose={() => setViewSalary(null)}
           onEdit={() => { setEditSalary(viewSalary); setViewSalary(null); }}
           onDownload={() => downloadPayslip(viewSalary._id)}
@@ -861,7 +870,7 @@ function EditSalaryModal({ sal, methods = [], onClose, onSuccess }) {
   );
 }
 
-function ViewSalaryModal({ sal, onClose, onEdit, onDownload, onPay, onRevert, reverting }) {
+function ViewSalaryModal({ sal, canEdit = true, onClose, onEdit, onDownload, onPay, onRevert, reverting }) {
   const e = sal.earnings || {};
   const ded = sal.deductions || {};
 
@@ -883,8 +892,10 @@ function ViewSalaryModal({ sal, onClose, onEdit, onDownload, onPay, onRevert, re
       footer={<>
         <button className="btn btn-secondary" onClick={onClose}>Close</button>
         <button className="btn btn-secondary" onClick={onDownload}><Download size={14} /> Payslip</button>
-        <button className="btn btn-secondary" onClick={onEdit}><Edit2 size={14} /> Edit</button>
-        {sal.status === 'pending' && (
+        {canEdit && (
+          <button className="btn btn-secondary" onClick={onEdit}><Edit2 size={14} /> Edit</button>
+        )}
+        {sal.status === 'pending' && canEdit && (
           <button className="btn btn-success" onClick={onPay} style={{ fontWeight: 600, background: '#16a34a', borderColor: '#16a34a', color: 'white' }}>Pay Now</button>
         )}
       </>}>
@@ -965,10 +976,12 @@ function ViewSalaryModal({ sal, onClose, onEdit, onDownload, onPay, onRevert, re
             {sal.payment.transactionId && <span style={{ color: 'var(--text-secondary)', marginLeft: 8 }}>· Ref: {sal.payment.transactionId}</span>}
             {sal.payment.date && <span style={{ color: 'var(--text-secondary)', marginLeft: 8 }}>· {new Date(sal.payment.date).toLocaleDateString('en-IN')}</span>}
           </div>
-          <button className="btn btn-secondary btn-sm" onClick={onRevert} disabled={reverting}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
-            <RotateCcw size={13} /> {reverting ? 'Reverting…' : 'Revert to Pending'}
-          </button>
+          {canEdit && (
+            <button className="btn btn-secondary btn-sm" onClick={onRevert} disabled={reverting}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+              <RotateCcw size={13} /> {reverting ? 'Reverting…' : 'Revert to Pending'}
+            </button>
+          )}
         </div>
       )}
     </Modal>

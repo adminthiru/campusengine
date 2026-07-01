@@ -13,6 +13,7 @@ import {
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useAuth } from '../../store/AuthContext';
+import { usePermissions } from '../../store/usePermissions';
 import { Modal, ConfirmDialog, StatusBadge, Pagination, SearchInput, Avatar, EmptyState, PageLoader, FormRow, ColumnSelector, useColumnSelector } from '../../components/ui';
 import { BulkUploadModal } from '../../components/ui/BulkUploadModal';
 import { format } from 'date-fns';
@@ -53,6 +54,7 @@ const DETAIL_TABS = [
 export default function Students() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { can } = usePermissions();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('');
@@ -377,17 +379,17 @@ export default function Students() {
             const noneTransferred = selectedStudents.every(s => s.status !== 'transferred');
             return (
               <>
-                {noneTransferred && (
+                {noneTransferred && can('students', 'edit') && (
                   <button className="btn btn-secondary" onClick={() => setPromoteModal(true)}>
                     <GraduationCap size={16} /> Promote ({selected.length})
                   </button>
                 )}
-                {noneTransferred && (
+                {noneTransferred && can('students', 'edit') && (
                   <button className="btn btn-secondary" onClick={() => setTransferModal(true)} style={{ color: '#b45309' }}>
                     <ArrowLeft size={16} style={{ transform: 'rotate(180deg)' }} /> Transfer ({selected.length})
                   </button>
                 )}
-                {allTransferred && selected.length === 1 && (
+                {allTransferred && selected.length === 1 && can('students', 'edit') && (
                   <button className="btn btn-secondary" onClick={() => setRejoinModal(selectedStudents[0])} style={{ color: '#16a34a' }}>
                     <GraduationCap size={16} /> Rejoin School
                   </button>
@@ -395,10 +397,12 @@ export default function Students() {
               </>
             );
           })()}
-          <button className="btn btn-secondary" onClick={() => setShowBulkModal(true)}>
-            <Upload size={14} /> Bulk Upload
-          </button>
-          {atStudentCap ? (
+          {can('students', 'add') && (
+            <button className="btn btn-secondary" onClick={() => setShowBulkModal(true)}>
+              <Upload size={14} /> Bulk Upload
+            </button>
+          )}
+          {can('students', 'add') && (atStudentCap ? (
             <a href="/settings/subscription" className="btn btn-secondary" title={`Plan limit reached (${total}/${studentCap})`} style={{ textDecoration: 'none' }}>
               <Plus size={14} /> {total}/{studentCap} — Upgrade to add more
             </a>
@@ -406,7 +410,7 @@ export default function Students() {
             <button className="btn btn-primary" onClick={openAdd}>
               <Plus size={14} /> Add Student
             </button>
-          )}
+          ))}
         </div>
       </div>
 
@@ -428,7 +432,7 @@ export default function Students() {
           onClick={() => { setShowInactive(v => !v); setShowTransferred(false); setPage(1); setSelected([]); }}>
           Inactive
         </button>
-        {selected.length > 0 && (
+        {selected.length > 0 && can('students', 'delete') && (
           <button className="btn btn-danger btn-sm" onClick={() => setBulkDeleteConfirm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Trash2 size={15} /> Delete ({selected.length})
           </button>
@@ -466,7 +470,7 @@ export default function Students() {
               <tbody>
                 {students.length === 0 && (
                   <tr><td colSpan={15}>
-                    <EmptyState icon={GraduationCap} message="No students found." action={<button className="btn btn-primary btn-sm" onClick={openAdd}><Plus size={14} /> Add Student</button>} />
+                    <EmptyState icon={GraduationCap} message="No students found." action={can('students', 'add') ? <button className="btn btn-primary btn-sm" onClick={openAdd}><Plus size={14} /> Add Student</button> : undefined} />
                   </td></tr>
                 )}
                 {students.map(stu => (
@@ -500,9 +504,11 @@ export default function Students() {
                     {col('transport')          && <td style={{ fontSize: 13 }}>{stu.transportRoute ? `${stu.transportRoute.routeNumber ? '#' + stu.transportRoute.routeNumber + ' · ' : ''}${stu.transportRoute.vehicleNumber || stu.transportRoute.routeName}` : '—'}</td>}
                     {col('address')            && <td style={{ fontSize: 13, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stu.address?.street || '—'}</td>}
                     <td style={{ position: 'sticky', right: 0, zIndex: 2, background: 'white', boxShadow: '-2px 0 5px rgba(0,0,0,0.08)' }} onClick={e => e.stopPropagation()}>
-                      <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openEdit(stu)}>
-                        <Edit size={15} />
-                      </button>
+                      {can('students', 'edit') && (
+                        <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openEdit(stu)}>
+                          <Edit size={15} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1147,6 +1153,7 @@ function ParentFormInline({ draft, setDraft, onSave, onCancel }) {
 
 // ── Student Detail Page ───────────────────────────────────────────────────────
 function StudentDetail({ student, onBack, onDelete, onDownload, onEdit, onRejoin, onTransfer }) {
+  const { can } = usePermissions();
   const [activeTab, setActiveTab] = useState('overview');
   const [zoomImage, setZoomImage] = useState(false);
   const { startMonth, endMonth, isCurrent } = useYear();
@@ -1308,14 +1315,18 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit, onRejoin
               </Dropdown>
             );
           })()}
-          <button className="btn btn-secondary btn-sm" onClick={() => onEdit(student)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Edit size={14} /> Edit
-          </button>
+          {can('students', 'edit') && (
+            <button className="btn btn-secondary btn-sm" onClick={() => onEdit(student)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Edit size={14} /> Edit
+            </button>
+          )}
           {student.status === 'transferred' ? (
             <>
-              <button className="btn btn-secondary btn-sm" onClick={() => onRejoin?.(student)} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#16a34a', borderColor: '#86efac' }}>
-                <GraduationCap size={14} /> Rejoin School
-              </button>
+              {can('students', 'edit') && (
+                <button className="btn btn-secondary btn-sm" onClick={() => onRejoin?.(student)} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#16a34a', borderColor: '#86efac' }}>
+                  <GraduationCap size={14} /> Rejoin School
+                </button>
+              )}
               {student.transferHistory?.length > 0 && (
                 <button className="btn btn-secondary btn-sm" onClick={async () => {
                   try {
@@ -1350,14 +1361,18 @@ function StudentDetail({ student, onBack, onDelete, onDownload, onEdit, onRejoin
               <button className="btn btn-secondary btn-sm" onClick={() => onDownload(student._id)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Download size={14} /> Admission Letter
               </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => onTransfer?.(student)} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#b45309' }}>
-                <ArrowLeft size={14} style={{ transform: 'rotate(180deg)' }} /> Transfer
-              </button>
+              {can('students', 'edit') && (
+                <button className="btn btn-secondary btn-sm" onClick={() => onTransfer?.(student)} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#b45309' }}>
+                  <ArrowLeft size={14} style={{ transform: 'rotate(180deg)' }} /> Transfer
+                </button>
+              )}
             </>
           )}
-          <button className="btn btn-danger btn-sm" onClick={() => onDelete(student._id)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Trash2 size={14} /> Delete
-          </button>
+          {can('students', 'delete') && (
+            <button className="btn btn-danger btn-sm" onClick={() => onDelete(student._id)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Trash2 size={14} /> Delete
+            </button>
+          )}
         </div>
       </div>
 

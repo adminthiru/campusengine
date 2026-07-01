@@ -7,6 +7,7 @@ import { Select as AntSelect, DatePicker, TimePicker } from 'antd';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
 import api from '../../utils/api';
+import { usePermissions } from '../../store/usePermissions';
 import { PageLoader, StatusBadge, Modal, FormRow, SearchInput } from '../../components/ui';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -31,6 +32,7 @@ export default function ExamDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const [activeClassId, setActiveClassId] = useState(null);
   const [activeSubjectId, setActiveSubjectId] = useState(null);
   const [editMode, setEditMode] = useState(false);
@@ -398,34 +400,40 @@ export default function ExamDetail() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button className="btn btn-secondary btn-sm btn-icon" title="Edit exam" onClick={openEditModal}>
-            <Edit2 size={14} />
-          </button>
+          {can('exams', 'edit') && (
+            <button className="btn btn-secondary btn-sm btn-icon" title="Edit exam" onClick={openEditModal}>
+              <Edit2 size={14} />
+            </button>
+          )}
           {!exam.isResultPublished && !exam.resultsComplete && exam.resultsPending > 0 && (
             <span style={{ fontSize: 12, color: '#d97706', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               {exam.resultsPending} student{exam.resultsPending === 1 ? '' : 's'} pending
             </span>
           )}
           {!exam.isResultPublished ? (
-            <button
-              className="btn btn-publish"
-              onClick={() => publishMutation.mutate()}
-              disabled={publishMutation.isPending || !exam.resultsComplete}
-              style={(!exam.resultsComplete && !publishMutation.isPending) ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
-              title={exam.resultsComplete
-                ? 'Publish results to students, parents & teachers'
-                : `Enter marks or mark Absent for every student first${exam.resultsPending ? ` — ${exam.resultsPending} student${exam.resultsPending === 1 ? '' : 's'} pending` : ''}`}
-            >
-              <Send size={14} /> {publishMutation.isPending ? 'Publishing...' : 'Publish Results'}
-            </button>
+            can('exams', 'edit') && (
+              <button
+                className="btn btn-publish"
+                onClick={() => publishMutation.mutate()}
+                disabled={publishMutation.isPending || !exam.resultsComplete}
+                style={(!exam.resultsComplete && !publishMutation.isPending) ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+                title={exam.resultsComplete
+                  ? 'Publish results to students, parents & teachers'
+                  : `Enter marks or mark Absent for every student first${exam.resultsPending ? ` — ${exam.resultsPending} student${exam.resultsPending === 1 ? '' : 's'} pending` : ''}`}
+              >
+                <Send size={14} /> {publishMutation.isPending ? 'Publishing...' : 'Publish Results'}
+              </button>
+            )
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 600, color: '#16a34a' }}>
                 <CheckCircle size={14} /> Published
               </span>
-              <button className="btn btn-secondary" onClick={() => unpublishMutation.mutate()} disabled={unpublishMutation.isPending}>
-                <EyeOff size={14} /> {unpublishMutation.isPending ? 'Unpublishing...' : 'Unpublish'}
-              </button>
+              {can('exams', 'edit') && (
+                <button className="btn btn-secondary" onClick={() => unpublishMutation.mutate()} disabled={unpublishMutation.isPending}>
+                  <EyeOff size={14} /> {unpublishMutation.isPending ? 'Unpublishing...' : 'Unpublish'}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -494,20 +502,22 @@ export default function ExamDetail() {
               </div>
             )}
             <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
-              <button className="btn btn-secondary" onClick={openScheduleModal}>
-                <CalendarDays size={14} /> Set Exam Dates
-              </button>
+              {can('exams', 'edit') && (
+                <button className="btn btn-secondary" onClick={openScheduleModal}>
+                  <CalendarDays size={14} /> Set Exam Dates
+                </button>
+              )}
               <button className="btn btn-secondary"
                 onClick={() => { setReportClassId(activeClassId || ''); setReportSearch(''); setShowReportModal(true); }}>
                 <FileDown size={14} /> Download Report
               </button>
-              {activeSubjectId && !editMode && (
+              {can('exams', 'edit') && activeSubjectId && !editMode && (
                 <button className="btn btn-primary" onClick={() => setEditMode(true)}>
                   <Edit2 size={14} /> Edit Marks
                 </button>
               )}
             </div>
-            {activeSubjectId && editMode && (
+            {can('exams', 'edit') && activeSubjectId && editMode && (
               <button className="btn btn-success"
                 onClick={() => { handleSaveMarks(); setEditMode(false); }}
                 disabled={saveMarksMutation.isPending}>

@@ -9,6 +9,7 @@ import api from '../../utils/api';
 import { PageLoader, EmptyState, Modal, FormRow, StatCard, SearchInput } from '../../components/ui';
 import { useAuth } from '../../store/AuthContext';
 import { useYear } from '../../store/YearContext';
+import { usePermissions } from '../../store/usePermissions';
 
 const STATUS_BADGE = { completed: 'badge-success', cancelled: 'badge-danger' };
 const STATUS_STYLE = {
@@ -24,6 +25,7 @@ const getSubStatus = v => SUB_STATUS.find(s => s.value === v) || SUB_STATUS[0];
 
 export default function Homework() {
   const { user } = useAuth();
+  const { can } = usePermissions();
   const qc = useQueryClient();
   const { selectedYear, range } = useYear();
   const [activeClass, setActiveClass] = useState('all');
@@ -117,7 +119,7 @@ export default function Homework() {
           <h1 className="page-title">Homework</h1>
           <p className="page-subtitle">Assign and track homework for each class</p>
         </div>
-        {canManage && (
+        {canManage && can('homework', 'add') && (
           <button className="btn btn-primary" onClick={() => setAddOpen(true)}>
             <Plus size={16} /> Add Homework
           </button>
@@ -249,10 +251,12 @@ export default function Homework() {
                       </td>
                       {canManage && (
                         <td onClick={e => e.stopPropagation()}>
-                          <button className="btn btn-secondary btn-sm btn-icon" title="Edit"
-                            onClick={() => setEditHw(hw)}>
-                            <Edit2 size={14} />
-                          </button>
+                          {can('homework', 'edit') && (
+                            <button className="btn btn-secondary btn-sm btn-icon" title="Edit"
+                              onClick={() => setEditHw(hw)}>
+                              <Edit2 size={14} />
+                            </button>
+                          )}
                         </td>
                       )}
                     </tr>
@@ -286,6 +290,7 @@ export default function Homework() {
 
 // ─── Full-page Homework Detail ─────────────────────────────────────────────────
 function HomeworkDetail({ hwId, classes, canManage, onBack }) {
+  const { can } = usePermissions();
   const qc = useQueryClient();
   const [editOpen, setEditOpen] = useState(false);
   const [editStatusMode, setEditStatusMode] = useState(false);
@@ -427,20 +432,26 @@ function HomeworkDetail({ hwId, classes, canManage, onBack }) {
         </div>
         {canManage && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', flexShrink: 0 }}>
-            <button className="btn btn-secondary btn-sm" onClick={() => notifyMutation.mutate()}
-              disabled={notifyMutation.isPending}
-              style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Bell size={14} /> {notifyMutation.isPending ? 'Sending...' : 'Notify Parents'}
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => setEditOpen(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Edit2 size={14} /> Edit
-            </button>
-            <button className="btn btn-danger btn-sm"
-              onClick={() => { if (window.confirm('Delete this homework?')) deleteMutation.mutate(); }}
-              disabled={deleteMutation.isPending}>
-              Delete
-            </button>
+            {can('homework', 'edit') && (
+              <button className="btn btn-secondary btn-sm" onClick={() => notifyMutation.mutate()}
+                disabled={notifyMutation.isPending}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Bell size={14} /> {notifyMutation.isPending ? 'Sending...' : 'Notify Parents'}
+              </button>
+            )}
+            {can('homework', 'edit') && (
+              <button className="btn btn-secondary btn-sm" onClick={() => setEditOpen(true)}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Edit2 size={14} /> Edit
+              </button>
+            )}
+            {can('homework', 'delete') && (
+              <button className="btn btn-danger btn-sm"
+                onClick={() => { if (window.confirm('Delete this homework?')) deleteMutation.mutate(); }}
+                disabled={deleteMutation.isPending}>
+                Delete
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -505,7 +516,7 @@ function HomeworkDetail({ hwId, classes, canManage, onBack }) {
               </span>
             </div>
           </div>
-          {canManage && students.length > 0 && (
+          {canManage && can('homework', 'edit') && students.length > 0 && (
             editStatusMode ? (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button className="btn btn-secondary btn-sm" onClick={() => markAll('completed')}

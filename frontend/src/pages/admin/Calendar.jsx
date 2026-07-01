@@ -6,6 +6,7 @@ import { Select as AntSelect, DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import api from '../../utils/api';
 import { useYear } from '../../store/YearContext';
+import { usePermissions } from '../../store/usePermissions';
 
 const TYPE_CONFIG = {
   holiday:  { label: 'Holiday',   color: '#ef4444', bg: '#fef2f2' },
@@ -33,6 +34,7 @@ function toInputDate(d) {
 
 export default function Calendar() {
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const today = new Date();
   const { selectedYear, startMonth, isCurrent } = useYear();
 
@@ -164,12 +166,16 @@ export default function Calendar() {
           <p className="page-subtitle">Manage holidays, events and important dates</p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <button className="btn btn-secondary" onClick={() => setScheduleModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Settings2 size={16} /> Work Schedule
-          </button>
-          <button className="btn btn-primary" onClick={() => openAdd(today.getDate())} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Plus size={16} /> Add Event
-          </button>
+          {can('calendar', 'edit') && (
+            <button className="btn btn-secondary" onClick={() => setScheduleModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Settings2 size={16} /> Work Schedule
+            </button>
+          )}
+          {can('calendar', 'add') && (
+            <button className="btn btn-primary" onClick={() => openAdd(today.getDate())} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Plus size={16} /> Add Event
+            </button>
+          )}
         </div>
       </div>
 
@@ -197,13 +203,13 @@ export default function Calendar() {
         <CalendarView
           year={year} month={month} daysInMonth={daysInMonth} firstWeekday={firstWeekday}
           eventsByDay={eventsByDay} selectedDay={selectedDay} dayEvents={dayEvents}
-          today={today} isLoading={isLoading}
+          today={today} isLoading={isLoading} can={can}
           onPrev={prevMonth} onNext={nextMonth}
           onDayClick={(d) => setSelectedDay(sel => sel === d ? null : d)}
           onAddClick={openAdd} onEdit={openEdit} onDelete={handleDelete}
         />
       ) : (
-        <ListView year={year} setYear={setYear} groupedList={groupedList} onEdit={openEdit} onDelete={handleDelete} onAdd={() => openAdd(1)} />
+        <ListView year={year} setYear={setYear} groupedList={groupedList} can={can} onEdit={openEdit} onDelete={handleDelete} onAdd={() => openAdd(1)} />
       )}
 
       {/* Work Schedule Modal */}
@@ -478,7 +484,7 @@ function WorkScheduleModal({ onClose }) {
 
 // ── Calendar month grid ───────────────────────────────────────────────────────
 
-function CalendarView({ year, month, daysInMonth, firstWeekday, eventsByDay, selectedDay, dayEvents, today, isLoading, onPrev, onNext, onDayClick, onAddClick, onEdit, onDelete }) {
+function CalendarView({ year, month, daysInMonth, firstWeekday, eventsByDay, selectedDay, dayEvents, today, isLoading, can, onPrev, onNext, onDayClick, onAddClick, onEdit, onDelete }) {
   const isToday = (d) => d === today.getDate() && month === today.getMonth() + 1 && year === today.getFullYear();
   const cells = firstWeekday + daysInMonth; // total cells needed
   const rows  = Math.ceil(cells / 7);
@@ -522,7 +528,7 @@ function CalendarView({ year, month, daysInMonth, firstWeekday, eventsByDay, sel
                         <span style={{ fontSize: 13, fontWeight: isToday(day) ? 700 : 400, color: isToday(day) ? '#fff' : isHoliday ? '#ef4444' : 'var(--text-primary)', background: isToday(day) ? 'var(--primary)' : 'transparent', borderRadius: '50%', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           {day}
                         </span>
-                        {evs.length === 0 && (
+                        {evs.length === 0 && can('calendar', 'add') && (
                           <button onClick={e => { e.stopPropagation(); onAddClick(day); }} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0, color: 'var(--text-muted)', padding: 2 }} className="add-day-btn">
                             <Plus size={13} />
                           </button>
@@ -550,16 +556,18 @@ function CalendarView({ year, month, daysInMonth, firstWeekday, eventsByDay, sel
         <div style={{ background: 'var(--bg-card,#fff)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
           <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontWeight: 600, fontSize: 14 }}>{selectedDay} {MONTHS[month-1]}</span>
-            <button onClick={() => onAddClick(selectedDay)} className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', fontSize: 12 }}>
-              <Plus size={13} /> Add
-            </button>
+            {can('calendar', 'add') && (
+              <button onClick={() => onAddClick(selectedDay)} className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', fontSize: 12 }}>
+                <Plus size={13} /> Add
+              </button>
+            )}
           </div>
           {dayEvents.length === 0 ? (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No events on this day</div>
           ) : (
             <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {dayEvents.map(ev => (
-                <EventCard key={ev._id} ev={ev} onEdit={onEdit} onDelete={onDelete} />
+                <EventCard key={ev._id} ev={ev} can={can} onEdit={onEdit} onDelete={onDelete} />
               ))}
             </div>
           )}
@@ -571,7 +579,7 @@ function CalendarView({ year, month, daysInMonth, firstWeekday, eventsByDay, sel
 
 // ── List (yearly) view ────────────────────────────────────────────────────────
 
-function ListView({ year, setYear, groupedList, onEdit, onDelete, onAdd }) {
+function ListView({ year, setYear, groupedList, can, onEdit, onDelete, onAdd }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
@@ -584,9 +592,11 @@ function ListView({ year, setYear, groupedList, onEdit, onDelete, onAdd }) {
         <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
           <CalendarDays size={48} style={{ marginBottom: 12, opacity: 0.3 }} />
           <div style={{ fontWeight: 600, marginBottom: 6 }}>No events for {year}</div>
-          <button className="btn btn-primary" onClick={onAdd} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-            <Plus size={15} /> Add First Event
-          </button>
+          {can('calendar', 'add') && (
+            <button className="btn btn-primary" onClick={onAdd} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+              <Plus size={15} /> Add First Event
+            </button>
+          )}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -597,7 +607,7 @@ function ListView({ year, setYear, groupedList, onEdit, onDelete, onAdd }) {
                 <span style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 400 }}>{groupedList[m].length} event{groupedList[m].length !== 1 ? 's' : ''}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {groupedList[m].map(ev => <EventCard key={ev._id} ev={ev} onEdit={onEdit} onDelete={onDelete} showDate />)}
+                {groupedList[m].map(ev => <EventCard key={ev._id} ev={ev} can={can} onEdit={onEdit} onDelete={onDelete} showDate />)}
               </div>
             </div>
           ))}
@@ -609,7 +619,7 @@ function ListView({ year, setYear, groupedList, onEdit, onDelete, onAdd }) {
 
 // ── Shared event card ─────────────────────────────────────────────────────────
 
-function EventCard({ ev, onEdit, onDelete, showDate = false }) {
+function EventCard({ ev, can, onEdit, onDelete, showDate = false }) {
   const color = typeColor(ev.type);
   const bg    = typeBg(ev.type);
   return (
@@ -628,8 +638,12 @@ function EventCard({ ev, onEdit, onDelete, showDate = false }) {
         </div>
       </div>
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-        <button onClick={e => onEdit(ev, e)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, borderRadius: 6 }} title="Edit"><Edit2 size={14} /></button>
-        <button onClick={e => onDelete(ev._id, e)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 4, borderRadius: 6 }} title="Delete"><Trash2 size={14} /></button>
+        {can('calendar', 'edit') && (
+          <button onClick={e => onEdit(ev, e)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, borderRadius: 6 }} title="Edit"><Edit2 size={14} /></button>
+        )}
+        {can('calendar', 'delete') && (
+          <button onClick={e => onDelete(ev._id, e)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 4, borderRadius: 6 }} title="Delete"><Trash2 size={14} /></button>
+        )}
       </div>
     </div>
   );

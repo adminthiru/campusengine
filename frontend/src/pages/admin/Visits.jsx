@@ -9,6 +9,7 @@ import api from '../../utils/api';
 import { Modal, ConfirmDialog, Pagination, SearchInput, PageLoader, EmptyState, StatCard, FormRow } from '../../components/ui';
 import { format } from 'date-fns';
 import { useYear } from '../../store/YearContext';
+import { usePermissions } from '../../store/usePermissions';
 
 // Purpose categories with their display labels and colors.
 const PURPOSES = [
@@ -67,6 +68,7 @@ function Pill({ meta }) {
 
 export default function Visits() {
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const { selectedYear, range } = useYear();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -148,17 +150,21 @@ export default function Visits() {
           <p className="page-subtitle">Front-desk visitor &amp; enquiry log</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {selected.length > 0 && (
+          {selected.length > 0 && can('visits', 'delete') && (
             <button className="btn btn-danger" onClick={() => setBulkDeleteConfirm(true)}>
               <Trash2 size={16} /> Delete ({selected.length})
             </button>
           )}
-          <button className="btn btn-secondary" onClick={() => setShowPurposes(true)}>
-            <Plus size={16} /> Add Purpose Category
-          </button>
-          <button className="btn btn-primary" onClick={() => { setEditVisit(null); setShowModal(true); }}>
-            <Plus size={16} /> Add Visitor
-          </button>
+          {can('visits', 'add') && (
+            <button className="btn btn-secondary" onClick={() => setShowPurposes(true)}>
+              <Plus size={16} /> Add Purpose Category
+            </button>
+          )}
+          {can('visits', 'add') && (
+            <button className="btn btn-primary" onClick={() => { setEditVisit(null); setShowModal(true); }}>
+              <Plus size={16} /> Add Visitor
+            </button>
+          )}
         </div>
       </div>
 
@@ -216,7 +222,7 @@ export default function Visits() {
               <tbody>
                 {visits.length === 0 && (
                   <tr><td colSpan={8}>
-                    <EmptyState icon={DoorOpen} message="No visits recorded." action={<button className="btn btn-primary btn-sm" onClick={() => { setEditVisit(null); setShowModal(true); }}><Plus size={14} /> Add Visitor</button>} />
+                    <EmptyState icon={DoorOpen} message="No visits recorded." action={can('visits', 'add') && <button className="btn btn-primary btn-sm" onClick={() => { setEditVisit(null); setShowModal(true); }}><Plus size={14} /> Add Visitor</button>} />
                   </td></tr>
                 )}
                 {visits.map(v => (
@@ -241,7 +247,7 @@ export default function Visits() {
                     <td><Pill meta={STATUS_META[v.status]} /></td>
                     <td onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        {v.followUpRequired && v.status !== 'cancelled' ? (
+                        {can('visits', 'edit') && (v.followUpRequired && v.status !== 'cancelled' ? (
                           // Pending follow-up: the next action is to complete it (no check-out).
                           <button className="btn btn-sm" title="Complete follow-up" onClick={() => setFollowUpTarget(v)}
                             style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '4px 10px', fontWeight: 600, whiteSpace: 'nowrap' }}>
@@ -249,8 +255,10 @@ export default function Visits() {
                           </button>
                         ) : v.status !== 'completed' && v.status !== 'cancelled' ? (
                           <button className="btn btn-secondary btn-sm btn-icon" title="Check out" onClick={() => setCheckoutTarget(v)}><LogOut size={14} /></button>
-                        ) : null}
-                        <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => { setEditVisit(v); setShowModal(true); }}><Edit2 size={14} /></button>
+                        ) : null)}
+                        {can('visits', 'edit') && (
+                          <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => { setEditVisit(v); setShowModal(true); }}><Edit2 size={14} /></button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -556,6 +564,7 @@ function TextBlock({ label, value }) {
 
 // ── Detail Modal (tabbed: details + activity log) ───────────────────────────────
 function VisitDetailModal({ id, onClose, onEdit, onCheckout, onCompleteFollowUp, onCheckInAgain }) {
+  const { can } = usePermissions();
   const { data, isLoading } = useQuery({ queryKey: ['visit', id], queryFn: () => api.get(`/visits/${id}`) });
   const v = data?.visit;
   const history = data?.history || [];
@@ -571,15 +580,19 @@ function VisitDetailModal({ id, onClose, onEdit, onCheckout, onCompleteFollowUp,
     <Modal open onClose={onClose} title="Visit Details" size="lg"
       footer={v ? <>
         <button className="btn btn-secondary" onClick={onClose}>Close</button>
-        <button className="btn btn-secondary" onClick={() => onCheckInAgain(v)}><DoorOpen size={14} /> Check In Again</button>
-        {pendingFollowUp ? (
+        {can('visits', 'edit') && (
+          <button className="btn btn-secondary" onClick={() => onCheckInAgain(v)}><DoorOpen size={14} /> Check In Again</button>
+        )}
+        {can('visits', 'edit') && (pendingFollowUp ? (
           <button className="btn btn-secondary" style={{ color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' }} onClick={() => onCompleteFollowUp(v)}>
             <BellRing size={14} /> Complete Follow-up
           </button>
         ) : v.status !== 'completed' && v.status !== 'cancelled' ? (
           <button className="btn btn-secondary" onClick={() => onCheckout(v)}><LogOut size={14} /> Check Out</button>
-        ) : null}
-        <button className="btn btn-primary" onClick={() => onEdit(v)}>Edit</button>
+        ) : null)}
+        {can('visits', 'edit') && (
+          <button className="btn btn-primary" onClick={() => onEdit(v)}>Edit</button>
+        )}
       </> : null}>
       {isLoading || !v ? <PageLoader /> : (
         <>

@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import api from '../../utils/api';
 import { useYear } from '../../store/YearContext';
 import { Modal, ConfirmDialog, StatusBadge, Pagination, SearchInput, PageLoader, FormRow, EmptyState, StatCard, ColumnSelector, useColumnSelector } from '../../components/ui';
+import { usePermissions } from '../../store/usePermissions';
 
 const FEE_COLS = [
   { key: 'mobile',       label: 'Mobile' },
@@ -46,6 +47,7 @@ const buildPaymentMethods = (custom = []) => [
 
 export default function Fees() {
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -259,25 +261,33 @@ export default function Fees() {
         <div style={{ display: 'flex', gap: 8 }}>
           {selected.length > 0 && (
             <>
-              <button className="btn btn-secondary" onClick={sendReminders}>
-                <MessageSquare size={16} /> Send Reminder ({selected.length})
-              </button>
-              <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
-                <Trash2 size={16} /> Delete ({selected.length})
-              </button>
+              {can('fees', 'edit') && (
+                <button className="btn btn-secondary" onClick={sendReminders}>
+                  <MessageSquare size={16} /> Send Reminder ({selected.length})
+                </button>
+              )}
+              {can('fees', 'delete') && (
+                <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
+                  <Trash2 size={16} /> Delete ({selected.length})
+                </button>
+              )}
             </>
           )}
-          {unsyncedCount > 0 && (
+          {unsyncedCount > 0 && can('fees', 'edit') && (
             <button className="btn btn-secondary" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}>
               <RefreshCw size={16} /> {syncMutation.isPending ? 'Syncing…' : `Sync Students (${unsyncedCount})`}
             </button>
           )}
-          <button className="btn btn-secondary" onClick={() => setShowMethodsModal(true)}>
-            <Tag size={16} /> Add Payment Category
-          </button>
-          <button className="btn btn-primary" onClick={openCreateModal}>
-            <Plus size={16} /> Add / Edit Fee Record
-          </button>
+          {can('fees', 'add') && (
+            <button className="btn btn-secondary" onClick={() => setShowMethodsModal(true)}>
+              <Tag size={16} /> Add Payment Category
+            </button>
+          )}
+          {can('fees', 'add') && (
+            <button className="btn btn-primary" onClick={openCreateModal}>
+              <Plus size={16} /> Add / Edit Fee Record
+            </button>
+          )}
         </div>
       </div>
 
@@ -404,12 +414,14 @@ export default function Fees() {
                     {col('status')  && <td><StatusBadge status={fee.status} /></td>}
                     <td onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setEditFee(fee)} title="Edit fee structure"><Edit2 size={14} /></button>
+                        {can('fees', 'edit') && (
+                          <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setEditFee(fee)} title="Edit fee structure"><Edit2 size={14} /></button>
+                        )}
                         <button className="btn btn-secondary btn-sm btn-icon" onClick={() => downloadReceipt(fee._id)} title={fee.paidAmount > 0 ? 'Download receipt' : 'Download fee statement'}><Download size={14} /></button>
-                        {fee.pendingAmount > 0 && (
+                        {fee.pendingAmount > 0 && can('fees', 'edit') && (
                           <button className="btn btn-success btn-sm" onClick={() => setShowCollect(fee)} style={{ padding: '4px 12px', fontSize: 12 }}>Collect Fee</button>
                         )}
-                        {arrearsMap[fee.student?._id] && (
+                        {arrearsMap[fee.student?._id] && can('fees', 'edit') && (
                           <button className="btn btn-sm" onClick={() => setArrearTarget(fee.student)}
                             style={{ padding: '4px 12px', fontSize: 12, background: '#fffbeb', color: '#b45309', border: '1px solid #fcd34d', fontWeight: 600, whiteSpace: 'nowrap' }}
                             title={`Arrears from ${arrearsMap[fee.student._id].years} previous year(s): ₹${(arrearsMap[fee.student._id].total || 0).toLocaleString('en-IN')}`}>
@@ -579,11 +591,13 @@ export default function Fees() {
                             {t.discount?.amount > 0 ? (
                               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
                                 <span>−₹{t.discount.amount.toLocaleString('en-IN')}</span>
-                                <button title="Remove this discount"
-                                  onClick={() => setClearDiscTarget({ feeId: viewFee._id, termName: t.name, amount: t.discount.amount })}
-                                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, borderRadius: 4, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', padding: 0 }}>
-                                  <X size={11} />
-                                </button>
+                                {can('fees', 'edit') && (
+                                  <button title="Remove this discount"
+                                    onClick={() => setClearDiscTarget({ feeId: viewFee._id, termName: t.name, amount: t.discount.amount })}
+                                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, borderRadius: 4, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', padding: 0 }}>
+                                    <X size={11} />
+                                  </button>
+                                )}
                               </div>
                             ) : '—'}
                             {t.discount?.amount > 0 && t.discount?.reason && (
@@ -602,7 +616,7 @@ export default function Fees() {
                             }}>{t.status}</span>
                           </td>
                           <td>
-                            {t.paidAmount > 0 && lastPayment && (
+                            {t.paidAmount > 0 && lastPayment && can('fees', 'edit') && (
                               <button className="btn btn-sm btn-icon" title="Reverse last payment for this term"
                                 onClick={() => setReverseTarget({ feeId: viewFee._id, paymentId: lastPayment._id, amount: lastPayment.amount, termName: t.name })}
                                 style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>

@@ -8,6 +8,7 @@ import api from '../../utils/api';
 import { Modal, ConfirmDialog, Pagination, SearchInput, PageLoader, EmptyState, StatCard, FormRow, Avatar } from '../../components/ui';
 import { format } from 'date-fns';
 import { useYear } from '../../store/YearContext';
+import { usePermissions } from '../../store/usePermissions';
 
 const REASONS = [
   { value: 'medical',         label: 'Medical',          color: '#dc2626', bg: '#fef2f2' },
@@ -42,6 +43,7 @@ const classLabel = (cls) => cls ? `${cls.name}${cls.section ? ' - ' + cls.sectio
 
 export default function OutPass() {
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const { selectedYear, range } = useYear();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -116,14 +118,16 @@ export default function OutPass() {
           <p className="page-subtitle">Issue and track student gate passes</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {selected.length > 0 && (
+          {selected.length > 0 && can('outpass', 'delete') && (
             <button className="btn btn-danger" onClick={() => setBulkDeleteConfirm(true)}>
               <Trash2 size={16} /> Delete ({selected.length})
             </button>
           )}
-          <button className="btn btn-primary" onClick={() => { setEditPass(null); setShowModal(true); }}>
-            <Plus size={16} /> New Out Pass
-          </button>
+          {can('outpass', 'add') && (
+            <button className="btn btn-primary" onClick={() => { setEditPass(null); setShowModal(true); }}>
+              <Plus size={16} /> New Out Pass
+            </button>
+          )}
         </div>
       </div>
 
@@ -174,7 +178,7 @@ export default function OutPass() {
               <tbody>
                 {outpasses.length === 0 && (
                   <tr><td colSpan={8}>
-                    <EmptyState icon={LogOut} message="No out passes issued." action={<button className="btn btn-primary btn-sm" onClick={() => { setEditPass(null); setShowModal(true); }}><Plus size={14} /> New Out Pass</button>} />
+                    <EmptyState icon={LogOut} message="No out passes issued." action={can('outpass', 'add') && <button className="btn btn-primary btn-sm" onClick={() => { setEditPass(null); setShowModal(true); }}><Plus size={14} /> New Out Pass</button>} />
                   </td></tr>
                 )}
                 {outpasses.map(op => (
@@ -208,10 +212,12 @@ export default function OutPass() {
                         <button className="btn btn-secondary btn-sm btn-icon" title="Download Pass" onClick={() => downloadPass(op)} disabled={downloadingId === op._id}>
                           <Download size={14} />
                         </button>
-                        {op.status === 'active' && (
+                        {op.status === 'active' && can('outpass', 'edit') && (
                           <button className="btn btn-secondary btn-sm btn-icon" title="Mark returned" onClick={() => setReturnTarget(op)}><RotateCcw size={14} /></button>
                         )}
-                        <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => { setEditPass(op); setShowModal(true); }}><Edit2 size={14} /></button>
+                        {can('outpass', 'edit') && (
+                          <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => { setEditPass(op); setShowModal(true); }}><Edit2 size={14} /></button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -537,6 +543,7 @@ function TextBlock({ label, value }) {
 }
 
 function OutPassDetailModal({ id, onClose, onEdit, onDownload, onReturn }) {
+  const { can } = usePermissions();
   const { data, isLoading } = useQuery({ queryKey: ['outpass', id], queryFn: () => api.get(`/outpasses/${id}`) });
   const op = data?.outpass;
   const fmt = (d) => d ? format(new Date(d), 'dd MMM, hh:mm a') : null;
@@ -545,8 +552,8 @@ function OutPassDetailModal({ id, onClose, onEdit, onDownload, onReturn }) {
     <Modal open onClose={onClose} title="Out Pass Details" size="lg"
       footer={op ? <>
         <button className="btn btn-secondary" onClick={onClose}>Close</button>
-        {op.status === 'active' && <button className="btn btn-secondary" onClick={() => onReturn(op)}><RotateCcw size={14} /> Mark Returned</button>}
-        <button className="btn btn-secondary" onClick={() => onEdit(op)}>Edit</button>
+        {op.status === 'active' && can('outpass', 'edit') && <button className="btn btn-secondary" onClick={() => onReturn(op)}><RotateCcw size={14} /> Mark Returned</button>}
+        {can('outpass', 'edit') && <button className="btn btn-secondary" onClick={() => onEdit(op)}>Edit</button>}
         <button className="btn btn-primary" onClick={() => onDownload(op)}><Download size={14} /> Download Pass</button>
       </> : null}>
       {isLoading || !op ? <PageLoader /> : (

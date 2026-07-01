@@ -16,6 +16,7 @@ import api from '../../utils/api';
 import { PageLoader, EmptyState, Modal, FormRow } from '../../components/ui';
 import { useAuth } from '../../store/AuthContext';
 import { useYear } from '../../store/YearContext';
+import { usePermissions } from '../../store/usePermissions';
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const DAY_LABELS = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat' };
@@ -82,6 +83,7 @@ export default function Timetable() {
 
 // ─── Class View ────────────────────────────────────────────────────────────────
 function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay }) {
+  const { can } = usePermissions();
   const qc = useQueryClient();
   const [classId, setClassId] = useState(classes[0]?._id || '');
   const [editMode, setEditMode] = useState(false);
@@ -228,8 +230,8 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
         />
         <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{academicYear}</span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          {classId && !editMode && <button className="btn btn-secondary" onClick={() => setShowStructure(true)}><Clock size={16} /> Period Structure</button>}
-          {classId && !editMode && <button className="btn btn-secondary" onClick={() => { setEditMode(true); if (!schedule.length) initSchedule(); }}><Plus size={16} /> Edit Timetable</button>}
+          {can('timetable', 'edit') && classId && !editMode && <button className="btn btn-secondary" onClick={() => setShowStructure(true)}><Clock size={16} /> Period Structure</button>}
+          {can('timetable', 'edit') && classId && !editMode && <button className="btn btn-secondary" onClick={() => { setEditMode(true); if (!schedule.length) initSchedule(); }}><Plus size={16} /> Edit Timetable</button>}
           {editMode && <>
             <button className="btn btn-secondary" onClick={() => { setEditMode(false); qc.invalidateQueries(['timetable']); }}>Cancel</button>
             <button className="btn btn-primary" onClick={saveSchedule} disabled={saving}>
@@ -638,6 +640,7 @@ function TeacherScheduleGrid({ teacherId, teacher, academicYear, periodsPerDay }
 
 // ─── Substitution Panel ────────────────────────────────────────────────────────
 function SubstitutionPanel({ teacherId, teacher, academicYear }) {
+  const { can } = usePermissions();
   const qc = useQueryClient();
   const [absentDate, setAbsentDate] = useState('');
   const [pickingPeriod, setPickingPeriod] = useState(null); // periodNumber being assigned
@@ -819,7 +822,7 @@ function SubstitutionPanel({ teacherId, teacher, academicYear }) {
 
                       {/* Action */}
                       <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                        {tp && (
+                        {can('timetable', 'edit') && tp && (
                           <>
                             <button className="btn btn-primary btn-sm"
                               onClick={() => setPickingPeriod(isPicking ? null : pNum)}

@@ -7,6 +7,7 @@ import { Select as AntSelect, DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import api from '../../utils/api';
 import { useYear } from '../../store/YearContext';
+import { usePermissions } from '../../store/usePermissions';
 import { PageLoader, Avatar, SearchInput, Modal } from '../../components/ui';
 
 const BASE_STATUS_CONFIG = [
@@ -91,6 +92,7 @@ function AmPmTimePicker({ value = '10:00', onChange }) {
 
 export default function Attendance() {
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const { selectedYear, isCurrent, range } = useYear();
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
@@ -572,7 +574,7 @@ export default function Attendance() {
               <button className="btn btn-danger btn-sm" onClick={() => toggleAll('absent')}>All Absent</button>
             </>
           )}
-          {people.length > 0 && (
+          {can('attendance', 'edit') && people.length > 0 && (
             editMode ? (
               <>
                 <button className="btn btn-secondary btn-sm" onClick={() => {
@@ -633,9 +635,11 @@ export default function Attendance() {
             {/* Search + timing rules CTA */}
             <div className="filter-bar" style={{ marginBottom: 16 }}>
               <SearchInput value={search} onChange={setSearch} placeholder="Search staff by name or ID..." />
-              <button className="btn btn-secondary" style={{ marginLeft: 'auto' }} onClick={() => setShowTimingForm(true)}>
-                <Settings size={15} /> {rulesConfigured ? 'Edit Time Rules' : 'Set Time Rules'}
-              </button>
+              {can('attendance', 'edit') && (
+                <button className="btn btn-secondary" style={{ marginLeft: 'auto' }} onClick={() => setShowTimingForm(true)}>
+                  <Settings size={15} /> {rulesConfigured ? 'Edit Time Rules' : 'Set Time Rules'}
+                </button>
+              )}
             </div>
 
             {/* Summary stats */}
@@ -889,7 +893,9 @@ export default function Attendance() {
                             )}
                           </td>
                           <td>
-                          {(lv.status === 'pending' || editingLeaves.has(lv._id)) ? (
+                          {!can('attendance', 'edit') ? (
+                              <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
+                          ) : (lv.status === 'pending' || editingLeaves.has(lv._id)) ? (
                               <div style={{ display: 'flex', gap: 6, minWidth: 170 }}>
                                 <button
                                   onClick={() => { activeLeaveAction.mutate({ id: lv._id, status: 'approved' }); setEditingLeaves(s => { const n = new Set(s); n.delete(lv._id); return n; }); }}
