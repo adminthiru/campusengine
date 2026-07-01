@@ -205,7 +205,7 @@ export default function TenantDetail() {
           </div>
         </Card>
 
-        {/* Admin + Details */}
+        {/* Admin + Billing + Details */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Card title="School Admin">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -215,9 +215,24 @@ export default function TenantDetail() {
               <Field icon={Clock} label="Last login" value={admin?.lastLogin ? fmt(admin.lastLogin) : 'never'} />
             </div>
           </Card>
+
+          <Card title="Billing Summary">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <Field icon={Wallet} label="Total collected" value={<strong style={{ color: '#16a34a' }}>{inr(billing?.totalCollected)}</strong>} />
+              <Field label="Payments" value={billing?.paymentCount || 0} />
+              <Field icon={CalendarDays} label="Last payment" value={billing?.lastPaymentAt ? fmt(billing.lastPaymentAt) : 'none yet'} />
+              <Field icon={Wallet} label="Current billing" value={amountLabel} />
+            </div>
+          </Card>
+
           <Card title="School Details">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <Field icon={MapPin} label="Location" value={school.address?.city} />
+              <Field label="Principal" value={school.principalName} />
+              <Field label="Board" value={school.board} />
+              <Field label="Established" value={school.establishedYear} />
+              <Field label="Affiliation No." value={school.affiliationNumber} />
+              <Field icon={MapPin} label="Location" value={[school.address?.city, school.address?.state].filter(Boolean).join(', ')} />
+              <Field label="Pincode" value={school.address?.pincode} />
               <Field label="Size (signup)" value={school.studentsRange} />
               <Field icon={CalendarDays} label="Registered" value={fmt(school.createdAt)} />
             </div>
