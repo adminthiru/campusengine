@@ -28,6 +28,23 @@ const getGatewayKeys = async () => {
 };
 const getRazorpay = (keyId, keySecret) => { const Razorpay = require('razorpay'); return new Razorpay({ key_id: keyId, key_secret: keySecret }); };
 
+// Run a Razorpay SDK call, retrying transient failures (network blips / 5xx /
+// no status code). Never retries auth (401) or bad-request (400) errors.
+const rzpRetry = async (fn, tries = 3) => {
+  let lastErr;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const code = e?.statusCode;
+      if (code === 400 || code === 401) throw e;   // permanent — don't retry
+      await new Promise(r => setTimeout(r, 400 * (i + 1)));
+    }
+  }
+  throw lastErr;
+};
+
 // The collection methods a school may use (no secrets) — drives the Billing page.
 const getPaymentMethods = async (req, res) => {
   try { res.json({ success: true, methods: (await PlatformSettings.get()).schoolMethods() }); }
@@ -79,11 +96,12 @@ const createOrder = async (req, res) => {
     const { plan, cycle, amount } = await resolvePlanCycle(req);
     if (!plan) return res.status(400).json({ success: false, message: 'Select a plan first.' });
     if (amount < 1) return res.status(400).json({ success: false, message: 'This plan has no price for the selected billing cycle.' });
-    const order = await getRazorpay(keyId, keySecret).orders.create({
+    const rzp = getRazorpay(keyId, keySecret);
+    const order = await rzpRetry(() => rzp.orders.create({
       amount: Math.round(amount * 100),   // paise (min 100)
       currency: 'INR',
       receipt: `sub_${req.user.school}_${Date.now()}`.slice(0, 40),
-    });
+    }));
     res.json({ success: true, order, key: keyId, amount, cycle });
   } catch (err) {
     // Razorpay SDK errors carry the reason under err.error.description, not err.message.
@@ -121,7 +139,8 @@ const verifyPayment = async (req, res) => {
     // Bind to the real Razorpay order: it must exist and its amount must equal
     // what we computed — stops replaying a cheaper/older order's signature.
     try {
-      const order = await getRazorpay(keyId, keySecret).orders.fetch(razorpayOrderId);
+      const rzp = getRazorpay(keyId, keySecret);
+      const order = await rzpRetry(() => rzp.orders.fetch(razorpayOrderId));
       if (!order || Number(order.amount) !== Math.round(amt * 100))
         return res.status(400).json({ success: false, message: 'Order amount mismatch' });
     } catch {
