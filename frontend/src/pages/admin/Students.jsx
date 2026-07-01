@@ -1673,9 +1673,12 @@ const DAY_PRIORITY = ['absent','late','half_day','excused','od','cl','sl','prese
 
 function AttendanceTab({ student, classYear }) {
   const now = new Date();
-  // Default calendar to start of selected AY; fall back to today
-  const initCalYear  = classYear ? parseInt(classYear.academicYear) : now.getFullYear();
-  const initCalMonth = classYear ? parseInt(classYear.startDate.slice(5, 7)) : (now.getMonth() + 1);
+  const { isCurrent } = useYear();
+  // For the current academic year, open on the real current month; for a past
+  // year, open on that AY's start month. Fall back to today with no classYear.
+  const openToNow = classYear ? (isCurrent && classYear.academicYear === student.academicYear) : true;
+  const initCalYear  = openToNow ? now.getFullYear() : parseInt(classYear.academicYear);
+  const initCalMonth = openToNow ? (now.getMonth() + 1) : parseInt(classYear.startDate.slice(5, 7));
   const [month, setMonth] = useState(initCalMonth);
   const [year,  setYear]  = useState(initCalYear);
 
