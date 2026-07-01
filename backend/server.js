@@ -133,7 +133,10 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`\n🚀 School Management Server running on port ${PORT}`);
   console.log(`📊 API: http://localhost:${PORT}/api`);
-  console.log(`🏥 Health: http://localhost:${PORT}/health\n`);
+  console.log(`🏥 Health: http://localhost:${PORT}/health`);
+  // Razorpay key diagnostic (never prints the secret) — confirms .env was loaded.
+  const rid = process.env.RAZORPAY_KEY_ID || '';
+  console.log(`💳 Razorpay keys: ${rid && process.env.RAZORPAY_KEY_SECRET ? `loaded (key …${rid.slice(-4)})` : 'MISSING — set RAZORPAY_KEY_ID/SECRET in .env and restart'}\n`);
 });
 
 module.exports = app;
