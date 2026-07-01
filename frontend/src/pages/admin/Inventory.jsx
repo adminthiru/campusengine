@@ -947,6 +947,7 @@ function CompleteRepairModal({ target, methods = [], onClose, onSaved }) {
   const [form, setForm] = useState({ resolutionNotes: repair.resolutionNotes || '', cost: repair.cost ?? '', itemStatus: 'in_use', paymentMethod: 'cash' });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const req = <span style={{ color: '#dc2626' }}> *</span>;
+  const isDamaged = form.itemStatus === 'damaged';
 
   const mutation = useMutation({
     mutationFn: (payload) => api.post(`/inventory/${itemId}/repairs/${repair._id}/complete`, payload),
@@ -957,14 +958,17 @@ function CompleteRepairModal({ target, methods = [], onClose, onSaved }) {
   });
 
   const submit = () => {
-    if (form.cost === '' || Number(form.cost) < 0) return toast.error('Enter the repair cost');
-    if (!form.paymentMethod) return toast.error('Select a payment method');
     if (!form.resolutionNotes.trim()) return toast.error('Enter the resolution notes');
+    // Damaged/unrepairable items were not fixed — no cost or payment is booked.
+    if (!isDamaged) {
+      if (form.cost === '' || Number(form.cost) < 0) return toast.error('Enter the repair cost');
+      if (!form.paymentMethod) return toast.error('Select a payment method');
+    }
     mutation.mutate({
       resolutionNotes: form.resolutionNotes.trim(),
-      cost: Number(form.cost),
+      cost: isDamaged ? undefined : Number(form.cost),
       itemStatus: form.itemStatus,
-      paymentMethod: form.paymentMethod,
+      paymentMethod: isDamaged ? undefined : form.paymentMethod,
     });
   };
 
@@ -988,18 +992,22 @@ function CompleteRepairModal({ target, methods = [], onClose, onSaved }) {
               { value: 'damaged', label: 'Damaged (unrepairable)' },
             ]} />
         </div>
-        <div className="form-group">
-          <label className="form-label">Repair Cost (₹){req}</label>
-          <input className="form-control" type="number" min={0} value={form.cost} onChange={e => set('cost', e.target.value)} placeholder="e.g. 500 (enter 0 if free)" />
-        </div>
+        {!isDamaged && (
+          <div className="form-group">
+            <label className="form-label">Repair Cost (₹){req}</label>
+            <input className="form-control" type="number" min={0} value={form.cost} onChange={e => set('cost', e.target.value)} placeholder="e.g. 500 (enter 0 if free)" />
+          </div>
+        )}
       </FormRow>
-      <div className="form-group">
-        <label className="form-label">Payment Method{req}</label>
-        <AntSelect style={{ width: '100%' }} value={form.paymentMethod} onChange={v => set('paymentMethod', v)} options={methods} />
-        <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
-          The repair cost is booked as an expense and deducted from this account's balance.
-        </p>
-      </div>
+      {!isDamaged && (
+        <div className="form-group">
+          <label className="form-label">Payment Method{req}</label>
+          <AntSelect style={{ width: '100%' }} value={form.paymentMethod} onChange={v => set('paymentMethod', v)} options={methods} />
+          <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
+            The repair cost is booked as an expense and deducted from this account's balance.
+          </p>
+        </div>
+      )}
       <div className="form-group">
         <label className="form-label">Resolution Notes{req}</label>
         <textarea className="form-control" rows={3} value={form.resolutionNotes} onChange={e => set('resolutionNotes', e.target.value)} placeholder="What was done?" style={{ resize: 'vertical' }} />
