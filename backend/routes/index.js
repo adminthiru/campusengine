@@ -1016,6 +1016,7 @@ router.get('/attendance/leave-balance', protect, checkSubscription, async (req, 
 // ============== FEES ==============
 router.get('/fees', protect, checkSubscription, feesCtrl.getFees);
 router.get('/fees/payment-summary', protect, checkSubscription, feesCtrl.getPaymentSummary);
+router.get('/fees/method-balances', protect, checkSubscription, feesCtrl.getMethodBalances);
 router.get('/fees/report', protect, checkSubscription, feesCtrl.getFeesReport);
 router.get('/fees/unsynced-count', protect, checkSubscription, feesCtrl.getUnsyncedCount);
 router.get('/fees/arrears-summary', protect, checkSubscription, feesCtrl.getArrearsSummary);
@@ -2007,16 +2008,26 @@ router.put('/school/expense-categories', protect, authorize('admin', 'correspond
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
-// Save custom fee payment categories (batch — full list replaces the stored one)
+// Save custom fee payment categories + per-method opening balances
+// (batch — full lists replace the stored ones).
 router.put('/school/payment-methods', protect, authorize('admin', 'correspondent', 'accountant'), async (req, res) => {
   try {
-    const { methods } = req.body;
+    const { methods, openingBalances } = req.body;
     if (!Array.isArray(methods)) return res.status(400).json({ success: false, message: 'methods must be an array' });
     // Trim, drop blanks/dupes, and never store the reserved built-in keys.
-    const reserved = new Set(['cash', 'bank_transfer', 'online', 'cheque']);
+    const reserved = ['cash', 'bank_transfer', 'online', 'cheque'];
+    const reservedSet = new Set(reserved);
     const clean = [...new Set(methods.map(m => String(m || '').trim()).filter(Boolean))]
-      .filter(m => !reserved.has(m.toLowerCase()));
-    const school = await School.findByIdAndUpdate(req.user.school, { paymentMethods: clean }, { returnDocument: 'after' });
+      .filter(m => !reservedSet.has(m.toLowerCase()));
+    const update = { paymentMethods: clean };
+    if (Array.isArray(openingBalances)) {
+      // Keep balances only for valid methods (built-ins + the cleaned custom list).
+      const allowed = new Set([...reserved, ...clean]);
+      update.paymentOpeningBalances = openingBalances
+        .filter(b => b && b.method && allowed.has(String(b.method).trim()))
+        .map(b => ({ method: String(b.method).trim(), amount: Math.max(0, Number(b.amount) || 0) }));
+    }
+    const school = await School.findByIdAndUpdate(req.user.school, update, { returnDocument: 'after' });
     res.json({ success: true, school });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });

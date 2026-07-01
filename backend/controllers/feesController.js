@@ -452,6 +452,42 @@ const getPaymentSummary = async (req, res) => {
   }
 };
 
+// Running balance per payment method = opening balance + ALL collected across
+// every academic year (NOT filtered by year). Drives the "Balance (All
+// Methods)" widget, which carries forward year over year.
+const getMethodBalances = async (req, res) => {
+  try {
+    const schoolId = req.user.school;
+    const school = await School.findById(schoolId).select('paymentMethods paymentOpeningBalances');
+    const custom = school?.paymentMethods || [];
+    const opening = {};
+    (school?.paymentOpeningBalances || []).forEach(b => { if (b?.method) opening[b.method] = Number(b.amount) || 0; });
+
+    const rows = await FeeCollection.aggregate([
+      { $match: { school: new mongoose.Types.ObjectId(schoolId) } },
+      { $unwind: '$payments' },
+      { $group: { _id: '$payments.method', total: { $sum: '$payments.amount' } } },
+    ]);
+    const collected = {};
+    rows.forEach(r => { const k = r._id || 'cash'; collected[k] = (collected[k] || 0) + (r.total || 0); });
+
+    const keys = ['cash', 'bank_transfer', 'cheque', 'online', ...custom];
+    Object.keys(collected).forEach(k => { if (!keys.includes(k)) keys.push(k); });
+    Object.keys(opening).forEach(k => { if (!keys.includes(k)) keys.push(k); });
+
+    const methods = {};
+    let total = 0;
+    for (const k of keys) {
+      const balance = (opening[k] || 0) + (collected[k] || 0);
+      methods[k] = { opening: opening[k] || 0, collected: collected[k] || 0, balance };
+      total += balance;
+    }
+    res.json({ success: true, methods, total });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // Generate receipt PDF
 const getReceiptPDF = async (req, res) => {
   try {
@@ -919,4 +955,4 @@ const syncClassStudents = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
-module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, clearTermDiscount, createRazorpayOrder, verifyRazorpayPayment, getFees, getPaymentSummary, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm, getUnsyncedCount, syncClassStudents, applyClassFeeStructure, getArrearsSummary, getStudentArrears };
+module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, clearTermDiscount, createRazorpayOrder, verifyRazorpayPayment, getFees, getPaymentSummary, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm, getUnsyncedCount, syncClassStudents, applyClassFeeStructure, getArrearsSummary, getStudentArrears, getMethodBalances };

@@ -88,14 +88,17 @@ export default function Fees() {
   });
   const arrearsMap = arrearsData?.arrears || {};
 
-  // Amount collected per payment method (across all matching records).
+  // Running balance per payment method = opening balance + ALL-TIME collected
+  // (not year-filtered). This widget carries forward year over year, unlike the
+  // per-year Total Collected / Pending / Discount cards.
   const [methodFilter, setMethodFilter] = useState('all');
-  const { data: paySummary } = useQuery({
-    queryKey: ['fees-payment-summary', statusFilter, classFilter, search, selectedYear],
-    queryFn: () => api.get(`/fees/payment-summary?status=${statusFilter}&classId=${classFilter}&search=${encodeURIComponent(search)}&academicYear=${encodeURIComponent(selectedYear)}`),
+  const { data: balData } = useQuery({
+    queryKey: ['fees-method-balances'],
+    queryFn: () => api.get('/fees/method-balances'),
   });
-  const methodTotals = paySummary?.methods || { cash: 0, bank_transfer: 0, cheque: 0, online: 0 };
-  const collectedAllMethods = paySummary?.total || 0;
+  const methodBalances = balData?.methods || {};
+  const methodTotals = Object.fromEntries(Object.entries(methodBalances).map(([k, v]) => [k, v.balance || 0]));
+  const collectedAllMethods = balData?.total || 0;
   const methodValue = methodFilter === 'all' ? collectedAllMethods : (methodTotals[methodFilter] || 0);
 
   const { register, handleSubmit, reset, control, watch } = useForm();
@@ -297,7 +300,7 @@ export default function Fees() {
               }}
             >
               <span className="text-14-regular" style={{ color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                {methodFilter === 'all' ? 'Collected (All Methods)' : `Collected · ${paymentMethods.find(m => m.value === methodFilter)?.label || methodFilter}`}
+                {methodFilter === 'all' ? 'Balance (All Methods)' : `Balance · ${paymentMethods.find(m => m.value === methodFilter)?.label || methodFilter}`}
                 <ChevronDown size={14} />
               </span>
             </Dropdown>
@@ -469,12 +472,13 @@ export default function Fees() {
         </form>
       </Modal>
 
-      {/* Manage custom payment categories */}
+      {/* Manage custom payment categories + opening balances */}
       {showMethodsModal && (
         <PaymentMethodsModal
           methods={customMethods}
+          openingBalances={schoolData?.school?.paymentOpeningBalances || []}
           onClose={() => setShowMethodsModal(false)}
-          onSuccess={() => { qc.invalidateQueries(['school']); setShowMethodsModal(false); }}
+          onSuccess={() => { qc.invalidateQueries(['school']); qc.invalidateQueries(['fees-method-balances']); setShowMethodsModal(false); }}
         />
       )}
 
@@ -484,7 +488,7 @@ export default function Fees() {
           fee={showCollect}
           methods={paymentMethods}
           onClose={() => setShowCollect(null)}
-          onSuccess={() => { qc.invalidateQueries(['fees']); setShowCollect(null); }}
+          onSuccess={() => { qc.invalidateQueries(['fees']); qc.invalidateQueries(['fees-method-balances']); setShowCollect(null); }}
         />
       )}
 
@@ -495,7 +499,7 @@ export default function Fees() {
           beforeYear={selectedYear}
           methods={paymentMethods}
           onClose={() => setArrearTarget(null)}
-          onSuccess={() => { qc.invalidateQueries(['fees']); qc.invalidateQueries(['fees-arrears-summary']); qc.invalidateQueries(['fees-payment-summary']); }}
+          onSuccess={() => { qc.invalidateQueries(['fees']); qc.invalidateQueries(['fees-arrears-summary']); qc.invalidateQueries(['fees-method-balances']); }}
         />
       )}
 
@@ -711,13 +715,20 @@ function FeeItemsEditor({ items, onChange, readonlyTypes = false }) {
   );
 }
 
-// Manage custom payment categories (e.g. specific bank accounts). The built-in
-// Cash / Bank Transfer / Cheque / Online methods are always present and shown
-// as locked; only custom entries can be added or removed.
-function PaymentMethodsModal({ methods, onClose, onSuccess }) {
+// Manage custom payment categories (e.g. specific bank accounts) and the
+// opening balance already held in each method. Built-in Cash / Bank Transfer /
+// Cheque / Online can't be removed but their opening balance is editable.
+function PaymentMethodsModal({ methods, openingBalances = [], onClose, onSuccess }) {
   const [list, setList] = useState(methods || []);
+  const [balances, setBalances] = useState(() => {
+    const m = {};
+    (openingBalances || []).forEach(b => { if (b?.method) m[b.method] = String(b.amount ?? ''); });
+    return m;
+  });
   const [input, setInput] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const setBal = (method, val) => setBalances(p => ({ ...p, [method]: val }));
 
   const add = () => {
     const v = input.trim();
@@ -728,12 +739,18 @@ function PaymentMethodsModal({ methods, onClose, onSuccess }) {
     setList(p => [...p, v]);
     setInput('');
   };
-  const remove = (m) => setList(p => p.filter(x => x !== m));
+  const remove = (m) => {
+    setList(p => p.filter(x => x !== m));
+    setBalances(p => { const n = { ...p }; delete n[m]; return n; });
+  };
 
   const save = async () => {
     setSaving(true);
     try {
-      await api.put('/school/payment-methods', { methods: list });
+      const openingList = [...DEFAULT_PAYMENT_METHODS.map(m => m.value), ...list]
+        .map(method => ({ method, amount: Math.max(0, parseFloat(balances[method]) || 0) }))
+        .filter(b => b.amount > 0);
+      await api.put('/school/payment-methods', { methods: list, openingBalances: openingList });
       toast.success('Payment categories saved');
       onSuccess();
     } catch (err) {
@@ -743,50 +760,49 @@ function PaymentMethodsModal({ methods, onClose, onSuccess }) {
     }
   };
 
+  const balanceRow = (method, label, removable) => (
+    <div key={method} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
+      <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{label}</div>
+      <div style={{ width: 160 }}>
+        <input className="form-control no-spinner" type="number" min={0}
+          value={balances[method] ?? ''} onWheel={e => e.currentTarget.blur()}
+          onChange={e => setBal(method, e.target.value)}
+          placeholder="Opening balance ₹" style={{ textAlign: 'right' }} />
+      </div>
+      {removable && (
+        <button onClick={() => remove(method)} className="btn btn-secondary btn-sm btn-icon" title="Remove category">
+          <X size={14} />
+        </button>
+      )}
+    </div>
+  );
+
   return (
-    <Modal open onClose={onClose} title="Payment Categories"
+    <Modal open onClose={onClose} title="Payment Categories & Opening Balance"
       footer={<>
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
         <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
       </>}>
       <p className="text-13-regular" style={{ color: 'var(--text-secondary)', marginBottom: 14 }}>
-        Add your own payment categories (e.g. a specific bank account) to track how much was collected via each. Built-in methods are always available.
+        Set the amount already available in each payment mode (opening balance). Newly collected fees add on top, giving a running balance that carries forward every year. Add custom categories (e.g. a specific bank account) below.
       </p>
 
-      <div style={{ marginBottom: 16 }}>
-        <label className="form-label">Built-in</label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {DEFAULT_PAYMENT_METHODS.map(m => (
-            <span key={m.value} style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 20, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0' }}>
-              {m.label}
-            </span>
-          ))}
-        </div>
+      <label className="form-label">Built-in Methods</label>
+      <div style={{ marginBottom: 18 }}>
+        {DEFAULT_PAYMENT_METHODS.map(m => balanceRow(m.value, m.label, false))}
       </div>
 
-      <div className="form-group">
-        <label className="form-label">Custom Categories</label>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input className="form-control" value={input} onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
-            placeholder="e.g. HDFC Bank A/c, SBI Current A/c" />
-          <button className="btn btn-secondary" onClick={add} disabled={!input.trim()}><Plus size={15} /> Add</button>
-        </div>
+      <label className="form-label">Custom Categories</label>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+        <input className="form-control" value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          placeholder="e.g. HDFC Bank A/c, SBI Current A/c" />
+        <button className="btn btn-secondary" onClick={add} disabled={!input.trim()}><Plus size={15} /> Add</button>
       </div>
-
       {list.length > 0 ? (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-          {list.map(m => (
-            <span key={m} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '4px 6px 4px 12px', borderRadius: 20, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
-              {m}
-              <button onClick={() => remove(m)} style={{ display: 'inline-flex', border: 'none', background: 'none', cursor: 'pointer', color: '#1d4ed8', padding: 0 }} title="Remove">
-                <X size={14} />
-              </button>
-            </span>
-          ))}
-        </div>
+        <div>{list.map(m => balanceRow(m, m, true))}</div>
       ) : (
-        <p className="text-12-regular" style={{ color: 'var(--text-muted)', marginTop: 4 }}>No custom categories yet.</p>
+        <p className="text-12-regular" style={{ color: 'var(--text-muted)' }}>No custom categories yet.</p>
       )}
     </Modal>
   );

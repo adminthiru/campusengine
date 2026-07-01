@@ -194,6 +194,13 @@ const schoolSchema = new mongoose.Schema({
   // Custom fee payment categories (e.g. specific bank accounts) in addition to
   // the built-in Cash / Bank Transfer / Cheque / Online methods.
   paymentMethods: { type: [String], default: [] },
+  // Opening balance already held per payment method (built-in or custom) before
+  // fees started being tracked here. The running balance = opening + all
+  // collected across every academic year. method key = built-in value or label.
+  paymentOpeningBalances: {
+    type: [{ method: String, amount: { type: Number, default: 0 } }],
+    default: [],
+  },
   inventoryCategories: { type: [String], default: [] },
   libraryCategories: { type: [String], default: [] },
   visitPurposes: { type: [String], default: [] },
