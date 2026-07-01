@@ -1850,6 +1850,31 @@ router.post('/leaves', protect, authorize('teacher', 'principal', 'admin', 'corr
       school: req.user.school, employee: emp._id, user: req.user._id,
       leaveType, fromDate, toDate, days: Number(days), reason
     });
+
+    // Notify the school's admins with an actionable (approve/reject) alert.
+    try {
+      const { notifyUsers } = require('../services/notificationService');
+      const admins = await User.find({
+        school: req.user.school,
+        role: { $in: ['admin', 'correspondent', 'principal'] },
+        isActive: { $ne: false },
+        _id: { $ne: req.user._id }, // don't notify the applicant if they're an admin
+      });
+      if (admins.length) {
+        const fmt = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+        const dateLabel = String(fromDate) === String(toDate) ? fmt(fromDate) : `${fmt(fromDate)} – ${fmt(toDate)}`;
+        await notifyUsers(admins, {
+          title: 'Leave Request',
+          body: `${emp.name || req.user.name || 'A staff member'} requested ${leaveType || 'leave'} on ${dateLabel}.${reason ? ` Reason: ${reason}` : ''}`,
+          type: 'info',
+          action: 'staff_leave',
+          refId: leave._id,
+          actionStatus: 'pending',
+          data: { kind: 'staff_leave', leaveId: String(leave._id) },
+        });
+      }
+    } catch (e) { console.error('[staff-leave notify admins]', e.message); }
+
     res.status(201).json({ success: true, leave });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -2057,6 +2082,28 @@ router.put('/leaves/:id', protect, authorize('admin', 'correspondent', 'principa
     }
 
     await leave.save();
+
+    // Notify the applicant that their leave was approved/rejected.
+    if ((status === 'approved' || status === 'rejected') && leave.user) {
+      try {
+        const { notifyUsers } = require('../services/notificationService');
+        const applicant = await User.findOne({ _id: leave.user, school: req.user.school });
+        if (applicant) {
+          const fmt = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+          const dateLabel = String(leave.fromDate) === String(leave.toDate) ? fmt(leave.fromDate) : `${fmt(leave.fromDate)} – ${fmt(leave.toDate)}`;
+          await notifyUsers([applicant], {
+            title: `Leave ${status === 'approved' ? 'Approved' : 'Rejected'}`,
+            body: `Your ${leave.leaveType || 'leave'} request for ${dateLabel} was ${status}.${adminNote ? ` Note: ${adminNote}` : ''}`,
+            type: status === 'approved' ? 'success' : 'error',
+            action: 'staff_leave',
+            refId: leave._id,
+            actionStatus: status,
+            data: { kind: 'staff_leave', leaveId: String(leave._id) },
+          });
+        }
+      } catch (e) { console.error('[staff-leave notify applicant]', e.message); }
+    }
+
     res.json({ success: true, leave });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
