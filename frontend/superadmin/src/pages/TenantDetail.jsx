@@ -11,7 +11,6 @@ export default function TenantDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [payOpen, setPayOpen] = useState(false);
   const [credsPw, setCredsPw] = useState(null);
   const [trialDays, setTrialDays] = useState(15);
 
@@ -26,10 +25,6 @@ export default function TenantDetail() {
     const end = new Date(); end.setDate(end.getDate() + 30);
     return api.put(`/super-admin/schools/${id}/subscription`, { status: 'trial', trialEndDate: end });
   }, 'Trial extended 30 days');
-  const activate = mut(() => {
-    const start = new Date(); const end = new Date(); end.setMonth(end.getMonth() + 1);
-    return api.put(`/super-admin/schools/${id}/subscription`, { status: 'active', currentPeriodStart: start, currentPeriodEnd: end });
-  }, 'Activated for 1 month');
   const changePlan = useMutation({
     mutationFn: (planId) => api.put(`/super-admin/schools/${id}`, { planId }),
     onSuccess: () => { invalidate(); toast.success('Plan updated'); }, onError: (e) => toast.error(e?.response?.data?.message || 'Failed'),
@@ -70,9 +65,9 @@ export default function TenantDetail() {
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>Code {school.code} · {school.email} · {school.phone || 'no phone'}</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {/* Plans are activated by the school via Razorpay checkout — no manual
+              activate / record-payment here. Super admin only extends trials. */}
           <button className="btn btn-secondary btn-sm" onClick={() => extendTrial.mutate()}><CalendarPlus size={14} /> +30d Trial</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => activate.mutate()}><CheckCircle size={14} /> Activate 1mo</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setPayOpen(true)}><IndianRupee size={14} /> Record Payment</button>
           <button className="btn btn-secondary btn-sm" onClick={() => resetPw.mutate()}><RefreshCw size={14} /> Reset Pw</button>
           {school.isActive
             ? <button className="btn btn-danger btn-sm" onClick={() => suspend.mutate()}><Power size={14} /> Suspend</button>
@@ -185,7 +180,6 @@ export default function TenantDetail() {
         )}
       </div>
 
-      {payOpen && <RecordPaymentModal id={id} defaultAmount={sub.amount} onClose={() => setPayOpen(false)} onDone={() => { setPayOpen(false); invalidate(); }} />}
       {credsPw && (
         <Modal open onClose={() => setCredsPw(null)} size="sm" title="Password Reset"
           footer={<button className="btn btn-primary" onClick={() => setCredsPw(null)}>Done</button>}>
@@ -197,29 +191,5 @@ export default function TenantDetail() {
         </Modal>
       )}
     </div>
-  );
-}
-
-function RecordPaymentModal({ id, defaultAmount, onClose, onDone }) {
-  const [f, setF] = useState({ amount: defaultAmount || '', method: 'cash', months: 1, notes: '' });
-  const set = (k, v) => setF(p => ({ ...p, [k]: v }));
-  const save = useMutation({
-    mutationFn: () => api.post(`/super-admin/schools/${id}/record-payment`, { ...f, amount: Number(f.amount), months: Number(f.months) }),
-    onSuccess: () => { toast.success('Payment recorded'); onDone(); }, onError: (e) => toast.error(e?.response?.data?.message || 'Failed'),
-  });
-  return (
-    <Modal open onClose={onClose} title="Record Offline Payment" size="sm"
-      footer={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Record & Activate'}</button></>}>
-      <FormRow>
-        <div className="form-group"><label className="form-label">Amount (₹)</label><input className="form-control" type="number" value={f.amount} onChange={e => set('amount', e.target.value)} /></div>
-        <div className="form-group"><label className="form-label">Months</label><input className="form-control" type="number" min="1" value={f.months} onChange={e => set('months', e.target.value)} /></div>
-      </FormRow>
-      <div className="form-group"><label className="form-label">Method</label>
-        <select className="form-control" value={f.method} onChange={e => set('method', e.target.value)}>
-          <option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option><option value="upi">UPI</option>
-        </select>
-      </div>
-      <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">Notes</label><input className="form-control" value={f.notes} onChange={e => set('notes', e.target.value)} placeholder="Reference / remarks" /></div>
-    </Modal>
   );
 }
