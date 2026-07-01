@@ -18,10 +18,11 @@ const STATUS_META = {
   damaged:    { label: 'Damaged',    color: '#dc2626', bg: '#fef2f2' },
   disposed:   { label: 'Disposed',   color: '#64748b', bg: '#f1f5f9' },
   lost:       { label: 'Lost',       color: '#b91c1c', bg: '#fef2f2' },
+  purchase_requested: { label: 'Purchase Requested', color: '#7c3aed', bg: '#f5f3ff' },
 };
 const STATUS_OPTIONS = Object.entries(STATUS_META).map(([value, m]) => ({ value, label: m.label }));
-// statuses an admin can set manually on an item (in_repair is driven by the repair flow)
-const ITEM_STATUS_OPTIONS = STATUS_OPTIONS.filter(o => o.value !== 'in_repair');
+// statuses an admin can set manually on an item (in_repair + purchase_requested are driven by their flows)
+const ITEM_STATUS_OPTIONS = STATUS_OPTIONS.filter(o => o.value !== 'in_repair' && o.value !== 'purchase_requested');
 
 const REPAIR_STATUS_META = {
   pending:     { label: 'Pending',     color: '#d97706', bg: '#fffbeb' },
@@ -64,6 +65,7 @@ export default function Inventory() {
   const [showConfig, setShowConfig] = useState(false);
   const [sendRepairItems, setSendRepairItems] = useState(null); // array of items
   const [completeTarget, setCompleteTarget] = useState(null); // { itemId, repair }
+  const [damagedTarget, setDamagedTarget] = useState(null);   // { itemId, name } — after a repair is closed as damaged
   const [logVisitTarget, setLogVisitTarget] = useState(null); // { itemId, repair }
   const [selected, setSelected] = useState([]);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
@@ -503,7 +505,21 @@ export default function Inventory() {
       )}
 
       {completeTarget && (
-        <CompleteRepairModal target={completeTarget} onClose={() => setCompleteTarget(null)} onSaved={() => { refresh(); setCompleteTarget(null); }} />
+        <CompleteRepairModal target={completeTarget} methods={paymentMethods}
+          onClose={() => setCompleteTarget(null)}
+          onSaved={(info) => {
+            refresh();
+            qc.invalidateQueries(['fees-method-balances']);
+            const name = completeTarget.repair?.itemName || 'this asset';
+            setCompleteTarget(null);
+            if (info?.damaged) setDamagedTarget({ itemId: info.itemId, name });
+          }} />
+      )}
+
+      {damagedTarget && (
+        <DamagedAssetModal target={damagedTarget}
+          onClose={() => setDamagedTarget(null)}
+          onSaved={() => { refresh(); setDamagedTarget(null); }} />
       )}
 
       {logVisitTarget && (
@@ -926,14 +942,17 @@ function SendToRepairModal({ items, onClose, onSaved }) {
 }
 
 // ── Complete Repair Modal ───────────────────────────────────────────────────────
-function CompleteRepairModal({ target, onClose, onSaved }) {
+function CompleteRepairModal({ target, methods = [], onClose, onSaved }) {
   const { itemId, repair } = target;
-  const [form, setForm] = useState({ resolutionNotes: repair.resolutionNotes || '', cost: repair.cost ?? '', itemStatus: 'in_use' });
+  const [form, setForm] = useState({ resolutionNotes: repair.resolutionNotes || '', cost: repair.cost ?? '', itemStatus: 'in_use', paymentMethod: 'cash' });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const hasCost = form.cost !== '' && Number(form.cost) > 0;
 
   const mutation = useMutation({
     mutationFn: (payload) => api.post(`/inventory/${itemId}/repairs/${repair._id}/complete`, payload),
-    onSuccess: () => { toast.success('Repair completed'); onSaved(); },
+    // Tell the parent whether the item was closed as damaged so it can prompt
+    // for a replacement / removal next.
+    onSuccess: () => { toast.success('Repair completed'); onSaved(form.itemStatus === 'damaged' ? { damaged: true, itemId } : undefined); },
     onError: (err) => toast.error(err.message || 'Failed'),
   });
 
@@ -941,7 +960,7 @@ function CompleteRepairModal({ target, onClose, onSaved }) {
     <Modal open onClose={onClose} title="Complete Repair"
       footer={<>
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-        <button className="btn btn-success" onClick={() => mutation.mutate({ resolutionNotes: form.resolutionNotes || undefined, cost: form.cost !== '' ? Number(form.cost) : undefined, itemStatus: form.itemStatus })} disabled={mutation.isPending}>
+        <button className="btn btn-success" onClick={() => mutation.mutate({ resolutionNotes: form.resolutionNotes || undefined, cost: form.cost !== '' ? Number(form.cost) : undefined, itemStatus: form.itemStatus, paymentMethod: form.paymentMethod })} disabled={mutation.isPending}>
           {mutation.isPending ? 'Saving...' : 'Complete Repair'}
         </button>
       </>}>
@@ -954,9 +973,7 @@ function CompleteRepairModal({ target, onClose, onSaved }) {
           <AntSelect style={{ width: '100%' }} value={form.itemStatus} onChange={v => set('itemStatus', v)}
             options={[
               { value: 'in_use', label: 'Back in Use' },
-              { value: 'in_storage', label: 'Moved to Storage' },
               { value: 'damaged', label: 'Damaged (unrepairable)' },
-              { value: 'disposed', label: 'Disposed' },
             ]} />
         </div>
         <div className="form-group">
@@ -964,10 +981,59 @@ function CompleteRepairModal({ target, onClose, onSaved }) {
           <input className="form-control" type="number" min={0} value={form.cost} onChange={e => set('cost', e.target.value)} placeholder="Optional" />
         </div>
       </FormRow>
+      {hasCost && (
+        <div className="form-group">
+          <label className="form-label">Payment Method</label>
+          <AntSelect style={{ width: '100%' }} value={form.paymentMethod} onChange={v => set('paymentMethod', v)} options={methods} />
+          <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
+            The repair cost is booked as an expense and deducted from this account's balance.
+          </p>
+        </div>
+      )}
       <div className="form-group">
         <label className="form-label">Resolution Notes</label>
         <textarea className="form-control" rows={3} value={form.resolutionNotes} onChange={e => set('resolutionNotes', e.target.value)} placeholder="What was done?" style={{ resize: 'vertical' }} />
       </div>
+    </Modal>
+  );
+}
+
+// After a repair is closed as "Damaged (unrepairable)", ask whether to raise a
+// replacement purchase request (asset → 'purchase_requested', revived to
+// 'in_use' when received) or remove the asset from the register.
+function DamagedAssetModal({ target, onClose, onSaved }) {
+  const { itemId, name } = target;
+  const requestMutation = useMutation({
+    mutationFn: () => api.post(`/inventory/${itemId}/request-replacement`),
+    onSuccess: () => { toast.success('Replacement purchase request created'); onSaved(); },
+    onError: (err) => toast.error(err.message || 'Failed'),
+  });
+  const removeMutation = useMutation({
+    mutationFn: () => api.delete(`/inventory/${itemId}`),
+    onSuccess: () => { toast.success('Asset removed'); onSaved(); },
+    onError: (err) => toast.error(err.message || 'Failed'),
+  });
+  const busy = requestMutation.isPending || removeMutation.isPending;
+
+  return (
+    <Modal open onClose={onClose} title="Asset Damaged — What Next?" dismissable={false}
+      footer={
+        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 8 }}>
+          <button className="btn btn-danger" onClick={() => removeMutation.mutate()} disabled={busy}>
+            <Trash2 size={14} /> {removeMutation.isPending ? 'Removing…' : 'Remove Asset'}
+          </button>
+          <button className="btn btn-primary" onClick={() => requestMutation.mutate()} disabled={busy}>
+            <PackageCheck size={14} /> {requestMutation.isPending ? 'Requesting…' : 'Confirm Purchase Request'}
+          </button>
+        </div>
+      }>
+      <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: 0 }}>
+        <strong>{name}</strong> is marked damaged / unrepairable. Choose what to do:
+      </p>
+      <ul style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '12px 0 0', paddingLeft: 18, lineHeight: 1.7 }}>
+        <li><strong>Confirm Purchase Request</strong> — raises a replacement request (appears in the Purchase Requests tab). The asset shows <em>Purchase Requested</em> and flips back to <em>In Use</em> once the purchase is received.</li>
+        <li><strong>Remove Asset</strong> — permanently deletes this asset from the register.</li>
+      </ul>
     </Modal>
   );
 }

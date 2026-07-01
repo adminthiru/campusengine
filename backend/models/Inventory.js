@@ -38,7 +38,7 @@ const inventoryItemSchema = new mongoose.Schema({
   assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }, // staff responsible
   status: {
     type: String,
-    enum: ['in_use', 'in_storage', 'in_repair', 'damaged', 'disposed', 'lost'],
+    enum: ['in_use', 'in_storage', 'in_repair', 'damaged', 'disposed', 'lost', 'purchase_requested'],
     default: 'in_use'
   },
   remarks: { type: String },

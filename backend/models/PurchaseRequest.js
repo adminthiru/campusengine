@@ -30,6 +30,9 @@ const purchaseRequestSchema = new mongoose.Schema({
   // What the receive created — used to cleanly reverse an accidental receive
   createdItems: [{ type: mongoose.Schema.Types.ObjectId, ref: 'InventoryItem' }],
   expenseRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Expense' },
+  // When this request replaces a damaged asset: on receive, that asset is
+  // revived to 'in_use' instead of creating a new unit.
+  replacesItem: { type: mongoose.Schema.Types.ObjectId, ref: 'InventoryItem' },
 }, { timestamps: true });
 
 purchaseRequestSchema.index({ school: 1, createdAt: -1 });

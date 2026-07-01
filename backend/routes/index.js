@@ -3039,7 +3039,8 @@ router.post('/inventory/:id/repairs/:repairId/complete', protect, checkSubscript
     if (req.body.resolutionNotes !== undefined) repair.resolutionNotes = req.body.resolutionNotes;
     if (req.body.cost !== undefined) repair.cost = req.body.cost;
 
-    const allowed = ['in_use', 'in_storage', 'damaged', 'disposed', 'lost'];
+    // Only two resulting statuses now: back in use, or damaged (unrepairable).
+    const allowed = ['in_use', 'damaged'];
     item.status = allowed.includes(req.body.itemStatus) ? req.body.itemStatus : 'in_use';
     await item.save();
 
@@ -3051,7 +3052,7 @@ router.post('/inventory/:id/repairs/:repairId/complete', protect, checkSubscript
       );
     }
 
-    // Capture the repair cost as an expense
+    // Capture the repair cost as an expense, deducted from the chosen account.
     if (repair.cost > 0) {
       await createInventoryExpense(req.user.school, req.user._id, {
         title: `Repair — ${item.name}`,
@@ -3060,11 +3061,42 @@ router.post('/inventory/:id/repairs/:repairId/complete', protect, checkSubscript
         date: repair.completedDate || new Date(),
         vendor: repair.technicianName,
         description: `Repair of ${item.itemCode}${repair.issue ? ' · ' + repair.issue : ''}`,
+        paymentMethod: (req.body.paymentMethod || 'cash'),
       });
     }
 
     const populated = await populateItem(InventoryItem.findById(item._id));
     res.json({ success: true, item: populated });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// Raise a purchase request to replace a damaged asset. Creates a 'pending' PR
+// linked to the asset and flips the asset to 'purchase_requested'. On receive,
+// the asset is revived to 'in_use' (see /purchase-requests/:id/receive).
+router.post('/inventory/:id/request-replacement', protect, checkSubscription, authorize(...INVENTORY_ROLES), async (req, res) => {
+  try {
+    const item = await InventoryItem.findOne({ _id: req.params.id, school: req.user.school });
+    if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
+
+    const n = await PurchaseRequest.countDocuments({ school: req.user.school }) + 1;
+    const pr = await PurchaseRequest.create({
+      school: req.user.school,
+      requestNumber: `PR${String(n).padStart(4, '0')}`,
+      title: `Replacement — ${item.name}`,
+      status: 'pending',
+      type: 'asset',
+      category: item.category || undefined,
+      location: item.location || undefined,
+      vendor: item.vendor || undefined,
+      notes: `Replaces damaged asset ${item.itemCode}`,
+      items: [{ name: item.name, category: item.category || undefined, location: item.location || undefined, quantity: 1, estimatedPrice: item.purchasePrice || undefined }],
+      requestedBy: req.user._id,
+      replacesItem: item._id,
+    });
+
+    item.status = 'purchase_requested';
+    await item.save();
+    res.status(201).json({ success: true, request: pr });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
@@ -3183,6 +3215,13 @@ router.post('/purchase-requests/:id/receive', protect, checkSubscription, author
     let grandTotal = 0;
     const cats = new Set();
     const createdIds = [];
+
+    // Replacement request: revive the damaged asset to 'in_use' instead of
+    // creating a new unit (keeps the same asset record / history).
+    const reviveAsset = pr.replacesItem
+      ? await InventoryItem.findOne({ _id: pr.replacesItem, school: req.user.school })
+      : null;
+
     for (const line of pr.items) {
       const raw = priceById[String(line._id)];
       const unitPrice = Number(raw !== undefined && raw !== '' && raw !== null ? raw : (line.estimatedPrice || 0)) || 0;
@@ -3190,6 +3229,19 @@ router.post('/purchase-requests/:id/receive', protect, checkSubscription, author
       const itemType = pr.type === 'consumable' ? 'consumable' : 'asset';
       const qty = itemType === 'asset' ? 1 : Math.max(1, Number(line.quantity) || 1);
       if (line.category) cats.add(line.category);
+      grandTotal += unitPrice * qty;
+
+      if (reviveAsset) {
+        // Revive the linked damaged asset rather than spawning a new unit.
+        reviveAsset.status = 'in_use';
+        reviveAsset.purchaseDate = new Date();
+        if (unitPrice > 0) reviveAsset.purchasePrice = unitPrice;
+        if (pr.vendor) reviveAsset.vendor = pr.vendor;
+        await reviveAsset.save();
+        createdIds.push(reviveAsset._id);
+        continue;
+      }
+
       n += 1;
       const doc = await InventoryItem.create({
         school: req.user.school,
@@ -3206,7 +3258,6 @@ router.post('/purchase-requests/:id/receive', protect, checkSubscription, author
         status: 'in_use',
       });
       createdIds.push(doc._id);
-      grandTotal += unitPrice * qty;
     }
 
     // One combined expense for the received request — clear any stale expense for
@@ -3247,7 +3298,14 @@ router.post('/purchase-requests/:id/reverse', protect, checkSubscription, author
 
     // Only a received request created inventory items / an expense to undo.
     if (pr.status === 'received') {
-      if (pr.createdItems && pr.createdItems.length) {
+      if (pr.replacesItem) {
+        // Replacement PR revived an existing asset — don't delete it; send it
+        // back to 'purchase_requested' so the link/flow stays intact.
+        await InventoryItem.updateOne(
+          { _id: pr.replacesItem, school: req.user.school },
+          { status: 'purchase_requested' }
+        );
+      } else if (pr.createdItems && pr.createdItems.length) {
         await InventoryItem.deleteMany({ _id: { $in: pr.createdItems }, school: req.user.school });
       } else {
         // Legacy receive (no tracked link): best-effort remove the matching items
