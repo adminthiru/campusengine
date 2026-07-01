@@ -946,7 +946,6 @@ function CompleteRepairModal({ target, methods = [], onClose, onSaved }) {
   const { itemId, repair } = target;
   const [form, setForm] = useState({ resolutionNotes: repair.resolutionNotes || '', cost: repair.cost ?? '', itemStatus: 'in_use', paymentMethod: 'cash' });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const hasCost = form.cost !== '' && Number(form.cost) > 0;
 
   const mutation = useMutation({
     mutationFn: (payload) => api.post(`/inventory/${itemId}/repairs/${repair._id}/complete`, payload),
@@ -981,15 +980,13 @@ function CompleteRepairModal({ target, methods = [], onClose, onSaved }) {
           <input className="form-control" type="number" min={0} value={form.cost} onChange={e => set('cost', e.target.value)} placeholder="Optional" />
         </div>
       </FormRow>
-      {hasCost && (
-        <div className="form-group">
-          <label className="form-label">Payment Method</label>
-          <AntSelect style={{ width: '100%' }} value={form.paymentMethod} onChange={v => set('paymentMethod', v)} options={methods} />
-          <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
-            The repair cost is booked as an expense and deducted from this account's balance.
-          </p>
-        </div>
-      )}
+      <div className="form-group">
+        <label className="form-label">Payment Method</label>
+        <AntSelect style={{ width: '100%' }} value={form.paymentMethod} onChange={v => set('paymentMethod', v)} options={methods} />
+        <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
+          When a repair cost is entered, it's booked as an expense and deducted from this account's balance.
+        </p>
+      </div>
       <div className="form-group">
         <label className="form-label">Resolution Notes</label>
         <textarea className="form-control" rows={3} value={form.resolutionNotes} onChange={e => set('resolutionNotes', e.target.value)} placeholder="What was done?" style={{ resize: 'vertical' }} />
