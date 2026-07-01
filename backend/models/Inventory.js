@@ -7,6 +7,7 @@ const repairSchema = new mongoose.Schema({
   issue: { type: String },
   quantity: { type: Number, default: 1 },   // how many units of the item are under this repair
   reportedDate: { type: Date, default: Date.now },
+  expectedDate: { type: Date },   // expected date the item comes back from repair
   status: { type: String, enum: ['pending', 'in_progress', 'completed', 'cancelled'], default: 'pending' },
   technicianName: { type: String },
   technicianPhone: { type: String },

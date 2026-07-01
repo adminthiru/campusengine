@@ -862,7 +862,7 @@ function ItemModal({ item, categories, locations, onClose, onSaved }) {
 // ── Send to Repair Modal ──────────────────────────────────────────────────────────
 function SendToRepairModal({ items, onClose, onSaved }) {
   const multi = items.length > 1;
-  const [form, setForm] = useState({ issue: '', technicianName: '', technicianPhone: '', reportedDate: dayjs().format('YYYY-MM-DD') });
+  const [form, setForm] = useState({ issue: '', reportedDate: dayjs().format('YYYY-MM-DD'), expectedDate: '' });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const mutation = useMutation({
@@ -876,9 +876,8 @@ function SendToRepairModal({ items, onClose, onSaved }) {
     mutation.mutate({
       itemIds: items.map(i => i._id),
       issue: form.issue.trim(),
-      technicianName: form.technicianName || undefined,
-      technicianPhone: form.technicianPhone || undefined,
       reportedDate: form.reportedDate || undefined,
+      expectedDate: form.expectedDate || undefined,
     });
   };
 
@@ -910,21 +909,18 @@ function SendToRepairModal({ items, onClose, onSaved }) {
       </div>
       <FormRow>
         <div className="form-group">
-          <label className="form-label">Technician Name</label>
-          <input className="form-control" value={form.technicianName} onChange={e => set('technicianName', e.target.value)} placeholder="Optional" />
+          <label className="form-label">Reported Date</label>
+          <DatePicker style={{ width: '100%' }} format="DD MMM YYYY"
+            value={form.reportedDate ? dayjs(form.reportedDate) : null}
+            onChange={(d) => set('reportedDate', d ? d.format('YYYY-MM-DD') : '')} getPopupContainer={() => document.body} />
         </div>
         <div className="form-group">
-          <label className="form-label">Technician Phone</label>
-          <input className="form-control" type="tel" maxLength={10} value={form.technicianPhone}
-            onChange={e => set('technicianPhone', e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="Optional" />
+          <label className="form-label">Expected Repair Date</label>
+          <DatePicker style={{ width: '100%' }} format="DD MMM YYYY" placeholder="When it should return"
+            value={form.expectedDate ? dayjs(form.expectedDate) : null}
+            onChange={(d) => set('expectedDate', d ? d.format('YYYY-MM-DD') : '')} getPopupContainer={() => document.body} />
         </div>
       </FormRow>
-      <div className="form-group">
-        <label className="form-label">Reported Date</label>
-        <DatePicker style={{ maxWidth: 220, width: '100%' }} format="DD MMM YYYY"
-          value={form.reportedDate ? dayjs(form.reportedDate) : null}
-          onChange={(d) => set('reportedDate', d ? d.format('YYYY-MM-DD') : '')} getPopupContainer={() => document.body} />
-      </div>
     </Modal>
   );
 }

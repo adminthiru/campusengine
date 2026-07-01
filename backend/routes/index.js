@@ -2936,6 +2936,7 @@ router.post('/inventory/:id/repairs', protect, checkSubscription, authorize(...I
       issue: req.body.issue,
       quantity: Number(req.body.quantity) > 0 ? Number(req.body.quantity) : 1,
       reportedDate: req.body.reportedDate || new Date(),
+      expectedDate: req.body.expectedDate || undefined,
       technicianName: req.body.technicianName,
       technicianPhone: req.body.technicianPhone,
       status: 'pending',
@@ -2958,6 +2959,7 @@ router.post('/inventory/repairs/bulk', protect, checkSubscription, authorize(...
       item.repairs.push({
         issue: req.body.issue,
         reportedDate: req.body.reportedDate || new Date(),
+        expectedDate: req.body.expectedDate || undefined,
         technicianName: req.body.technicianName,
         technicianPhone: req.body.technicianPhone,
         technicianDesignation: req.body.technicianDesignation,
