@@ -294,9 +294,9 @@ export default function Fees() {
       </div>
 
       <div className="grid-4" style={{ marginBottom: 24 }}>
-        <StatCard title="Total Collected" value={`₹${totalCollected.toLocaleString('en-IN')}`} icon={IndianRupee} color="#10b981" bg="#f0fdf4" />
-        <StatCard title="Pending Amount" value={`₹${totalPending.toLocaleString('en-IN')}`} icon={IndianRupee} color="#ef4444" bg="#fef2f2" />
-        <StatCard title="Total Discount" value={`₹${totalDiscount.toLocaleString('en-IN')}`} icon={Tag} color="#f59e0b" bg="#fffbeb" />
+        <StatCard title="Total Collected" value={`₹${totalCollected.toLocaleString('en-IN')}`} sub="This year" icon={IndianRupee} color="#10b981" bg="#f0fdf4" />
+        <StatCard title="Pending Amount" value={`₹${totalPending.toLocaleString('en-IN')}`} sub="This year" icon={IndianRupee} color="#ef4444" bg="#fef2f2" />
+        <StatCard title="Total Discount" value={`₹${totalDiscount.toLocaleString('en-IN')}`} sub="This year" icon={Tag} color="#f59e0b" bg="#fffbeb" />
         <div className="stat-card">
           <div>
             {/* Title doubles as the method picker — click to choose a method */}
