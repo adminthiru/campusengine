@@ -471,15 +471,23 @@ const getMethodBalances = async (req, res) => {
     const collected = {};
     rows.forEach(r => { const k = r._id || 'cash'; collected[k] = (collected[k] || 0) + (r.total || 0); });
 
+    // Salaries paid OUT reduce the balance of the method they were paid from.
+    const Salary = require('../models/Salary');
+    const salRows = await Salary.aggregate([
+      { $match: { school: new mongoose.Types.ObjectId(schoolId), status: 'paid' } },
+      { $group: { _id: '$payment.method', total: { $sum: '$netSalary' } } },
+    ]);
+    const paidOut = {};
+    salRows.forEach(r => { const k = r._id || 'cash'; paidOut[k] = (paidOut[k] || 0) + (r.total || 0); });
+
     const keys = ['cash', 'bank_transfer', 'cheque', 'online', ...custom];
-    Object.keys(collected).forEach(k => { if (!keys.includes(k)) keys.push(k); });
-    Object.keys(opening).forEach(k => { if (!keys.includes(k)) keys.push(k); });
+    [collected, opening, paidOut].forEach(obj => Object.keys(obj).forEach(k => { if (!keys.includes(k)) keys.push(k); }));
 
     const methods = {};
     let total = 0;
     for (const k of keys) {
-      const balance = (opening[k] || 0) + (collected[k] || 0);
-      methods[k] = { opening: opening[k] || 0, collected: collected[k] || 0, balance };
+      const balance = (opening[k] || 0) + (collected[k] || 0) - (paidOut[k] || 0);
+      methods[k] = { opening: opening[k] || 0, collected: collected[k] || 0, paidOut: paidOut[k] || 0, balance };
       total += balance;
     }
     res.json({ success: true, methods, total });

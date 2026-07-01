@@ -79,6 +79,17 @@ export default function Salary() {
     queryKey: ['salaries', month, year],
     queryFn: () => api.get(`/salaries?month=${month}&year=${year}`)
   });
+
+  // Payment methods = built-ins + the school's custom fee payment categories,
+  // so salaries can be paid from (and deducted against) the same balances.
+  const { data: schoolData } = useQuery({ queryKey: ['school'], queryFn: () => api.get('/school') });
+  const payMethodOptions = [
+    { value: 'bank_transfer', label: 'Bank Transfer' },
+    { value: 'cash',          label: 'Cash' },
+    { value: 'cheque',        label: 'Cheque' },
+    { value: 'online',        label: 'Online (UPI/NEFT)' },
+    ...(schoolData?.school?.paymentMethods || []).filter(Boolean).map(m => ({ value: m, label: m })),
+  ];
   const salaries = data?.salaries || [];
 
   const autoGenerateMutation = useMutation({
@@ -126,6 +137,7 @@ export default function Salary() {
     mutationFn: (id) => api.post(`/salaries/${id}/revert`),
     onSuccess: (data) => {
       qc.invalidateQueries(['salaries']);
+      qc.invalidateQueries(['fees-method-balances']);
       toast.success('Salary reverted to pending');
       if (viewSalary) setViewSalary(data.salary);
     },
@@ -134,7 +146,7 @@ export default function Salary() {
 
   const paySalary = useMutation({
     mutationFn: (id) => api.post(`/salaries/${id}/pay`, { method: payMethod, transactionId: txId }),
-    onSuccess: () => { qc.invalidateQueries(['salaries']); toast.success('Salary paid!'); setPayModal(null); setTxId(''); },
+    onSuccess: () => { qc.invalidateQueries(['salaries']); qc.invalidateQueries(['fees-method-balances']); toast.success('Salary paid!'); setPayModal(null); setTxId(''); },
     onError: (err) => toast.error(err.message || 'Failed')
   });
 
@@ -340,12 +352,7 @@ export default function Salary() {
               style={{ width: '100%' }}
               value={payMethod}
               onChange={val => setPayMethod(val)}
-              options={[
-                { value: 'bank_transfer', label: 'Bank Transfer' },
-                { value: 'cash',          label: 'Cash' },
-                { value: 'cheque',        label: 'Cheque' },
-                { value: 'upi',           label: 'UPI' },
-              ]}
+              options={payMethodOptions}
             />
           </div>
           <div className="form-group">

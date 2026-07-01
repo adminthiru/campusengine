@@ -28,7 +28,9 @@ const salarySchema = new mongoose.Schema({
   totalDeductions: { type: Number },
   netSalary: { type: Number },
   payment: {
-    method: { type: String, enum: ['cash', 'bank_transfer', 'cheque', 'upi'] },
+    // Built-in: cash | bank_transfer | cheque | online. Schools may also pay via
+    // a custom payment category (e.g. a bank name), stored as free text.
+    method: { type: String },
     date: Date,
     transactionId: String,
     remarks: String
