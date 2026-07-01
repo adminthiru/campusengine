@@ -321,7 +321,7 @@ export default function Employees() {
           </button>
         )}
         {can('employees', 'add') && (atStaffCap ? (
-          <a href="/settings/subscription" className="btn btn-secondary" title={`Plan limit reached (${total}/${staffCap})`} style={{ textDecoration: 'none' }}>
+          <a href="/subscription" className="btn btn-secondary" title={`Plan limit reached (${total}/${staffCap})`} style={{ textDecoration: 'none' }}>
             <Plus size={16} /> {total}/{staffCap} — Upgrade to add more
           </a>
         ) : (

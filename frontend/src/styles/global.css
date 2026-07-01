@@ -171,8 +171,7 @@ h1, h2, h3, h4, h5, h6 { font-family: 'Inter', sans-serif; font-weight: 700; lin
   display: flex;
   flex-direction: column;
   z-index: 100;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;   /* only .sidebar-nav scrolls; logo + footer stay pinned */
   transition: width 0.25s ease;
 }
 
@@ -223,7 +222,19 @@ h1, h2, h3, h4, h5, h6 { font-family: 'Inter', sans-serif; font-weight: 700; lin
   flex: 1;
   padding: 12px 5px;
   overflow-y: auto;
+  min-height: 0;   /* allow the flex child to shrink so the footer stays pinned */
 }
+
+/* Pinned footer (Settings + Subscription) — always visible below the scrollable nav */
+.sidebar-footer {
+  flex-shrink: 0;
+  padding: 8px 5px 12px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  background: var(--bg-sidebar);
+}
+.sidebar.collapsed .sidebar-footer { padding: 8px; }
+.sidebar.collapsed .sidebar-footer .sidebar-link { justify-content: center; padding: 10px; }
+.sidebar.collapsed .sidebar-footer .sidebar-link span { display: none; }
 
 .sidebar-section-title {
   color: rgba(255,255,255,0.3);

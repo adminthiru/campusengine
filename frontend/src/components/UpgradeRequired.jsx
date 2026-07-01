@@ -16,7 +16,7 @@ export default function UpgradeRequired({ module }) {
         <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 24, lineHeight: 1.5 }}>
           {label} is not included in your current plan. Upgrade your subscription to unlock it for your school.
         </p>
-        <Link to="/settings/subscription" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <Link to="/subscription" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           View Plans <ArrowUpRight size={16} />
         </Link>
       </div>

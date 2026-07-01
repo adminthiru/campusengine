@@ -7,6 +7,7 @@ import {
   Settings,
   GraduationCap, ClipboardList, Banknote, School, BookMarked, UsersRound, Calendar, Library, DoorOpen, LogOut, Package, Lock, BedDouble
 } from 'lucide-react';
+import { CreditCard as CreditCardIcon } from 'lucide-react';
 import { MODULES, moduleKeyForPath } from '../../config/modules';
 
 const navConfig = {
@@ -149,7 +150,13 @@ export default function Sidebar({ open, onClose, collapsed }) {
   const { user } = useAuth();
   const { t } = useTranslation();
   const isCustom = user?.accessType === 'custom' || user?.role === 'staff';
-  const items = isCustom ? customNav(user) : (navConfig[user?.role] || navConfig.admin);
+  const allItems = isCustom ? customNav(user) : (navConfig[user?.role] || navConfig.admin);
+  // Settings & Subscription are pinned in a fixed footer (below), so drop the
+  // Settings link from the scrollable nav and strip any now-empty section header.
+  const withoutSettings = allItems.filter(i => i.path !== '/settings');
+  const items = withoutSettings.filter((it, i) => !it.section || (withoutSettings[i + 1] && !withoutSettings[i + 1].section));
+  // Only the paying owner roles see the Subscription/billing link.
+  const showSubscription = ['admin', 'correspondent'].includes(user?.role);
 
   // Plan entitlement — modules not in the school's plan stay visible but locked.
   // Empty/absent list = all unlocked (legacy schools / trials).
@@ -200,6 +207,24 @@ export default function Sidebar({ open, onClose, collapsed }) {
             );
           })}
         </nav>
+
+        {/* Pinned footer — always visible, does not scroll with the nav */}
+        <div className="sidebar-footer">
+          {showSubscription && (
+            <NavLink to="/subscription" onClick={onClose}
+              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+              title={collapsed ? 'Subscription' : undefined}>
+              <CreditCardIcon className="icon" />
+              <span>Subscription</span>
+            </NavLink>
+          )}
+          <NavLink to="/settings" onClick={onClose}
+            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+            title={collapsed ? 'Settings' : undefined}>
+            <Settings className="icon" />
+            <span>Settings</span>
+          </NavLink>
+        </div>
 
       </aside>
     </>

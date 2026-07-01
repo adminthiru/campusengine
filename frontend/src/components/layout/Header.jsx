@@ -192,7 +192,7 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
             ? '⚠️ Trial expired! Please subscribe to continue.'
             : `⚡ Trial expires in ${trialDaysLeft} day${trialDaysLeft !== 1 ? 's' : ''}!`}
           <button
-            onClick={() => navigate('/settings/subscription')}
+            onClick={() => navigate('/subscription')}
             className="text-12-semibold" style={{ background: 'white', color: '#1a56e8', border: 'none', padding: '3px 14px', borderRadius: 20, cursor: 'pointer' }}
           >
             Subscribe Now
@@ -211,7 +211,7 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
             ? '⚠️ Your plan has expired! Renew to keep using all features.'
             : `⏳ Your plan expires in ${renewDaysLeft} day${renewDaysLeft !== 1 ? 's' : ''}. Renew to avoid interruption.`}
           <button
-            onClick={() => navigate('/settings/subscription')}
+            onClick={() => navigate('/subscription')}
             className="text-12-semibold" style={{ background: 'white', color: '#1a56e8', border: 'none', padding: '3px 14px', borderRadius: 20, cursor: 'pointer' }}
           >
             Renew Now
@@ -373,7 +373,7 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
                 {[
                   { label: 'My Profile', path: '/settings/profile' },
                   { label: 'Change Password', path: '/settings/password' },
-                  ...(user?.role !== 'super_admin' ? [{ label: 'Subscription', path: '/settings/subscription' }] : []),
+                  ...(['admin', 'correspondent'].includes(user?.role) ? [{ label: 'Subscription', path: '/subscription' }] : []),
                 ].map(item => (
                   <button key={item.path} onClick={() => { navigate(item.path); setProfileOpen(false); }}
                     className="text-14-regular" style={{ width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', color: 'var(--text-primary)' }}

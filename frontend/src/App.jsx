@@ -18,7 +18,7 @@ import ExamDetail from './pages/admin/ExamDetail';
 import Expenses from './pages/admin/Expenses';
 import Homework from './pages/admin/Homework';
 import Transport from './pages/admin/Transport';
-import Settings from './pages/admin/Settings';
+import Settings, { SubscriptionSettings } from './pages/admin/Settings';
 import Parents from './pages/admin/Parents';
 import { TeacherDashboard, MySalary, MyTasks, StudentDashboard, ParentDashboard } from './pages/portals/index';
 import Library from './pages/admin/Library';
@@ -116,6 +116,7 @@ export default function App() {
       <Route path="/transport" element={<ProtectedRoute roles={ADMIN} module="transport"><Transport /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute roles={ALL}><Settings /></ProtectedRoute>} />
       <Route path="/settings/:tab" element={<ProtectedRoute roles={ALL}><Settings /></ProtectedRoute>} />
+      <Route path="/subscription" element={<ProtectedRoute roles={['admin', 'correspondent']}><SubscriptionSettings /></ProtectedRoute>} />
 
       <Route path="/my-classes" element={<ProtectedRoute roles={['teacher']}><TeacherDashboard /></ProtectedRoute>} />
       <Route path="/my-salary" element={<ProtectedRoute roles={['teacher']}><MySalary /></ProtectedRoute>} />

@@ -25,7 +25,6 @@ const TABS = [
   { id: 'salaryconfig',  label: 'Salary & LOP',      icon: Banknote },
   { id: 'applogins',     label: 'App Logins',       icon: UserCheck },
   { id: 'stafflogins',   label: 'Staff Logins',     icon: UserCog },
-  { id: 'subscription',  label: 'Subscription',     icon: CreditCard },
   { id: 'password',      label: 'Change Password',  icon: Key },
   { id: 'profile',       label: 'My Profile',       icon: SettingsIcon },
 ];
@@ -88,7 +87,6 @@ export default function Settings() {
           {activeTab === 'salaryconfig' && isAdmin && <SalaryConfigSettings />}
           {activeTab === 'applogins'    && isOwner && <AppLoginsSettings />}
           {activeTab === 'stafflogins'  && isOwner && <StaffLoginsSettings />}
-          {activeTab === 'subscription' && isAdmin && <SubscriptionSettings />}
           {activeTab === 'password' && <PasswordSettings />}
           {activeTab === 'profile'  && <ProfileSettings />}
         </div>
@@ -1500,7 +1498,7 @@ function AppLoginCreateModal({ type, cfg, onClose, onCreated }) {
   );
 }
 
-function SubscriptionSettings() {
+export function SubscriptionSettings() {
   const qc = useQueryClient();
   const { updateUser } = useAuth();
   const [checkout, setCheckout] = useState(null);   // plan being paid for

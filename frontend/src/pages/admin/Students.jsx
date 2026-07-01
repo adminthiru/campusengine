@@ -403,7 +403,7 @@ export default function Students() {
             </button>
           )}
           {can('students', 'add') && (atStudentCap ? (
-            <a href="/settings/subscription" className="btn btn-secondary" title={`Plan limit reached (${total}/${studentCap})`} style={{ textDecoration: 'none' }}>
+            <a href="/subscription" className="btn btn-secondary" title={`Plan limit reached (${total}/${studentCap})`} style={{ textDecoration: 'none' }}>
               <Plus size={14} /> {total}/{studentCap} — Upgrade to add more
             </a>
           ) : (
