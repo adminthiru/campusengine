@@ -30,15 +30,8 @@ export function SuperAdminDashboard() {
     } catch { toast.error('Failed'); }
   };
 
-  const activate = async (school) => {
-    try {
-      const start = new Date();
-      const end = new Date(start); end.setMonth(end.getMonth() + 1);
-      await api.put(`/super-admin/schools/${school._id}/subscription`, { status: 'active', currentPeriodStart: start, currentPeriodEnd: end });
-      qc.invalidateQueries(['all-schools', 'super-admin-stats']);
-      toast.success('Subscription activated');
-    } catch { toast.error('Failed'); }
-  };
+  // Manual activation removed — schools activate their plan via Razorpay
+  // checkout (Settings → Subscription). The super admin only extends trials.
 
   if (isLoading) return <PageLoader />;
 
@@ -89,7 +82,6 @@ export function SuperAdminDashboard() {
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button className="btn btn-secondary btn-sm text-12-regular" onClick={() => extendTrial(school)} style={{ padding: '4px 8px' }}>+30 days</button>
-                      <button className="btn btn-success btn-sm text-12-regular" onClick={() => activate(school)} style={{ padding: '4px 8px' }}>Activate</button>
                     </div>
                   </td>
                 </tr>
