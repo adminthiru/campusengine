@@ -672,7 +672,7 @@ function AdvanceMethodModal({ target, methods, onClose, onSuccess }) {
   };
 
   return (
-    <Modal open onClose={onClose} title="Advance — Payment Category"
+    <Modal open onClose={onClose} title="Advance — Payment Category" dismissable={false}
       footer={
         <button className="btn btn-primary" onClick={submit} disabled={saving}>{saving ? 'Saving…' : 'Confirm'}</button>
       }>
