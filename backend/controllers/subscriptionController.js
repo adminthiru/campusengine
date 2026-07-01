@@ -63,18 +63,34 @@ const selectPlan = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
+// Resolve the plan + chosen cycle ('monthly'|'yearly') for a checkout request,
+// returning the net amount (₹) and billing months. planId in the body wins;
+// otherwise the school's currently-selected plan is used.
+const resolvePlanCycle = async (req) => {
+  const cycle = req.body.cycle === 'yearly' ? 'yearly' : 'monthly';
+  let plan = null;
+  if (req.body.planId) plan = await SubscriptionPlan.findById(req.body.planId);
+  if (!plan) {
+    const school = await School.findById(req.user.school).populate('subscription.plan');
+    plan = school?.subscription?.plan || null;
+  }
+  const { amount, months } = plan ? plan.netForCycle(cycle) : { amount: 200, months: 1 };
+  return { plan, cycle, amount, months };
+};
+
 const createOrder = async (req, res) => {
   try {
     const { enabled, keyId, keySecret } = await getGatewayKeys();
     if (!enabled || !keyId || !keySecret) return res.status(400).json({ success: false, message: 'Online payment is not configured. Please use another method or contact support.' });
-    const school = await School.findById(req.user.school).populate('subscription.plan');
-    const amountRs = school.subscription?.amount || school.subscription?.plan?.price || 200;
+    const { plan, cycle, amount } = await resolvePlanCycle(req);
+    if (!plan) return res.status(400).json({ success: false, message: 'Select a plan first.' });
+    if (amount < 1) return res.status(400).json({ success: false, message: 'This plan has no price for the selected billing cycle.' });
     const order = await getRazorpay(keyId, keySecret).orders.create({
-      amount: Math.round(amountRs * 100),   // paise
+      amount: Math.round(amount * 100),   // paise (min 100)
       currency: 'INR',
       receipt: `sub_${req.user.school}_${Date.now()}`.slice(0, 40),
     });
-    res.json({ success: true, order, key: keyId, amount: amountRs });
+    res.json({ success: true, order, key: keyId, amount, cycle });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
@@ -86,14 +102,14 @@ const verifyPayment = async (req, res) => {
       .update(`${razorpayOrderId}|${razorpayPaymentId}`).digest('hex');
     if (sig !== razorpaySignature) return res.status(400).json({ success: false, message: 'Payment verification failed' });
 
-    const school = await School.findById(req.user.school).populate('subscription.plan');
-    const plan = school.subscription?.plan;
-    const cycle = plan?.billingCycleMonths || 1;
-    const amt = school.subscription?.amount || plan?.price || 200;
+    const school = await School.findById(req.user.school);
+    // Recompute the amount/period server-side from the plan + chosen cycle
+    // (never trust a client-sent amount).
+    const { plan, cycle, amount: amt, months } = await resolvePlanCycle(req);
 
     const start = (school.subscription?.currentPeriodEnd && new Date(school.subscription.currentPeriodEnd) > new Date())
       ? new Date(school.subscription.currentPeriodEnd) : new Date();
-    const end = addMonths(start, cycle);
+    const end = addMonths(start, months);
 
     const invoiceNumber = await genInvoiceNumber();
     await SubscriptionPayment.create({
@@ -105,6 +121,12 @@ const verifyPayment = async (req, res) => {
     await School.findByIdAndUpdate(school._id, {
       $set: {
         'subscription.status': 'active',
+        'subscription.plan': plan?._id,
+        'subscription.planName': plan?.name,
+        'subscription.amount': amt,
+        'subscription.billingCycle': cycle,
+        'subscription.modules': plan?.modules || [],
+        'subscription.limits': plan?.limits || {},
         'subscription.currentPeriodStart': start,
         'subscription.currentPeriodEnd': end,
         'subscription.razorpaySubscriptionId': razorpayPaymentId,

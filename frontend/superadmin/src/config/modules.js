@@ -19,7 +19,7 @@ export const MODULES = [
   { key: 'outpass',    label: 'Out Pass' },
   { key: 'inventory',  label: 'Inventory' },
   { key: 'transport',  label: 'Transport' },
-  { key: 'sms',        label: 'SMS' },
+  { key: 'hostel',     label: 'Hostel' },
 ];
 
 // Core modules every paid tier typically includes — used by the "Core" preset.

@@ -37,7 +37,26 @@ export default function Plans() {
                 </div>
                 {!p.isActive && <Badge status="suspended" />}
               </div>
-              <div className="text-24-bold" style={{ color: 'var(--primary)', margin: '8px 0' }}>₹{p.price}<span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>/{p.billingCycleMonths > 1 ? `${p.billingCycleMonths}mo` : 'mo'}</span></div>
+              {(() => {
+                const mBase = p.monthlyPrice || p.price || 0;
+                const mNet = Math.max(0, mBase - (p.monthlyDiscount || 0));
+                const yBase = p.yearlyPrice || 0;
+                const yNet = Math.max(0, yBase - (p.yearlyDiscount || 0));
+                const Price = ({ label, base, net, disc }) => (
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span className="text-18-bold" style={{ color: 'var(--primary)' }}>₹{net.toLocaleString('en-IN')}</span>
+                    <span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>/{label}</span>
+                    {disc > 0 && <span className="text-12-regular" style={{ color: 'var(--text-muted)', textDecoration: 'line-through' }}>₹{base.toLocaleString('en-IN')}</span>}
+                    {disc > 0 && <span className="text-12-regular" style={{ color: '#16a34a' }}>−₹{disc.toLocaleString('en-IN')}</span>}
+                  </div>
+                );
+                return (
+                  <div style={{ margin: '8px 0', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {mBase > 0 && <Price label="mo" base={mBase} net={mNet} disc={p.monthlyDiscount || 0} />}
+                    {yBase > 0 && <Price label="yr" base={yBase} net={yNet} disc={p.yearlyDiscount || 0} />}
+                  </div>
+                );
+              })()}
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 <span style={{ background: 'var(--bg-muted, #f1f5f9)', borderRadius: 6, padding: '2px 7px' }}>🧩 {(p.modules || []).length ? `${p.modules.length} modules` : 'All modules'}</span>
                 <span style={{ background: 'var(--bg-muted, #f1f5f9)', borderRadius: 6, padding: '2px 7px' }}>👥 {p.limits?.maxStudents ? p.limits.maxStudents.toLocaleString('en-IN') : '∞'}</span>
@@ -61,11 +80,15 @@ export default function Plans() {
 function PlanModal({ plan, onClose, onSaved }) {
   const editing = !!plan;
   const [f, setF] = useState({
-    name: plan?.name || '', code: plan?.code || '', price: plan?.price ?? '', billingCycleMonths: plan?.billingCycleMonths || 1,
+    name: plan?.name || '', code: plan?.code || '',
+    monthlyPrice: plan?.monthlyPrice ?? plan?.price ?? '', monthlyDiscount: plan?.monthlyDiscount ?? '',
+    yearlyPrice: plan?.yearlyPrice ?? '', yearlyDiscount: plan?.yearlyDiscount ?? '',
     description: plan?.description || '', features: (plan?.features || []).join('\n'), isActive: plan?.isActive ?? true,
     modules: plan?.modules || [],
     maxStudents: plan?.limits?.maxStudents ?? 0, maxStaff: plan?.limits?.maxStaff ?? 0,
   });
+  const mNet = Math.max(0, (Number(f.monthlyPrice) || 0) - (Number(f.monthlyDiscount) || 0));
+  const yNet = Math.max(0, (Number(f.yearlyPrice) || 0) - (Number(f.yearlyDiscount) || 0));
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   const toggleModule = (key) => setF(p => ({ ...p, modules: p.modules.includes(key) ? p.modules.filter(m => m !== key) : [...p.modules, key] }));
   const selectAll = () => set('modules', MODULES.map(m => m.key));
@@ -74,7 +97,9 @@ function PlanModal({ plan, onClose, onSaved }) {
   const save = useMutation({
     mutationFn: () => {
       const body = {
-        name: f.name, code: f.code, price: Number(f.price), billingCycleMonths: Number(f.billingCycleMonths),
+        name: f.name, code: f.code,
+        monthlyPrice: Number(f.monthlyPrice) || 0, monthlyDiscount: Number(f.monthlyDiscount) || 0,
+        yearlyPrice: Number(f.yearlyPrice) || 0, yearlyDiscount: Number(f.yearlyDiscount) || 0,
         description: f.description, isActive: f.isActive,
         features: f.features.split('\n').map(s => s.trim()).filter(Boolean),
         modules: f.modules,
@@ -85,7 +110,11 @@ function PlanModal({ plan, onClose, onSaved }) {
     onSuccess: () => { toast.success(editing ? 'Plan updated' : 'Plan created'); onSaved(); },
     onError: (e) => toast.error(e?.response?.data?.message || 'Failed'),
   });
-  const submit = () => { if (!f.name || !f.code || f.price === '') return toast.error('Name, code and price are required'); save.mutate(); };
+  const submit = () => {
+    if (!f.name || !f.code) return toast.error('Name and code are required');
+    if ((Number(f.monthlyPrice) || 0) <= 0 && (Number(f.yearlyPrice) || 0) <= 0) return toast.error('Enter a monthly and/or yearly price');
+    save.mutate();
+  };
   return (
     <Modal open onClose={onClose} title={editing ? 'Edit Plan' : 'New Plan'} size="md"
       footer={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save Plan'}</button></>}>
@@ -93,10 +122,28 @@ function PlanModal({ plan, onClose, onSaved }) {
         <div className="form-group"><label className="form-label">Name *</label><input className="form-control" value={f.name} onChange={e => set('name', e.target.value)} placeholder="Standard" /></div>
         <div className="form-group"><label className="form-label">Code *</label><input className="form-control" value={f.code} onChange={e => set('code', e.target.value)} placeholder="standard" disabled={editing} /></div>
       </FormRow>
+      {/* Monthly pricing */}
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '4px 0 6px' }}>Monthly</div>
       <FormRow>
-        <div className="form-group"><label className="form-label">Price (₹) *</label><input className="form-control" type="number" value={f.price} onChange={e => set('price', e.target.value)} /></div>
-        <div className="form-group"><label className="form-label">Billing cycle (months)</label><input className="form-control" type="number" min="1" value={f.billingCycleMonths} onChange={e => set('billingCycleMonths', e.target.value)} /></div>
+        <div className="form-group"><label className="form-label">Monthly price (₹)</label><input className="form-control" type="number" min="0" value={f.monthlyPrice} onChange={e => set('monthlyPrice', e.target.value)} placeholder="e.g. 500" /></div>
+        <div className="form-group"><label className="form-label">Monthly discount (₹)</label><input className="form-control" type="number" min="0" value={f.monthlyDiscount} onChange={e => set('monthlyDiscount', e.target.value)} placeholder="0" /></div>
       </FormRow>
+      {(Number(f.monthlyPrice) || 0) > 0 && (
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: -6, marginBottom: 10 }}>
+          Charged monthly: <strong style={{ color: 'var(--primary)' }}>₹{mNet.toLocaleString('en-IN')}</strong>{(Number(f.monthlyDiscount) || 0) > 0 && <span> (₹{(Number(f.monthlyPrice) || 0).toLocaleString('en-IN')} − ₹{(Number(f.monthlyDiscount) || 0).toLocaleString('en-IN')})</span>}
+        </div>
+      )}
+      {/* Yearly pricing */}
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '4px 0 6px' }}>Yearly</div>
+      <FormRow>
+        <div className="form-group"><label className="form-label">Yearly price (₹)</label><input className="form-control" type="number" min="0" value={f.yearlyPrice} onChange={e => set('yearlyPrice', e.target.value)} placeholder="e.g. 5000" /></div>
+        <div className="form-group"><label className="form-label">Yearly discount (₹)</label><input className="form-control" type="number" min="0" value={f.yearlyDiscount} onChange={e => set('yearlyDiscount', e.target.value)} placeholder="0" /></div>
+      </FormRow>
+      {(Number(f.yearlyPrice) || 0) > 0 && (
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: -6, marginBottom: 10 }}>
+          Charged yearly: <strong style={{ color: 'var(--primary)' }}>₹{yNet.toLocaleString('en-IN')}</strong>{(Number(f.yearlyDiscount) || 0) > 0 && <span> (₹{(Number(f.yearlyPrice) || 0).toLocaleString('en-IN')} − ₹{(Number(f.yearlyDiscount) || 0).toLocaleString('en-IN')})</span>}
+        </div>
+      )}
       <div className="form-group"><label className="form-label">Description</label><input className="form-control" value={f.description} onChange={e => set('description', e.target.value)} /></div>
 
       {/* Usage limits */}

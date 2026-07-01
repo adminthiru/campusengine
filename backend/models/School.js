@@ -48,6 +48,7 @@ const schoolSchema = new mongoose.Schema({
     status: { type: String, enum: ['trial', 'active', 'expired', 'cancelled'], default: 'trial' },
     plan: { type: mongoose.Schema.Types.ObjectId, ref: 'SubscriptionPlan' },
     planName: { type: String },
+    billingCycle: { type: String, enum: ['monthly', 'yearly'], default: 'monthly' },  // chosen at checkout
     trialStartDate: { type: Date, default: Date.now },
     trialEndDate: { type: Date },
     currentPeriodStart: { type: Date },

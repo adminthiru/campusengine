@@ -1518,10 +1518,11 @@ function SubscriptionSettings() {
   const endDate = isActive ? sub.currentPeriodEnd : sub.trialEndDate;
   const daysLeft = endDate ? Math.max(0, Math.ceil((new Date(endDate) - new Date()) / 86400000)) : 0;
   const amount = sub.amount || plans.find(p => String(p._id) === String(sub.plan))?.price || 200;
+  const cycleLabel = sub.billingCycle === 'yearly' ? '/year' : '/month';
 
-  // Persist the chosen plan (so the order uses its price), then open the checkout.
-  const startCheckout = async (plan) => {
-    try { await api.post('/subscription/select-plan', { planId: plan._id }); qc.invalidateQueries(['my-subscription']); setCheckout(plan); }
+  // Persist the chosen plan, then open the checkout for the chosen cycle.
+  const startCheckout = async (plan, cycle) => {
+    try { await api.post('/subscription/select-plan', { planId: plan._id }); qc.invalidateQueries(['my-subscription']); setCheckout({ plan, cycle }); }
     catch (e) { toast.error(e?.response?.data?.message || 'Failed to select plan'); }
   };
 
@@ -1559,7 +1560,7 @@ function SubscriptionSettings() {
                 : sub.status === 'trial' && endDate ? `Trial ends ${new Date(endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
             </div>
           </div>
-          <span className="text-24-bold" style={{ color: '#1a56e8' }}>₹{amount}<span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>/month</span></span>
+          <span className="text-24-bold" style={{ color: '#1a56e8' }}>₹{amount.toLocaleString('en-IN')}<span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>{cycleLabel}</span></span>
         </div>
       </div>
 
@@ -1602,14 +1603,33 @@ function SubscriptionSettings() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 14, marginBottom: 24 }}>
             {plans.map(p => {
               const current = isActive && String(p._id) === String(sub.plan?._id || sub.plan);
-              const free = (p.price || 0) === 0;
+              const mBase = p.monthlyPrice || p.price || 0;
+              const mNet = Math.max(0, mBase - (p.monthlyDiscount || 0));
+              const yBase = p.yearlyPrice || 0;
+              const yNet = Math.max(0, yBase - (p.yearlyDiscount || 0));
+              const free = mBase === 0 && yBase === 0;
               return (
                 <div key={p._id} className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column', border: `1px solid ${current ? 'var(--primary)' : 'var(--border)'}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span className="text-16-bold">{p.name}</span>
                     {current && <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--primary)', background: '#eff6ff', padding: '2px 8px', borderRadius: 20 }}>Current</span>}
                   </div>
-                  <div className="text-24-bold" style={{ color: 'var(--primary)', margin: '6px 0 10px' }}>₹{p.price}<span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>/{p.billingCycleMonths > 1 ? `${p.billingCycleMonths}mo` : 'mo'}</span></div>
+                  <div style={{ margin: '6px 0 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {mBase > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                        <span className="text-20-bold" style={{ color: 'var(--primary)' }}>₹{mNet.toLocaleString('en-IN')}</span>
+                        <span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>/mo</span>
+                        {(p.monthlyDiscount || 0) > 0 && <span className="text-12-regular" style={{ color: 'var(--text-muted)', textDecoration: 'line-through' }}>₹{mBase.toLocaleString('en-IN')}</span>}
+                      </div>
+                    )}
+                    {yBase > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                        <span className="text-16-bold" style={{ color: 'var(--text-primary)' }}>₹{yNet.toLocaleString('en-IN')}</span>
+                        <span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>/yr</span>
+                        {(p.yearlyDiscount || 0) > 0 && <span className="text-12-regular" style={{ color: '#16a34a' }}>save ₹{(p.yearlyDiscount || 0).toLocaleString('en-IN')}</span>}
+                      </div>
+                    )}
+                  </div>
                   {(() => {
                     const maxS = p.limits?.maxStudents || 0, maxE = p.limits?.maxStaff || 0;
                     const modCount = (p.modules || []).length;
@@ -1628,15 +1648,22 @@ function SubscriptionSettings() {
                       </div>
                     ))}
                   </div>
-                  <div style={{ marginTop: 12 }}>
+                  <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {free ? (
                       <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }} disabled>Free</button>
-                    ) : current ? (
-                      <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }} disabled>Current Plan</button>
                     ) : (
-                      <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => startCheckout(p)}>
-                        <CreditCard size={15} /> {isActive ? 'Switch & Pay' : 'Subscribe'}
-                      </button>
+                      <>
+                        {mBase > 0 && (
+                          <button className="btn btn-primary btn-sm" style={{ width: '100%', justifyContent: 'center' }} onClick={() => startCheckout(p, 'monthly')}>
+                            <CreditCard size={14} /> Pay Monthly · ₹{mNet.toLocaleString('en-IN')}
+                          </button>
+                        )}
+                        {yBase > 0 && (
+                          <button className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center' }} onClick={() => startCheckout(p, 'yearly')}>
+                            <CreditCard size={14} /> Pay Yearly · ₹{yNet.toLocaleString('en-IN')}
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -1673,7 +1700,7 @@ function SubscriptionSettings() {
       </div>
 
       {checkout && (
-        <CheckoutModal plan={checkout} methods={methods}
+        <CheckoutModal plan={checkout.plan} cycle={checkout.cycle} methods={methods}
           onClose={() => setCheckout(null)}
           onPaid={() => { qc.invalidateQueries(['my-subscription']); updateUser({ subscription: { ...sub, status: 'active' } }); }} />
       )}
@@ -1682,8 +1709,10 @@ function SubscriptionSettings() {
 }
 
 // Guided payment popup: pick a method → pay → success.
-function CheckoutModal({ plan, methods, onClose, onPaid }) {
-  const amount = plan.price;
+function CheckoutModal({ plan, cycle = 'monthly', methods, onClose, onPaid }) {
+  const mNet = Math.max(0, (plan.monthlyPrice || plan.price || 0) - (plan.monthlyDiscount || 0));
+  const yNet = Math.max(0, (plan.yearlyPrice || 0) - (plan.yearlyDiscount || 0));
+  const amount = cycle === 'yearly' ? yNet : mNet;
   const available = [
     methods.gateway?.enabled && { key: 'online', emoji: '💳', title: 'Card / UPI / Netbanking', sub: 'Pay securely online · instant activation' },
     methods.upi?.enabled && { key: 'upi', emoji: '📱', title: 'UPI', sub: 'Pay to our UPI ID' },
@@ -1698,13 +1727,13 @@ function CheckoutModal({ plan, methods, onClose, onPaid }) {
     if (!window.Razorpay) return toast.error('Payment library not loaded. Refresh and try again.');
     setPaying(true);
     try {
-      const { order, key } = await api.post('/subscription/create-order');
+      const { order, key } = await api.post('/subscription/create-order', { planId: plan._id, cycle });
       const rzp = new window.Razorpay({
         key, amount: order.amount, currency: 'INR', order_id: order.id,
-        name: 'School ERP', description: `${plan.name} plan subscription`, theme: { color: '#1a56e8' },
+        name: 'School ERP', description: `${plan.name} plan · ${cycle === 'yearly' ? 'yearly' : 'monthly'}`, theme: { color: '#1a56e8' },
         handler: async (r) => {
           try {
-            await api.post('/subscription/verify', { razorpayOrderId: r.razorpay_order_id, razorpayPaymentId: r.razorpay_payment_id, razorpaySignature: r.razorpay_signature });
+            await api.post('/subscription/verify', { razorpayOrderId: r.razorpay_order_id, razorpayPaymentId: r.razorpay_payment_id, razorpaySignature: r.razorpay_signature, planId: plan._id, cycle });
             onPaid(); setStep('success');
           } catch (e) { toast.error(e?.response?.data?.message || 'Verification failed'); }
           finally { setPaying(false); }
@@ -1747,8 +1776,8 @@ function CheckoutModal({ plan, methods, onClose, onPaid }) {
     <Modal open onClose={onClose} size="md" title={`Subscribe — ${plan.name}`}>
       {/* Summary */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '12px 16px', marginBottom: 16 }}>
-        <div><div className="text-14-semibold">{plan.name} plan</div><div className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>Billed every {plan.billingCycleMonths > 1 ? `${plan.billingCycleMonths} months` : 'month'}</div></div>
-        <div className="text-24-bold" style={{ color: 'var(--primary)' }}>₹{amount}</div>
+        <div><div className="text-14-semibold">{plan.name} plan</div><div className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>Billed {cycle === 'yearly' ? 'yearly (12 months)' : 'monthly'}</div></div>
+        <div className="text-24-bold" style={{ color: 'var(--primary)' }}>₹{amount.toLocaleString('en-IN')}<span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>/{cycle === 'yearly' ? 'yr' : 'mo'}</span></div>
       </div>
 
       {available.length === 0 ? (
