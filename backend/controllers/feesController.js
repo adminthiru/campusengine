@@ -420,12 +420,14 @@ const getBalanceLedger = async (req, res) => {
     const { method, type } = req.query;
     const Salary = require('../models/Salary');
     const { Expense } = require('../models/Expense');
-    const [school, fees, salaries, expenses] = await Promise.all([
+    const PaymentAdjustment = require('../models/PaymentAdjustment');
+    const [school, fees, salaries, expenses, adjustments] = await Promise.all([
       School.findById(schoolId).select('paymentMethods paymentOpeningBalances createdAt').lean(),
       FeeCollection.find({ school: schoolId, 'payments.0': { $exists: true } })
         .populate('student', 'name admissionNumber').select('student payments').lean(),
       Salary.find({ school: schoolId, status: 'paid' }).populate('employee', 'name').select('employee netSalary payment month year updatedAt').lean(),
       Expense.find({ school: schoolId }).select('title category amount date paymentMethod vendor').lean(),
+      PaymentAdjustment.find({ school: schoolId }).select('method direction amount reason createdAt _id').lean(),
     ]);
 
     const tx = [];
@@ -433,6 +435,12 @@ const getBalanceLedger = async (req, res) => {
     (school?.paymentOpeningBalances || []).forEach(b => {
       if ((b.amount || 0) > 0) tx.push({ date: school.createdAt, direction: 'credit', amount: b.amount, method: b.method, kind: 'opening', title: 'Opening balance', subtitle: 'Balance carried forward' });
     });
+    // Manual adjustments → credit (money added) or debit (money reduced)
+    adjustments.forEach(a => tx.push({
+      id: String(a._id), date: a.createdAt, direction: a.direction, amount: a.amount, method: a.method, kind: 'adjustment',
+      title: a.direction === 'credit' ? 'Money added' : 'Money reduced',
+      subtitle: a.reason || 'Manual adjustment',
+    }));
     // Fee payments → credits
     fees.forEach(f => (f.payments || []).forEach(p => {
       if ((p.amount || 0) > 0) tx.push({
@@ -464,6 +472,40 @@ const getBalanceLedger = async (req, res) => {
     list.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
     res.json({ success: true, transactions: list.slice(0, 1000), totalIn, totalOut, balance: totalIn - totalOut });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+};
+
+// ── Manual balance adjustments (Add money / Reduce money) ────────────────────
+const createAdjustment = async (req, res) => {
+  try {
+    const { method, direction, amount, reason } = req.body;
+    const amt = Math.round(Number(amount) || 0);
+    if (!method) return res.status(400).json({ success: false, message: 'Payment method is required' });
+    if (!['credit', 'debit'].includes(direction)) return res.status(400).json({ success: false, message: 'Invalid direction' });
+    if (amt < 1) return res.status(400).json({ success: false, message: 'Enter an amount greater than 0' });
+    const PaymentAdjustment = require('../models/PaymentAdjustment');
+    const adj = await PaymentAdjustment.create({ school: req.user.school, method: String(method).trim(), direction, amount: amt, reason: (reason || '').trim(), createdBy: req.user._id });
+    res.status(201).json({ success: true, adjustment: adj });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+};
+
+const listAdjustments = async (req, res) => {
+  try {
+    const PaymentAdjustment = require('../models/PaymentAdjustment');
+    const q = { school: req.user.school };
+    if (req.query.method) q.method = req.query.method;
+    const items = await PaymentAdjustment.find(q).sort({ createdAt: -1 }).limit(200).lean();
+    res.json({ success: true, adjustments: items });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+};
+
+// Delete (undo) an adjustment made in error.
+const deleteAdjustment = async (req, res) => {
+  try {
+    const PaymentAdjustment = require('../models/PaymentAdjustment');
+    const removed = await PaymentAdjustment.findOneAndDelete({ _id: req.params.id, school: req.user.school });
+    if (!removed) return res.status(404).json({ success: false, message: 'Adjustment not found' });
+    res.json({ success: true });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
@@ -547,14 +589,26 @@ const getMethodBalances = async (req, res) => {
     const paidOut = {};
     [...salRows, ...expRows].forEach(r => { const k = r._id || 'cash'; paidOut[k] = (paidOut[k] || 0) + (r.total || 0); });
 
+    // Manual adjustments (Add money / Reduce money) — credit adds, debit subtracts.
+    const PaymentAdjustment = require('../models/PaymentAdjustment');
+    const adjRows = await PaymentAdjustment.aggregate([
+      { $match: { school: new mongoose.Types.ObjectId(schoolId) } },
+      { $group: { _id: { method: '$method', direction: '$direction' }, total: { $sum: '$amount' } } },
+    ]);
+    const adjusted = {};
+    adjRows.forEach(r => {
+      const k = r._id.method || 'cash';
+      adjusted[k] = (adjusted[k] || 0) + (r._id.direction === 'debit' ? -(r.total || 0) : (r.total || 0));
+    });
+
     const keys = ['cash', 'bank_transfer', 'cheque', 'online', ...custom];
-    [collected, opening, paidOut].forEach(obj => Object.keys(obj).forEach(k => { if (!keys.includes(k)) keys.push(k); }));
+    [collected, opening, paidOut, adjusted].forEach(obj => Object.keys(obj).forEach(k => { if (!keys.includes(k)) keys.push(k); }));
 
     const methods = {};
     let total = 0;
     for (const k of keys) {
-      const balance = (opening[k] || 0) + (collected[k] || 0) - (paidOut[k] || 0);
-      methods[k] = { opening: opening[k] || 0, collected: collected[k] || 0, paidOut: paidOut[k] || 0, balance };
+      const balance = (opening[k] || 0) + (adjusted[k] || 0) + (collected[k] || 0) - (paidOut[k] || 0);
+      methods[k] = { opening: opening[k] || 0, adjusted: adjusted[k] || 0, collected: collected[k] || 0, paidOut: paidOut[k] || 0, balance };
       total += balance;
     }
     res.json({ success: true, methods, total });
@@ -1030,4 +1084,4 @@ const syncClassStudents = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
-module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, clearTermDiscount, createRazorpayOrder, verifyRazorpayPayment, getFees, getPaymentSummary, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm, getUnsyncedCount, syncClassStudents, applyClassFeeStructure, getArrearsSummary, getStudentArrears, getMethodBalances, getBalanceLedger };
+module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, clearTermDiscount, createRazorpayOrder, verifyRazorpayPayment, getFees, getPaymentSummary, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm, getUnsyncedCount, syncClassStudents, applyClassFeeStructure, getArrearsSummary, getStudentArrears, getMethodBalances, getBalanceLedger, createAdjustment, listAdjustments, deleteAdjustment };

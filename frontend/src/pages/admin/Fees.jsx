@@ -492,13 +492,12 @@ export default function Fees() {
         </form>
       </Modal>
 
-      {/* Manage custom payment categories + opening balances */}
+      {/* Manage custom payment categories + balance adjustments */}
       {showMethodsModal && (
         <PaymentMethodsModal
           methods={customMethods}
-          openingBalances={schoolData?.school?.paymentOpeningBalances || []}
           onClose={() => setShowMethodsModal(false)}
-          onSuccess={() => { qc.invalidateQueries(['school']); qc.invalidateQueries(['fees-method-balances']); setShowMethodsModal(false); }}
+          onChanged={() => { qc.invalidateQueries(['school']); qc.invalidateQueries(['fees-method-balances']); qc.invalidateQueries(['fees-ledger']); }}
         />
       )}
 
@@ -738,100 +737,101 @@ function FeeItemsEditor({ items, onChange, readonlyTypes = false }) {
 }
 
 // Manage custom payment categories (e.g. specific bank accounts) and the
-// opening balance already held in each method. Built-in Cash / Bank Transfer /
-// Cheque / Online can't be removed but their opening balance is editable.
-function PaymentMethodsModal({ methods, openingBalances = [], onClose, onSuccess }) {
+// per-method balances. Balances change via discrete "Add money" / "Reduce
+// money" actions (each recorded in the ledger and correctable), not a static
+// opening-balance field. Custom categories (bank accounts) can be added/removed.
+function PaymentMethodsModal({ methods, onClose, onChanged }) {
+  const qc = useQueryClient();
+  const { data: bal } = useQuery({ queryKey: ['fees-method-balances'], queryFn: () => api.get('/fees/method-balances') });
+  const balances = bal?.methods || {};
   const [list, setList] = useState(methods || []);
-  const [balances, setBalances] = useState(() => {
-    const m = {};
-    (openingBalances || []).forEach(b => { if (b?.method) m[b.method] = String(b.amount ?? ''); });
-    return m;
-  });
   const [input, setInput] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState(false); // balances locked until Edit is clicked
+  const [savingCats, setSavingCats] = useState(false);
+  // Inline adjust form: which method+direction is open, plus amount/reason.
+  const [adjust, setAdjust] = useState(null); // { method, direction }
+  const [amount, setAmount] = useState('');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const setBal = (method, val) => setBalances(p => ({ ...p, [method]: val }));
+  const allMethods = [...DEFAULT_PAYMENT_METHODS, ...list.map(m => ({ value: m, label: m }))];
 
-  const add = () => {
+  const saveCats = async (next) => {
+    setSavingCats(true);
+    try { await api.put('/school/payment-methods', { methods: next }); onChanged(); }
+    catch (err) { toast.error(err.message || 'Failed'); }
+    finally { setSavingCats(false); }
+  };
+  const addCat = () => {
     const v = input.trim();
     if (!v) return;
-    if (DEFAULT_PAYMENT_METHODS.some(m => m.label.toLowerCase() === v.toLowerCase() || m.value.toLowerCase() === v.toLowerCase()))
-      return toast.error('That is a built-in method');
+    if (DEFAULT_PAYMENT_METHODS.some(m => m.label.toLowerCase() === v.toLowerCase() || m.value.toLowerCase() === v.toLowerCase())) return toast.error('That is a built-in method');
     if (list.some(m => m.toLowerCase() === v.toLowerCase())) return toast.error('Already added');
-    setList(p => [...p, v]);
-    setInput('');
-    setEditing(true); // let them set the new category's opening balance right away
+    const next = [...list, v]; setList(next); setInput(''); saveCats(next);
   };
-  const remove = (m) => {
-    setList(p => p.filter(x => x !== m));
-    setBalances(p => { const n = { ...p }; delete n[m]; return n; });
-  };
+  const removeCat = (m) => { const next = list.filter(x => x !== m); setList(next); saveCats(next); };
 
-  const save = async () => {
-    setSaving(true);
+  const openAdjust = (method, direction) => { setAdjust({ method, direction }); setAmount(''); setReason(''); };
+  const applyAdjust = async () => {
+    const amt = Math.round(parseFloat(amount) || 0);
+    if (amt < 1) return toast.error('Enter an amount greater than 0');
+    setBusy(true);
     try {
-      const openingList = [...DEFAULT_PAYMENT_METHODS.map(m => m.value), ...list]
-        .map(method => ({ method, amount: Math.max(0, parseFloat(balances[method]) || 0) }))
-        .filter(b => b.amount > 0);
-      await api.put('/school/payment-methods', { methods: list, openingBalances: openingList });
-      toast.success('Payment categories saved');
-      onSuccess();
-    } catch (err) {
-      toast.error(err.message || 'Failed to save');
-    } finally {
-      setSaving(false);
-    }
+      await api.post('/fees/adjustments', { method: adjust.method, direction: adjust.direction, amount: amt, reason });
+      toast.success(adjust.direction === 'credit' ? `Added ₹${amt.toLocaleString('en-IN')}` : `Reduced ₹${amt.toLocaleString('en-IN')}`);
+      qc.invalidateQueries(['fees-method-balances']);
+      setAdjust(null); onChanged();
+    } catch (err) { toast.error(err.message || 'Failed'); }
+    finally { setBusy(false); }
   };
 
-  const balanceRow = (method, label, removable) => (
-    <div key={method} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-      <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{label}</div>
-      <div style={{ width: 160 }}>
-        <input className="form-control no-spinner" type="number" min={0}
-          value={balances[method] ?? ''} onWheel={e => e.currentTarget.blur()}
-          onChange={e => setBal(method, e.target.value)}
-          disabled={!editing}
-          placeholder="Opening balance ₹"
-          style={{ textAlign: 'right', background: editing ? undefined : '#f8fafc', color: editing ? undefined : 'var(--text-secondary)', cursor: editing ? 'text' : 'not-allowed' }} />
+  const methodRow = (method, label, removable) => {
+    const b = balances[method]?.balance || 0;
+    const open = adjust?.method === method;
+    return (
+      <div key={method} style={{ padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
+            <div style={{ fontSize: 12, color: b < 0 ? '#dc2626' : 'var(--text-muted)' }}>Balance: <strong>₹{b.toLocaleString('en-IN')}</strong></div>
+          </div>
+          <button className="btn btn-sm" style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }} onClick={() => openAdjust(method, 'credit')} title="Add money"><Plus size={13} /> Add</button>
+          <button className="btn btn-sm" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }} onClick={() => openAdjust(method, 'debit')} title="Reduce money"><span style={{ fontWeight: 800, fontSize: 15, lineHeight: 1 }}>−</span> Reduce</button>
+          {removable && <button className="btn btn-secondary btn-sm btn-icon" onClick={() => removeCat(method)} title="Remove category"><X size={14} /></button>}
+        </div>
+        {open && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, background: '#f8fafc', borderRadius: 8, padding: 10 }}>
+            <input className="form-control no-spinner" type="number" min={1} autoFocus value={amount} onWheel={e => e.currentTarget.blur()}
+              onChange={e => setAmount(e.target.value)} placeholder="Amount ₹" style={{ width: 130, textAlign: 'right', fontWeight: 600 }} />
+            <input className="form-control" value={reason} onChange={e => setReason(e.target.value)} placeholder={adjust.direction === 'credit' ? 'Reason (e.g. cash deposit)' : 'Reason (e.g. correction)'} style={{ flex: 1 }} />
+            <button className={`btn btn-sm ${adjust.direction === 'credit' ? 'btn-success' : 'btn-danger'}`} disabled={busy} onClick={applyAdjust}>{busy ? '…' : (adjust.direction === 'credit' ? 'Add' : 'Reduce')}</button>
+            <button className="btn btn-secondary btn-sm btn-icon" onClick={() => setAdjust(null)}><X size={14} /></button>
+          </div>
+        )}
       </div>
-      {removable && (
-        <button onClick={() => remove(method)} className="btn btn-secondary btn-sm btn-icon" title="Remove category">
-          <X size={14} />
-        </button>
-      )}
-    </div>
-  );
+    );
+  };
 
   return (
-    <Modal open onClose={onClose} title="Payment Categories & Opening Balance"
-      footer={<>
-        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-        <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-      </>}>
+    <Modal open onClose={onClose} title="Payment Categories & Balances"
+      footer={<button className="btn btn-primary" onClick={onClose}>Done</button>}>
       <p className="text-13-regular" style={{ color: 'var(--text-secondary)', marginBottom: 14 }}>
-        Set the amount already available in each payment mode (opening balance). Newly collected fees add on top, giving a running balance that carries forward every year. Add custom categories (e.g. a specific bank account) below.
+        Each method shows its current balance. Use <strong>Add</strong> to record money you already have or deposit, and <strong>Reduce</strong> to correct an over-entry. Every change is logged in the balance history.
       </p>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-        <label className="form-label" style={{ margin: 0 }}>Built-in Methods</label>
-        <button className={`btn btn-sm ${editing ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setEditing(v => !v)}>
-          <Edit2 size={13} /> {editing ? 'Done Editing' : 'Edit Balances'}
-        </button>
-      </div>
+      <label className="form-label" style={{ margin: 0 }}>Built-in Methods</label>
       <div style={{ marginBottom: 18 }}>
-        {DEFAULT_PAYMENT_METHODS.map(m => balanceRow(m.value, m.label, false))}
+        {DEFAULT_PAYMENT_METHODS.map(m => methodRow(m.value, m.label, false))}
       </div>
 
       <label className="form-label">Custom Categories</label>
       <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
         <input className="form-control" value={input} onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCat(); } }}
           placeholder="e.g. HDFC Bank A/c, SBI Current A/c" />
-        <button className="btn btn-secondary" onClick={add} disabled={!input.trim()}><Plus size={15} /> Add</button>
+        <button className="btn btn-secondary" onClick={addCat} disabled={!input.trim() || savingCats}><Plus size={15} /> Add</button>
       </div>
       {list.length > 0 ? (
-        <div>{list.map(m => balanceRow(m, m, true))}</div>
+        <div>{list.map(m => methodRow(m, m, true))}</div>
       ) : (
         <p className="text-12-regular" style={{ color: 'var(--text-muted)' }}>No custom categories yet.</p>
       )}

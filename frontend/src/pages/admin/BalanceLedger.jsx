@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Select as AntSelect } from 'antd';
-import { ArrowLeft, ArrowDownLeft, ArrowUpRight, Wallet, TrendingUp, TrendingDown, Search } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { ArrowLeft, ArrowDownLeft, ArrowUpRight, Wallet, TrendingUp, TrendingDown, Trash2 } from 'lucide-react';
 import api from '../../utils/api';
 import { PageLoader, EmptyState, SearchInput } from '../../components/ui';
 
@@ -37,6 +38,7 @@ const timeLabel = (d) => new Date(d).toLocaleTimeString('en-IN', { hour: 'numeri
 
 export default function BalanceLedger() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const [methodFilter, setMethodFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -47,6 +49,18 @@ export default function BalanceLedger() {
     queryKey: ['fees-ledger', methodFilter, typeFilter],
     queryFn: () => api.get(`/fees/ledger?method=${methodFilter}&type=${typeFilter}`),
   });
+
+  // Undo a manual adjustment (only these are deletable — fees/salaries/expenses
+  // are managed in their own modules).
+  const undoAdjustment = async (id) => {
+    if (!id || !window.confirm('Delete this manual adjustment? The balance will be updated.')) return;
+    try {
+      await api.delete(`/fees/adjustments/${id}`);
+      toast.success('Adjustment removed');
+      qc.invalidateQueries(['fees-ledger']);
+      qc.invalidateQueries(['fees-method-balances']);
+    } catch (e) { toast.error(e?.message || 'Failed'); }
+  };
 
   const methodBalances = bal?.methods || {};
   const customMethods = (school?.school?.paymentMethods || []).map(m => ({ value: m, label: m }));
@@ -139,6 +153,12 @@ export default function BalanceLedger() {
                       </div>
                       <div className="text-12-regular" style={{ color: 'var(--text-muted)' }}>{timeLabel(t.date)}</div>
                     </div>
+                    {t.kind === 'adjustment' && t.id && (
+                      <button onClick={() => undoAdjustment(t.id)} title="Delete this manual adjustment"
+                        className="btn btn-secondary btn-sm btn-icon" style={{ flexShrink: 0, color: '#dc2626' }}>
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 );
               })}
