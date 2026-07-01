@@ -2470,9 +2470,11 @@ function PasswordModal({ login, password, onClose, showUrl = true }) {
   // Identity is the email for staff/teacher, admission number for students, mobile for parents.
   const identifier = login?.identifier || login?.email || '';
   // Staff logins sign in with staff code + email; app/other logins use school code + id.
+  // Keep the share link short & memorable: staff code only (email is typed on
+  // the login page). The staff-login page reads ?code= and pre-fills the code.
   const loginUrl = isStaff
-    ? `${window.location.origin}/staff-login?staffCode=${encodeURIComponent(login.staffCode)}${login.email ? `&email=${encodeURIComponent(login.email)}` : ''}`
-    : `${window.location.origin}/staff-login?code=${encodeURIComponent(code)}${identifier ? `&id=${encodeURIComponent(identifier)}` : ''}`;
+    ? `${window.location.origin}/staff-login?code=${encodeURIComponent(login.staffCode)}`
+    : `${window.location.origin}/staff-login?code=${encodeURIComponent(code)}`;
   const copyAll = () => {
     const lines = [
       showUrl ? `Login URL: ${loginUrl}` : null,
