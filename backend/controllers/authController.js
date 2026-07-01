@@ -45,6 +45,25 @@ const registerSchool = async (req, res) => {
       studentsRange,
     });
 
+    // Start the school on the super-admin's designated free-trial plan (the
+    // active plan with trialDays > 0). Sets the trial length + entitlements
+    // from that plan instead of the env default. Extendable later by the
+    // super admin from the Tenants page.
+    try {
+      const SubscriptionPlan = require('../models/SubscriptionPlan');
+      const trialPlan = await SubscriptionPlan.findOne({ isActive: true, trialDays: { $gt: 0 } }).sort({ sortOrder: 1, createdAt: 1 });
+      if (trialPlan) {
+        school.subscription.status = 'trial';
+        school.subscription.trialStartDate = new Date();
+        school.subscription.trialEndDate = new Date(Date.now() + trialPlan.trialDays * 24 * 60 * 60 * 1000);
+        school.subscription.plan = trialPlan._id;
+        school.subscription.planName = trialPlan.name;
+        school.subscription.modules = trialPlan.modules || [];
+        school.subscription.limits = trialPlan.limits || {};
+        await school.save();
+      }
+    } catch { /* non-fatal — fall back to the default env trial already set */ }
+
     const user = await User.create({
       school: school._id,
       name: adminName?.trim() || loginEmail.split('@')[0] || 'Administrator',
