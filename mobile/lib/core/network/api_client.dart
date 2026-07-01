@@ -56,14 +56,20 @@ class ApiClient {
     return _dio.get(path, queryParameters: params);
   }
 
+  // For FormData (file uploads) send multipart/form-data so Dio generates the
+  // boundary — otherwise the default application/json header clobbers it and the
+  // server can't parse the file.
+  static Options? _opts(dynamic data) =>
+      data is FormData ? Options(contentType: 'multipart/form-data') : null;
+
   static Future<Response> post(String path, {dynamic data}) async {
     await init();
-    return _dio.post(path, data: data);
+    return _dio.post(path, data: data, options: _opts(data));
   }
 
   static Future<Response> put(String path, {dynamic data}) async {
     await init();
-    return _dio.put(path, data: data);
+    return _dio.put(path, data: data, options: _opts(data));
   }
 
   static Future<Response> delete(String path, {dynamic data}) async {
