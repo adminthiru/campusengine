@@ -673,10 +673,9 @@ function AdvanceMethodModal({ target, methods, onClose, onSuccess }) {
 
   return (
     <Modal open onClose={onClose} title="Advance — Payment Category"
-      footer={<>
-        <button className="btn btn-secondary" onClick={onClose}>Skip</button>
+      footer={
         <button className="btn btn-primary" onClick={submit} disabled={saving}>{saving ? 'Saving…' : 'Confirm'}</button>
-      </>}>
+      }>
       <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 10, padding: '12px 16px', marginBottom: 16 }}>
         <div className="text-14-semibold" style={{ color: '#92400e' }}>{target.employeeName}</div>
         <div className="text-13-regular" style={{ color: '#92400e', marginTop: 2 }}>
