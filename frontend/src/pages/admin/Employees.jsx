@@ -1843,9 +1843,11 @@ function EmployeeAttendanceTab({ employee }) {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year,  setYear]  = useState(now.getFullYear());
 
+  // Scope the summary to the selected month so "Total Days" is that month's
+  // working days (not the whole academic year).
   const { data: summaryData } = useQuery({
-    queryKey: ['emp-att-summary', employee._id],
-    queryFn:  () => api.get(`/attendance/employee-summary?employeeId=${employee._id}`),
+    queryKey: ['emp-att-summary', employee._id, month, year],
+    queryFn:  () => api.get(`/attendance/employee-summary?employeeId=${employee._id}&month=${month}&year=${year}`),
     enabled:  !!employee._id,
   });
   const overall = summaryData?.summary;
