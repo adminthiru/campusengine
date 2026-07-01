@@ -27,7 +27,7 @@ class ExamsScreen extends StatelessWidget {
 
 // ── State machine ─────────────────────────────────────────────────────────────
 
-enum _View { list, detail, marks, results }
+enum _View { list, detail, marks }
 
 class _ExamsScreenContent extends StatefulWidget {
   const _ExamsScreenContent();
@@ -40,7 +40,6 @@ class _ExamsScreenContentState extends State<_ExamsScreenContent> {
   _View _view = _View.list;
   ExamInfo? _selectedExam;
   ExamScheduleEntry? _selectedSchedule;
-  String? _resultsClassId;
 
   void _openDetail(ExamInfo exam) => setState(() {
         _selectedExam = exam;
@@ -61,18 +60,8 @@ class _ExamsScreenContentState extends State<_ExamsScreenContent> {
         .fetchStudentsAndResults(classId, exam.id, subjectId);
   }
 
-  void _openResults({String? classId}) {
-    final exam = _selectedExam;
-    if (exam == null) return;
-    setState(() {
-      _resultsClassId = classId;
-      _view = _View.results;
-    });
-    context.read<ExamsProvider>().fetchExamResults(exam.id, classId: classId);
-  }
-
   void _back() {
-    if (_view == _View.marks || _view == _View.results) {
+    if (_view == _View.marks) {
       setState(() {
         _selectedSchedule = null;
         _view = _View.detail;
@@ -99,19 +88,11 @@ class _ExamsScreenContentState extends State<_ExamsScreenContent> {
         onBack: _back,
       );
     }
-    if (_view == _View.results && _selectedExam != null) {
-      return _ResultsView(
-        exam: _selectedExam!,
-        classId: _resultsClassId,
-        onBack: _back,
-      );
-    }
     if (_view == _View.detail && _selectedExam != null) {
       return _ExamDetailView(
         exam: _selectedExam!,
         onBack: _back,
         onSelectSchedule: _openMarks,
-        onViewResults: _openResults,
         onExamUpdated: (updated) => setState(() => _selectedExam = updated),
         onExamDeleted: _back,
       );
@@ -470,7 +451,6 @@ class _ExamDetailView extends StatelessWidget {
   final ExamInfo exam;
   final VoidCallback onBack;
   final Function(ExamScheduleEntry) onSelectSchedule;
-  final Function({String? classId}) onViewResults;
   final Function(ExamInfo) onExamUpdated;
   final VoidCallback onExamDeleted;
 
@@ -478,7 +458,6 @@ class _ExamDetailView extends StatelessWidget {
     required this.exam,
     required this.onBack,
     required this.onSelectSchedule,
-    required this.onViewResults,
     required this.onExamUpdated,
     required this.onExamDeleted,
   });
@@ -487,14 +466,6 @@ class _ExamDetailView extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.watch<ExamsProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // Unique classes in schedule
-    final classIds = exam.schedule
-        .map((s) => s.classId)
-        .whereType<String>()
-        .where((id) => p.canViewResultsForClass(exam, id))
-        .toSet()
-        .toList();
 
     // Schedule entries this teacher is allowed to enter marks for
     final myEntries =
@@ -615,31 +586,6 @@ class _ExamDetailView extends StatelessWidget {
                           onTap: () => onSelectSchedule(s),
                         ),
                       )),
-
-                // ── Results section ─────────────────────────────────────────
-                const SizedBox(height: 8),
-                Text('RESULTS',
-                    style: AppTypography.s11Bold(
-                        color: isDark
-                            ? AppColors.textMuted
-                            : AppColors.textSecondary)),
-                const SizedBox(height: 10),
-                if (classIds.isEmpty)
-                  _EmptyNote('No results available for your classes', isDark)
-                else
-                  ...classIds.map((cid) {
-                    final entry = exam.schedule.firstWhere(
-                        (s) => s.classId == cid,
-                        orElse: () => exam.schedule.first);
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _ResultsTile(
-                        className: entry.classFullName,
-                        isDark: isDark,
-                        onTap: () => onViewResults(classId: cid),
-                      ),
-                    );
-                  }),
               ],
             ),
           ),
@@ -673,247 +619,6 @@ class _ExamDetailView extends StatelessWidget {
       default:
         return t.isNotEmpty ? t[0].toUpperCase() + t.substring(1) : 'Exam';
     }
-  }
-}
-
-// ── Results View ──────────────────────────────────────────────────────────────
-
-class _ResultsView extends StatelessWidget {
-  final ExamInfo exam;
-  final String? classId;
-  final VoidCallback onBack;
-
-  const _ResultsView(
-      {required this.exam, required this.classId, required this.onBack});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.watch<ExamsProvider>();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // Resolve class name from schedule
-    String className = 'Class';
-    if (classId != null) {
-      final match =
-          exam.schedule.where((s) => s.classId == classId).firstOrNull;
-      if (match != null) className = match.classFullName;
-    }
-
-    return Scaffold(
-      backgroundColor: isDark ? AppColors.bgDark : AppColors.bgLight,
-      body: Column(
-        children: [
-          Container(
-            color: isDark ? AppColors.cardDark : Colors.white,
-            child: Row(
-              children: [
-                IconButton(
-                  icon: Icon(Icons.arrow_back_ios_new,
-                      size: 20,
-                      color: isDark ? Colors.white : AppColors.textPrimary),
-                  onPressed: onBack,
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Results',
-                          style: AppTypography.s16Bold(
-                              color: isDark
-                                  ? Colors.white
-                                  : AppColors.textPrimary)),
-                      Text('${exam.name} · $className',
-                          style: AppTypography.s12Regular(
-                              color: isDark
-                                  ? AppColors.textMuted
-                                  : AppColors.textSecondary)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: p.isResultsLoading
-                ? const SkeletonList(showLeading: false)
-                : p.results.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.bar_chart,
-                                size: 52,
-                                color: isDark
-                                    ? AppColors.textMuted
-                                    : AppColors.textSecondary),
-                            const SizedBox(height: 12),
-                            Text('No results available yet',
-                                style: AppTypography.s14Regular(
-                                    color: isDark
-                                        ? AppColors.textMuted
-                                        : AppColors.textSecondary)),
-                          ],
-                        ),
-                      )
-                    : Column(
-                        children: [
-                          // Results header row
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 10),
-                            color: isDark
-                                ? AppColors.cardDark
-                                : const Color(0xFFF1F5F9),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 36,
-                                  child: Text('Rank',
-                                      style: AppTypography.s11Bold(
-                                          color: isDark
-                                              ? AppColors.textMuted
-                                              : AppColors.textSecondary)),
-                                ),
-                                Expanded(
-                                    child: Text('Student',
-                                        style: AppTypography.s11Bold(
-                                            color: isDark
-                                                ? AppColors.textMuted
-                                                : AppColors.textSecondary))),
-                                SizedBox(
-                                  width: 60,
-                                  child: Text('Marks',
-                                      style: AppTypography.s11Bold(
-                                          color: isDark
-                                              ? AppColors.textMuted
-                                              : AppColors.textSecondary),
-                                      textAlign: TextAlign.center),
-                                ),
-                                SizedBox(
-                                  width: 48,
-                                  child: Text('%',
-                                      style: AppTypography.s11Bold(
-                                          color: isDark
-                                              ? AppColors.textMuted
-                                              : AppColors.textSecondary),
-                                      textAlign: TextAlign.center),
-                                ),
-                                SizedBox(
-                                  width: 36,
-                                  child: Text('Grade',
-                                      style: AppTypography.s11Bold(
-                                          color: isDark
-                                              ? AppColors.textMuted
-                                              : AppColors.textSecondary),
-                                      textAlign: TextAlign.center),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            child: ListView.separated(
-                              padding: const EdgeInsets.only(bottom: 32),
-                              itemCount: p.results.length,
-                              separatorBuilder: (_, __) => Divider(
-                                height: 1,
-                                color: isDark
-                                    ? AppColors.borderDark
-                                    : AppColors.borderLight,
-                              ),
-                              itemBuilder: (_, i) => _ResultRow(
-                                result: p.results[i],
-                                isDark: isDark,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ResultRow extends StatelessWidget {
-  final ExamStudentResult result;
-  final bool isDark;
-  const _ResultRow({required this.result, required this.isDark});
-
-  @override
-  Widget build(BuildContext context) {
-    final pct = result.percentage;
-    Color pctColor;
-    if (pct >= 75) {
-      pctColor = AppColors.success;
-    } else if (pct >= 50) {
-      pctColor = AppColors.warning;
-    } else {
-      pctColor = AppColors.error;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: isDark ? AppColors.bgDark : Colors.white,
-      child: Row(
-        children: [
-          SizedBox(
-            width: 36,
-            child: Text(
-              result.rank > 0 ? '${result.rank}' : '-',
-              style: AppTypography.s13Bold(
-                  color:
-                      isDark ? AppColors.textMuted : AppColors.textSecondary),
-            ),
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(result.studentName,
-                    style: AppTypography.s13SemiBold(
-                        color: isDark ? Colors.white : AppColors.textPrimary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                if (result.admissionNumber != null)
-                  Text(result.admissionNumber!,
-                      style: AppTypography.s11Regular(
-                          color: isDark
-                              ? AppColors.textMuted
-                              : AppColors.textSecondary)),
-              ],
-            ),
-          ),
-          SizedBox(
-            width: 60,
-            child: Text(
-              '${result.totalMarksObtained.toInt()}/${result.totalMaxMarks.toInt()}',
-              style: AppTypography.s12Medium(
-                  color: isDark ? Colors.white : AppColors.textPrimary),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          SizedBox(
-            width: 48,
-            child: Text(
-              '${result.percentage.toStringAsFixed(1)}%',
-              style: AppTypography.s12Bold(color: pctColor),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          SizedBox(
-            width: 36,
-            child: Text(
-              result.grade.isNotEmpty ? result.grade : '-',
-              style: AppTypography.s12Bold(
-                  color:
-                      isDark ? AppColors.textMuted : AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 
@@ -2533,56 +2238,6 @@ class _ScheduleEntryCard extends StatelessWidget {
             const SizedBox(width: 8),
             const Icon(Icons.chevron_right,
                 size: 18, color: AppColors.textSecondary),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ResultsTile extends StatelessWidget {
-  final String className;
-  final bool isDark;
-  final VoidCallback onTap;
-  const _ResultsTile(
-      {required this.className, required this.isDark, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.cardDark : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: isDark ? AppColors.borderDark : AppColors.borderLight),
-          boxShadow: isDark ? [] : AppColors.shadowSm,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.bar_chart,
-                  color: AppColors.success, size: 20),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(className,
-                  style: AppTypography.s14SemiBold(
-                      color: isDark ? Colors.white : AppColors.textPrimary)),
-            ),
-            Text('View Results',
-                style: AppTypography.s12Medium(color: AppColors.primary)),
-            const SizedBox(width: 4),
-            const Icon(Icons.chevron_right, size: 16, color: AppColors.primary),
           ],
         ),
       ),
