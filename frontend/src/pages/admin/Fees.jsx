@@ -4,6 +4,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { Select as AntSelect, Dropdown } from 'antd';
 import { Plus, Download, MessageSquare, CreditCard, IndianRupee, Trash2, Edit2, Users, User, RotateCcw, Tag, RefreshCw, X, ChevronDown, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useYear } from '../../store/YearContext';
 import { Modal, ConfirmDialog, StatusBadge, Pagination, SearchInput, PageLoader, FormRow, EmptyState, StatCard, ColumnSelector, useColumnSelector } from '../../components/ui';
@@ -48,6 +49,7 @@ const buildPaymentMethods = (custom = []) => [
 export default function Fees() {
   const qc = useQueryClient();
   const { can } = usePermissions();
+  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -318,8 +320,13 @@ export default function Fees() {
             <div className="text-24-bold" style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-primary)', marginTop: 4 }}>
               ₹{methodValue.toLocaleString('en-IN')}
             </div>
+            <button onClick={() => navigate('/fees/balance')}
+              className="text-12-regular"
+              style={{ marginTop: 6, background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--primary)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              View transactions →
+            </button>
           </div>
-          <div className="stat-icon" style={{ background: '#eff6ff' }}>
+          <div className="stat-icon" style={{ background: '#eff6ff', cursor: 'pointer' }} onClick={() => navigate('/fees/balance')} title="View transaction history">
             <CreditCard size={22} color="#1a56e8" />
           </div>
         </div>

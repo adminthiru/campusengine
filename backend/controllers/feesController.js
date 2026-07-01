@@ -409,6 +409,64 @@ const getStudentArrears = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
+// Unified money ledger for the "Balance" detail screen — a Google-Pay-style
+// list of every credit (opening deposits, fees collected) and debit (salaries
+// paid, advances, expenses/received-purchases), newest first. Optional filters:
+// ?method=<key> and ?type=credit|debit.
+const LEDGER_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const getBalanceLedger = async (req, res) => {
+  try {
+    const schoolId = req.user.school;
+    const { method, type } = req.query;
+    const Salary = require('../models/Salary');
+    const { Expense } = require('../models/Expense');
+    const [school, fees, salaries, expenses] = await Promise.all([
+      School.findById(schoolId).select('paymentMethods paymentOpeningBalances createdAt').lean(),
+      FeeCollection.find({ school: schoolId, 'payments.0': { $exists: true } })
+        .populate('student', 'name admissionNumber').select('student payments').lean(),
+      Salary.find({ school: schoolId, status: 'paid' }).populate('employee', 'name').select('employee netSalary payment month year updatedAt').lean(),
+      Expense.find({ school: schoolId }).select('title category amount date paymentMethod vendor').lean(),
+    ]);
+
+    const tx = [];
+    // Opening balances → credits (money the school already had)
+    (school?.paymentOpeningBalances || []).forEach(b => {
+      if ((b.amount || 0) > 0) tx.push({ date: school.createdAt, direction: 'credit', amount: b.amount, method: b.method, kind: 'opening', title: 'Opening balance', subtitle: 'Balance carried forward' });
+    });
+    // Fee payments → credits
+    fees.forEach(f => (f.payments || []).forEach(p => {
+      if ((p.amount || 0) > 0) tx.push({
+        date: p.date, direction: 'credit', amount: p.amount, method: p.method || 'cash', kind: 'fee',
+        title: `Fee — ${f.student?.name || 'Student'}`,
+        subtitle: [p.termName, p.receiptNumber].filter(Boolean).join(' · ') || 'Fee payment',
+      });
+    }));
+    // Salaries paid → debits
+    salaries.forEach(s => tx.push({
+      date: s.payment?.date || s.updatedAt, direction: 'debit', amount: s.netSalary || 0, method: s.payment?.method || 'cash', kind: 'salary',
+      title: `Salary — ${s.employee?.name || 'Employee'}`,
+      subtitle: `${LEDGER_MONTHS[(s.month || 1) - 1]} ${s.year || ''}`.trim(),
+    }));
+    // Expenses → debits (salary advances are category 'salary'; purchases are booked here too)
+    expenses.forEach(e => tx.push({
+      date: e.date, direction: 'debit', amount: e.amount || 0, method: e.paymentMethod || 'cash',
+      kind: e.category === 'salary' ? 'advance' : 'expense',
+      title: e.title || `${e.category || 'Other'} expense`,
+      subtitle: e.vendor || e.category || 'Expense',
+    }));
+
+    const totalIn = tx.filter(t => t.direction === 'credit').reduce((s, t) => s + t.amount, 0);
+    const totalOut = tx.filter(t => t.direction === 'debit').reduce((s, t) => s + t.amount, 0);
+
+    let list = tx;
+    if (method) list = list.filter(t => t.method === method);
+    if (type === 'credit' || type === 'debit') list = list.filter(t => t.direction === type);
+    list.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+    res.json({ success: true, transactions: list.slice(0, 1000), totalIn, totalOut, balance: totalIn - totalOut });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+};
+
 // Amount collected per payment method (across ALL matching records, not just a page)
 const getPaymentSummary = async (req, res) => {
   try {
@@ -972,4 +1030,4 @@ const syncClassStudents = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
-module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, clearTermDiscount, createRazorpayOrder, verifyRazorpayPayment, getFees, getPaymentSummary, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm, getUnsyncedCount, syncClassStudents, applyClassFeeStructure, getArrearsSummary, getStudentArrears, getMethodBalances };
+module.exports = { createFeeRecord, createBulkFeeRecords, updateFeeRecord, updateClassFeeStructure, collectPayment, reversePayment, clearTermDiscount, createRazorpayOrder, verifyRazorpayPayment, getFees, getPaymentSummary, getFeesReport, getReceiptPDF, sendFeeReminder, deleteFeeRecord, deleteFeeTerm, getUnsyncedCount, syncClassStudents, applyClassFeeStructure, getArrearsSummary, getStudentArrears, getMethodBalances, getBalanceLedger };

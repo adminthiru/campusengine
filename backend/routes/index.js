@@ -1016,6 +1016,7 @@ router.get('/attendance/leave-balance', protect, checkSubscription, async (req, 
 router.get('/fees', protect, checkSubscription, feesCtrl.getFees);
 router.get('/fees/payment-summary', protect, checkSubscription, feesCtrl.getPaymentSummary);
 router.get('/fees/method-balances', protect, checkSubscription, feesCtrl.getMethodBalances);
+router.get('/fees/ledger', protect, checkSubscription, feesCtrl.getBalanceLedger);
 router.get('/fees/report', protect, checkSubscription, feesCtrl.getFeesReport);
 router.get('/fees/unsynced-count', protect, checkSubscription, feesCtrl.getUnsyncedCount);
 router.get('/fees/arrears-summary', protect, checkSubscription, feesCtrl.getArrearsSummary);

@@ -10,6 +10,7 @@ import Employees from './pages/admin/Employees';
 import { Classes, Subjects } from './pages/admin/ClassesSubjects';
 import Attendance from './pages/admin/Attendance';
 import Fees from './pages/admin/Fees';
+import BalanceLedger from './pages/admin/BalanceLedger';
 import Timetable from './pages/admin/Timetable';
 import Calendar from './pages/admin/Calendar';
 import Salary from './pages/admin/Salary';
@@ -101,6 +102,7 @@ export default function App() {
       <Route path="/attendance" element={<ProtectedRoute roles={[...ADMIN, 'teacher']} module="attendance"><Attendance /></ProtectedRoute>} />
       <Route path="/staff-tracking" element={<Navigate to="/attendance" replace />} />
       <Route path="/fees" element={<ProtectedRoute roles={ADMIN} module="fees"><Fees /></ProtectedRoute>} />
+      <Route path="/fees/balance" element={<ProtectedRoute roles={ADMIN} module="fees"><BalanceLedger /></ProtectedRoute>} />
       <Route path="/timetable" element={<ProtectedRoute roles={[...ADMIN, 'teacher']} module="timetable"><Timetable /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute roles={[...ADMIN, 'teacher']} module="calendar"><Calendar /></ProtectedRoute>} />
       <Route path="/salary" element={<ProtectedRoute roles={ADMIN} module="salary"><Salary /></ProtectedRoute>} />
