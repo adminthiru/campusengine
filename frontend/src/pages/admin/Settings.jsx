@@ -1724,6 +1724,7 @@ export function SubscriptionSettings() {
 
 // Guided payment popup: pick a method → pay → success.
 function CheckoutModal({ plan, cycle = 'monthly', methods, onClose, onPaid }) {
+  const { user } = useAuth();
   const mNet = Math.max(0, (plan.monthlyPrice || plan.price || 0) - (plan.monthlyDiscount || 0));
   const yNet = Math.max(0, (plan.yearlyPrice || 0) - (plan.yearlyDiscount || 0));
   const amount = cycle === 'yearly' ? yNet : mNet;
@@ -1742,9 +1743,16 @@ function CheckoutModal({ plan, cycle = 'monthly', methods, onClose, onPaid }) {
     setPaying(true);
     try {
       const { order, key } = await api.post('/subscription/create-order', { planId: plan._id, cycle });
+      // With order_id, Razorpay derives the amount from the order — do NOT also
+      // pass amount (a mismatch triggers "Oops, something went wrong").
       const rzp = new window.Razorpay({
-        key, amount: order.amount, currency: 'INR', order_id: order.id,
+        key, currency: order.currency || 'INR', order_id: order.id,
         name: 'School ERP', description: `${plan.name} plan · ${cycle === 'yearly' ? 'yearly' : 'monthly'}`, theme: { color: '#1a56e8' },
+        prefill: {
+          name: user?.school?.name || user?.name || '',
+          email: user?.email || '',
+          contact: user?.phone || user?.school?.phone || '',
+        },
         handler: async (r) => {
           try {
             await api.post('/subscription/verify', { razorpayOrderId: r.razorpay_order_id, razorpayPaymentId: r.razorpay_payment_id, razorpaySignature: r.razorpay_signature, planId: plan._id, cycle });
