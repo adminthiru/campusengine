@@ -695,13 +695,14 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
       'saturday'
     ];
 
-    // Find the max period number dynamically
+    // Find the max teaching-period number dynamically (breaks are skipped, so
+    // columns are numbered consecutively — matching the admin timetable).
     int maxPeriod = 8;
     for (var day in days) {
       final periods = provider.timetable[day] ?? [];
       for (var p in periods) {
-        if (p.periodNumber > maxPeriod) {
-          maxPeriod = p.periodNumber;
+        if (p.displayPeriod > maxPeriod) {
+          maxPeriod = p.displayPeriod;
         }
       }
     }
@@ -834,7 +835,7 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                           // Periods cells
                           ...periodsList.map((pNum) {
                             final periodList =
-                                dayPeriods.where((p) => p.periodNumber == pNum);
+                                dayPeriods.where((p) => p.displayPeriod == pNum);
                             final period =
                                 periodList.isNotEmpty ? periodList.first : null;
 
@@ -1042,18 +1043,18 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
 
     int maxPeriod = 8;
     for (final p in regularPeriods) {
-      if (p.periodNumber > maxPeriod) maxPeriod = p.periodNumber;
+      if (p.displayPeriod > maxPeriod) maxPeriod = p.displayPeriod;
     }
     for (final s in subs) {
-      if (s.periodNumber > maxPeriod) maxPeriod = s.periodNumber;
+      if (s.displayPeriod > maxPeriod) maxPeriod = s.displayPeriod;
     }
 
     final List<TimetableItem> items = [];
     for (int pNum = 1; pNum <= maxPeriod; pNum++) {
-      final regList = regularPeriods.where((p) => p.periodNumber == pNum);
+      final regList = regularPeriods.where((p) => p.displayPeriod == pNum);
       final reg = regList.isNotEmpty ? regList.first : null;
 
-      final subList = subs.where((s) => s.periodNumber == pNum);
+      final subList = subs.where((s) => s.displayPeriod == pNum);
       final sub = subList.isNotEmpty ? subList.first : null;
 
       if (reg != null || sub != null) {

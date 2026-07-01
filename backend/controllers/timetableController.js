@@ -141,12 +141,20 @@ const getTimetable = async (req, res) => {
         const ttObj = tt.toObject();
         return {
           ...ttObj,
-          schedule: ttObj.schedule.map(d => ({
-            ...d,
-            periods: d.periods.filter(p =>
-              p.teacher?._id?.toString() === teacherId || p.teacher?.toString() === teacherId
-            )
-          })).filter(d => d.periods.length > 0)
+          schedule: ttObj.schedule.map(d => {
+            // Teaching-period ordinal: breaks don't consume a period number, so
+            // P1, P2, break, P3, P4… — matches the admin timetable's labelling.
+            const ordinalByPeriod = {};
+            let n = 0;
+            [...d.periods].sort((a, b) => a.periodNumber - b.periodNumber)
+              .forEach(p => { if (!p.isBreak) ordinalByPeriod[p.periodNumber] = ++n; });
+            return {
+              ...d,
+              periods: d.periods
+                .filter(p => p.teacher?._id?.toString() === teacherId || p.teacher?.toString() === teacherId)
+                .map(p => ({ ...p, displayPeriod: ordinalByPeriod[p.periodNumber] || p.periodNumber }))
+            };
+          }).filter(d => d.periods.length > 0)
         };
       }).filter(tt => tt.schedule.length > 0);
 

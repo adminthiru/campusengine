@@ -1079,7 +1079,36 @@ router.get('/timetable/substitutions', protect, checkSubscription, async (req, r
       .populate('substituteTeacher', 'name designation department')
       .populate('classRef', 'name section')
       .populate('subject', 'name color');
-    res.json({ success: true, substitutions: subs });
+
+    // Attach a teaching-period ordinal (breaks skipped) so the teacher app shows
+    // period numbers consistent with the timetable. periodNumber stays raw for
+    // the admin UI, which matches assignments by it.
+    const Timetable = require('../models/Timetable');
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const ordinalCache = {}; // classId → { rawPeriodNumber: ordinal } for the sub's day
+    const out = [];
+    for (const s of subs) {
+      const obj = s.toObject();
+      const clsId = s.classRef?._id?.toString();
+      const day = dayNames[new Date(s.date).getUTCDay()];
+      if (clsId) {
+        const cacheKey = `${clsId}_${day}`;
+        if (!ordinalCache[cacheKey]) {
+          const tt = await Timetable.findOne({ school: req.user.school, class: clsId, isActive: true }).sort({ createdAt: -1 });
+          const periods = tt?.schedule?.find(d => d.day === day)?.periods || [];
+          const map = {};
+          let n = 0;
+          [...periods].sort((a, b) => a.periodNumber - b.periodNumber)
+            .forEach(p => { if (!p.isBreak) map[p.periodNumber] = ++n; });
+          ordinalCache[cacheKey] = map;
+        }
+        obj.displayPeriod = ordinalCache[cacheKey][s.periodNumber] || s.periodNumber;
+      } else {
+        obj.displayPeriod = s.periodNumber;
+      }
+      out.push(obj);
+    }
+    res.json({ success: true, substitutions: out });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 

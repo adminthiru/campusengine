@@ -4,6 +4,7 @@ import '../../../../core/network/api_client.dart';
 
 class TeacherPeriod {
   final int periodNumber;
+  final int displayPeriod; // teaching-period ordinal (breaks skipped)
   final String subjectName;
   final String subjectColor;
   final String className;
@@ -15,6 +16,7 @@ class TeacherPeriod {
 
   TeacherPeriod({
     required this.periodNumber,
+    int? displayPeriod,
     required this.subjectName,
     required this.subjectColor,
     required this.className,
@@ -23,7 +25,7 @@ class TeacherPeriod {
     this.isBreak = false,
     this.startTime,
     this.endTime,
-  });
+  }) : displayPeriod = displayPeriod ?? periodNumber;
 
   String get fullClassName => section.isNotEmpty ? '$className $section' : className;
 }
@@ -32,6 +34,7 @@ class SubstitutionAssignment {
   final String id;
   final DateTime date;
   final int periodNumber;
+  final int displayPeriod; // teaching-period ordinal (breaks skipped)
   final String absentTeacherName;
   final String className;
   final String section;
@@ -43,13 +46,14 @@ class SubstitutionAssignment {
     required this.id,
     required this.date,
     required this.periodNumber,
+    int? displayPeriod,
     required this.absentTeacherName,
     required this.className,
     required this.section,
     required this.subjectName,
     required this.subjectColor,
     required this.note,
-  });
+  }) : displayPeriod = displayPeriod ?? periodNumber;
 
   String get fullClassName => section.isNotEmpty ? '$className $section' : className;
 }
@@ -119,6 +123,7 @@ class TimetableProvider extends ChangeNotifier {
 
               tempSchedule[day]!.add(TeacherPeriod(
                 periodNumber: p['periodNumber'] is int ? p['periodNumber'] : int.parse(p['periodNumber'].toString()),
+                displayPeriod: p['displayPeriod'] == null ? null : (p['displayPeriod'] is int ? p['displayPeriod'] : int.tryParse(p['displayPeriod'].toString())),
                 subjectName: subjectName,
                 subjectColor: subjectColor,
                 className: className,
@@ -134,7 +139,7 @@ class TimetableProvider extends ChangeNotifier {
 
       // Sort periods by periodNumber for each day
       for (var day in tempSchedule.keys) {
-        tempSchedule[day]!.sort((a, b) => a.periodNumber.compareTo(b.periodNumber));
+        tempSchedule[day]!.sort((a, b) => a.displayPeriod.compareTo(b.displayPeriod));
       }
 
       _timetable = tempSchedule;
@@ -172,6 +177,7 @@ class TimetableProvider extends ChangeNotifier {
           id: json['_id'] ?? '',
           date: DateTime.parse(json['date']),
           periodNumber: json['periodNumber'] is int ? json['periodNumber'] : int.parse(json['periodNumber'].toString()),
+          displayPeriod: json['displayPeriod'] == null ? null : (json['displayPeriod'] is int ? json['displayPeriod'] : int.tryParse(json['displayPeriod'].toString())),
           absentTeacherName: absentTeacherName,
           className: className,
           section: classSection,
