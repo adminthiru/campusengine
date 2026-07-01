@@ -1502,6 +1502,7 @@ export function SubscriptionSettings() {
   const qc = useQueryClient();
   const { updateUser } = useAuth();
   const [checkout, setCheckout] = useState(null);   // plan being paid for
+  const [planCycle, setPlanCycle] = useState('monthly'); // Monthly/Yearly toggle for the plan cards
 
   const { data, isLoading } = useQuery({ queryKey: ['my-subscription'], queryFn: () => api.get('/subscription/my') });
   const { data: plansData } = useQuery({ queryKey: ['active-plans'], queryFn: () => api.get('/plans') });
@@ -1598,7 +1599,22 @@ export function SubscriptionSettings() {
       {/* Plan cards */}
       {!suspended && plans.length > 0 && (
         <>
-          <h3 className="text-14-semibold" style={{ marginBottom: 12 }}>{isActive ? 'Change plan' : 'Choose a plan'}</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+            <h3 className="text-14-semibold" style={{ margin: 0 }}>{isActive ? 'Change plan' : 'Choose a plan'}</h3>
+            {/* Monthly / Yearly toggle */}
+            <div style={{ display: 'inline-flex', background: '#f1f5f9', borderRadius: 10, padding: 3 }}>
+              {['monthly', 'yearly'].map(c => (
+                <button key={c} onClick={() => setPlanCycle(c)}
+                  className={planCycle === c ? 'text-13-semibold' : 'text-13-regular'}
+                  style={{ border: 'none', cursor: 'pointer', padding: '6px 16px', borderRadius: 8,
+                    background: planCycle === c ? 'white' : 'transparent',
+                    color: planCycle === c ? 'var(--primary)' : 'var(--text-secondary)',
+                    boxShadow: planCycle === c ? '0 1px 2px rgba(0,0,0,0.08)' : 'none' }}>
+                  {c === 'monthly' ? 'Monthly' : 'Yearly'}
+                </button>
+              ))}
+            </div>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 14, marginBottom: 24 }}>
             {plans.map(p => {
               const current = isActive && String(p._id) === String(sub.plan?._id || sub.plan);
@@ -1607,26 +1623,32 @@ export function SubscriptionSettings() {
               const yBase = p.yearlyPrice || 0;
               const yNet = Math.max(0, yBase - (p.yearlyDiscount || 0));
               const free = mBase === 0 && yBase === 0;
+              // Price shown depends on the selected cycle; fall back to the other
+              // cycle if this plan only offers one.
+              const isYearly = planCycle === 'yearly';
+              const base = isYearly ? yBase : mBase;
+              const net  = isYearly ? yNet  : mNet;
+              const disc = isYearly ? (p.yearlyDiscount || 0) : (p.monthlyDiscount || 0);
+              const unit = isYearly ? '/yr' : '/mo';
+              const available = base > 0;   // this plan offers the selected cycle
               return (
                 <div key={p._id} className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column', border: `1px solid ${current ? 'var(--primary)' : 'var(--border)'}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span className="text-16-bold">{p.name}</span>
                     {current && <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--primary)', background: '#eff6ff', padding: '2px 8px', borderRadius: 20 }}>Current</span>}
                   </div>
-                  <div style={{ margin: '6px 0 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {mBase > 0 && (
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                        <span className="text-20-bold" style={{ color: 'var(--primary)' }}>₹{mNet.toLocaleString('en-IN')}</span>
-                        <span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>/mo</span>
-                        {(p.monthlyDiscount || 0) > 0 && <span className="text-12-regular" style={{ color: 'var(--text-muted)', textDecoration: 'line-through' }}>₹{mBase.toLocaleString('en-IN')}</span>}
+                  <div style={{ margin: '6px 0 10px', minHeight: 30 }}>
+                    {free ? (
+                      <span className="text-16-bold" style={{ color: '#16a34a' }}>Free</span>
+                    ) : available ? (
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                        <span className="text-20-bold" style={{ color: 'var(--primary)' }}>₹{net.toLocaleString('en-IN')}</span>
+                        <span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>{unit}</span>
+                        {disc > 0 && <span className="text-12-regular" style={{ color: 'var(--text-muted)', textDecoration: 'line-through' }}>₹{base.toLocaleString('en-IN')}</span>}
+                        {disc > 0 && <span className="text-12-regular" style={{ color: '#16a34a' }}>save ₹{disc.toLocaleString('en-IN')}</span>}
                       </div>
-                    )}
-                    {yBase > 0 && (
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                        <span className="text-16-bold" style={{ color: 'var(--text-primary)' }}>₹{yNet.toLocaleString('en-IN')}</span>
-                        <span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>/yr</span>
-                        {(p.yearlyDiscount || 0) > 0 && <span className="text-12-regular" style={{ color: '#16a34a' }}>save ₹{(p.yearlyDiscount || 0).toLocaleString('en-IN')}</span>}
-                      </div>
+                    ) : (
+                      <span className="text-13-regular" style={{ color: 'var(--text-muted)' }}>No {isYearly ? 'yearly' : 'monthly'} option</span>
                     )}
                   </div>
                   {(() => {
@@ -1647,22 +1669,15 @@ export function SubscriptionSettings() {
                       </div>
                     ))}
                   </div>
-                  <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ marginTop: 12 }}>
                     {free ? (
                       <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }} disabled>Free</button>
+                    ) : available ? (
+                      <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => startCheckout(p, planCycle)}>
+                        <CreditCard size={14} /> Pay {isYearly ? 'Yearly' : 'Monthly'} · ₹{net.toLocaleString('en-IN')}
+                      </button>
                     ) : (
-                      <>
-                        {mBase > 0 && (
-                          <button className="btn btn-primary btn-sm" style={{ width: '100%', justifyContent: 'center' }} onClick={() => startCheckout(p, 'monthly')}>
-                            <CreditCard size={14} /> Pay Monthly · ₹{mNet.toLocaleString('en-IN')}
-                          </button>
-                        )}
-                        {yBase > 0 && (
-                          <button className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center' }} onClick={() => startCheckout(p, 'yearly')}>
-                            <CreditCard size={14} /> Pay Yearly · ₹{yNet.toLocaleString('en-IN')}
-                          </button>
-                        )}
-                      </>
+                      <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }} disabled>Not available {isYearly ? 'yearly' : 'monthly'}</button>
                     )}
                   </div>
                 </div>
