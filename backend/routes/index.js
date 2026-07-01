@@ -2083,6 +2083,16 @@ router.put('/leaves/:id', protect, authorize('admin', 'correspondent', 'principa
 
     await leave.save();
 
+    // Clear the now-resolved request from admins' notification bells.
+    if (status === 'approved' || status === 'rejected') {
+      try {
+        await User.updateMany(
+          { school: req.user.school, role: { $in: ['admin', 'correspondent', 'principal'] } },
+          { $pull: { notifications: { action: 'staff_leave', refId: leave._id } } }
+        );
+      } catch (e) { console.error('[staff-leave clear admin notif]', e.message); }
+    }
+
     // Notify the applicant that their leave was approved/rejected.
     if ((status === 'approved' || status === 'rejected') && leave.user) {
       try {

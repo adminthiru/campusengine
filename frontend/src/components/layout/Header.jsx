@@ -160,7 +160,7 @@ export default function Header({ onMenuClick, sidebarCollapsed }) {
   }, []);
 
   const markRead = async (id) => {
-    if (String(id).startsWith('leave-')) return; // synthetic item, nothing to mark
+    if (String(id).startsWith('leave-') || String(id).startsWith('staffleave-')) return; // synthetic item, nothing to mark
     setNotifs(prev => prev.map(n => n._id === id ? { ...n, read: true } : n));
     try { await api.put(`/auth/notifications/${id}/read`); } catch { /* ignore */ }
   };
