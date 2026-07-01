@@ -71,6 +71,7 @@ export default function Salary() {
   const [viewSalary, setViewSalary] = useState(null);
   const [selected, setSelected] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [advanceTarget, setAdvanceTarget] = useState(null); // { salaryId, amount, employeeName }
 
   const autoGenAttempted = useRef(new Set());
   const [autoGenerating, setAutoGenerating] = useState(false);
@@ -384,8 +385,23 @@ export default function Salary() {
       {editSalary && (
         <EditSalaryModal
           sal={editSalary}
+          methods={payMethodOptions}
           onClose={() => setEditSalary(null)}
-          onSuccess={() => { qc.invalidateQueries(['salaries']); setEditSalary(null); }}
+          onSuccess={(adv) => {
+            qc.invalidateQueries(['salaries']);
+            qc.invalidateQueries(['fees-method-balances']);
+            setEditSalary(null);
+            if (adv?.needsMethod) setAdvanceTarget(adv);
+          }}
+        />
+      )}
+
+      {advanceTarget && (
+        <AdvanceMethodModal
+          target={advanceTarget}
+          methods={payMethodOptions}
+          onClose={() => setAdvanceTarget(null)}
+          onSuccess={() => { qc.invalidateQueries(['fees-method-balances']); setAdvanceTarget(null); }}
         />
       )}
 
@@ -636,7 +652,47 @@ function AddSalaryModal({ month, year, onClose, onSuccess }) {
   );
 }
 
-function EditSalaryModal({ sal, onClose, onSuccess }) {
+// After an advance is saved, ask which payment category it's paid from so the
+// amount is deducted from that method's running balance.
+function AdvanceMethodModal({ target, methods, onClose, onSuccess }) {
+  const [method, setMethod] = useState('cash');
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      await api.put(`/salaries/${target.salaryId}/advance-method`, { method });
+      toast.success('Advance payment recorded');
+      onSuccess();
+    } catch (err) {
+      toast.error(err.message || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Advance — Payment Category"
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Skip</button>
+        <button className="btn btn-primary" onClick={submit} disabled={saving}>{saving ? 'Saving…' : 'Confirm'}</button>
+      </>}>
+      <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 10, padding: '12px 16px', marginBottom: 16 }}>
+        <div className="text-14-semibold" style={{ color: '#92400e' }}>{target.employeeName}</div>
+        <div className="text-13-regular" style={{ color: '#92400e', marginTop: 2 }}>
+          Advance of ₹{(target.amount || 0).toLocaleString('en-IN')} — choose the account it's paid from. This amount will be deducted from that category's balance.
+        </div>
+      </div>
+      <div className="form-group">
+        <label className="form-label">Payment Category</label>
+        <AntSelect style={{ width: '100%' }} value={method} onChange={setMethod} options={methods} />
+      </div>
+    </Modal>
+  );
+}
+
+function EditSalaryModal({ sal, methods = [], onClose, onSuccess }) {
+  const originalAdvance = Number(sal.deductions?.loan) || 0;
   // Pre-fill from existing record
   const [basic, setBasic] = useState(String(sal.earnings?.basic || ''));
   const [hra, setHra] = useState(String(sal.earnings?.hra || ''));
@@ -696,7 +752,10 @@ function EditSalaryModal({ sal, onClose, onSuccess }) {
         netSalary: net,
       });
       toast.success('Salary updated!');
-      onSuccess();
+      // If an advance was newly given (or its amount changed), ask which account
+      // it's paid from so the balance is deducted from that category.
+      const needsMethod = loanV > 0 && loanV !== originalAdvance;
+      onSuccess(needsMethod ? { needsMethod: true, salaryId: sal._id, amount: loanV, employeeName: sal.employee?.name } : undefined);
     } catch (err) {
       toast.error(err.message || 'Failed');
     } finally {

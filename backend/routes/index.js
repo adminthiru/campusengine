@@ -1044,6 +1044,7 @@ router.post('/salaries', protect, checkSubscription, authorize('admin', 'corresp
 router.post('/salaries/generate', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.generateSalary);
 router.put('/salaries/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.updateSalary);
 router.post('/salaries/:id/pay', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.paySalary);
+router.put('/salaries/:id/advance-method', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.setAdvanceMethod);
 router.post('/salaries/:id/revert', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.revertSalary);
 router.post('/salaries/:id/recalculate', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.recalculateSalary);
 router.delete('/salaries/:id', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), salCtrl.deleteSalaryRecord);

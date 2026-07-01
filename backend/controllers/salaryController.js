@@ -27,28 +27,30 @@ const persistEmployeeSalary = async (schoolId, employeeId, earnings = {}, deduct
 
 // Upsert (create or update) an advance expense keyed on slipNumber stored in billNumber.
 // If advanceAmount is 0, removes the expense so the record stays in sync.
-const syncAdvanceExpense = async ({ school, employeeId, employeeName, advanceAmount, month, year, userId, slipNumber }) => {
+const syncAdvanceExpense = async ({ school, employeeId, employeeName, advanceAmount, month, year, userId, slipNumber, paymentMethod }) => {
   if (!slipNumber) return;
   const amount = Number(advanceAmount) || 0;
   if (amount <= 0) {
     await Expense.deleteOne({ school, category: 'salary', billNumber: slipNumber });
     return;
   }
+  const set = {
+    school,
+    title: `Advance — ${employeeName || 'Employee'}`,
+    category: 'salary',
+    amount,
+    date: new Date(),
+    description: `Salary advance for ${MONTHS[month - 1]} ${year} · ${employeeName} (${employeeId})`,
+    createdBy: userId,
+    billNumber: slipNumber,
+  };
+  // Only set the payment method when supplied so we don't overwrite a
+  // previously-chosen category on unrelated amount edits. Default to cash on
+  // first creation.
+  if (paymentMethod) set.paymentMethod = paymentMethod;
   await Expense.findOneAndUpdate(
     { school, category: 'salary', billNumber: slipNumber },
-    {
-      $set: {
-        school,
-        title: `Advance — ${employeeName || 'Employee'}`,
-        category: 'salary',
-        amount,
-        date: new Date(),
-        paymentMethod: 'cash',
-        description: `Salary advance for ${MONTHS[month - 1]} ${year} · ${employeeName} (${employeeId})`,
-        createdBy: userId,
-        billNumber: slipNumber,
-      }
-    },
+    { $set: set, $setOnInsert: paymentMethod ? {} : { paymentMethod: 'cash' } },
     { upsert: true, returnDocument: 'after' }
   );
 };
@@ -266,6 +268,27 @@ const paySalary = async (req, res) => {
     }
 
     res.json({ success: true, salary });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Set the payment category for an employee's salary advance (asked after the
+// admin saves an advance). Updates the linked advance expense so the amount is
+// deducted from that method's running balance.
+const setAdvanceMethod = async (req, res) => {
+  try {
+    const { method } = req.body;
+    if (!method) return res.status(400).json({ success: false, message: 'Payment method is required' });
+    const salary = await Salary.findOne({ _id: req.params.id, school: req.user.school });
+    if (!salary) return res.status(404).json({ success: false, message: 'Not found' });
+    if (!salary.slipNumber) return res.status(400).json({ success: false, message: 'No slip number on this salary' });
+    const result = await Expense.updateOne(
+      { school: req.user.school, category: 'salary', billNumber: salary.slipNumber },
+      { $set: { paymentMethod: method } }
+    );
+    if (!result.matchedCount) return res.status(404).json({ success: false, message: 'No advance found for this salary' });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -560,4 +583,4 @@ const recalculateSalary = async (req, res) => {
   }
 };
 
-module.exports = { generateSalary, createSalaryRecord, getSalaries, paySalary, revertSalary, getPayslipPDF, updateSalary, deleteSalaryRecord, getAttendanceSummary, recalculateSalary };
+module.exports = { generateSalary, createSalaryRecord, getSalaries, paySalary, revertSalary, getPayslipPDF, updateSalary, deleteSalaryRecord, getAttendanceSummary, recalculateSalary, setAdvanceMethod };
