@@ -2859,17 +2859,9 @@ router.post('/inventory', protect, checkSubscription, authorize(...INVENTORY_ROL
     const { school, createdBy, itemCode: _ic, _id, repairs, ...body } = req.body;
     const created = await InventoryItem.create({ ...body, itemCode, school: req.user.school, createdBy: req.user._id });
 
-    // Capture the purchase price as an expense (price × quantity)
-    if (created.purchasePrice > 0) {
-      await createInventoryExpense(req.user.school, req.user._id, {
-        title: `Asset Purchase — ${created.name}`,
-        category: mapInventoryToExpenseCategory(created.category),
-        amount: created.purchasePrice * (created.quantity || 1),
-        date: created.purchaseDate || new Date(),
-        vendor: created.vendor,
-        description: `Inventory purchase · ${created.itemCode}`,
-      });
-    }
+    // Note: adding inventory records stock the school already owns — it does NOT
+    // create an expense or deduct from any payment balance. Only receiving a
+    // purchase request books an expense (see /purchase-requests/:id/receive).
 
     const item = await populateItem(InventoryItem.findById(created._id));
     res.status(201).json({ success: true, item });
@@ -2910,19 +2902,9 @@ router.post('/inventory/bulk', protect, checkSubscription, authorize(...INVENTOR
       created.push(doc);
     }
 
-    // One combined expense for the batch (sum of price × quantity)
-    const totalPrice = created.reduce((s, d) => s + (d.purchasePrice || 0) * (d.quantity || 1), 0);
-    if (totalPrice > 0) {
-      const codes = created.length > 1 ? `${created[0].itemCode}–${created[created.length - 1].itemCode}` : created[0].itemCode;
-      await createInventoryExpense(req.user.school, req.user._id, {
-        title: `Asset Purchase — ${created.length} item${created.length > 1 ? 's' : ''}${shared.category ? ' (' + shared.category + ')' : ''}`,
-        category: mapInventoryToExpenseCategory(shared.category),
-        amount: totalPrice,
-        date: shared.purchaseDate || new Date(),
-        vendor: shared.vendor,
-        description: `Inventory purchase · ${codes}`,
-      });
-    }
+    // Adding inventory records stock the school already owns — no expense is
+    // booked and no payment balance is deducted. Only receiving a purchase
+    // request books an expense (see /purchase-requests/:id/receive).
     res.status(201).json({ success: true, count: created.length });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
