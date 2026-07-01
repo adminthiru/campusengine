@@ -473,21 +473,21 @@ const getMethodBalances = async (req, res) => {
 
     // Money paid OUT reduces the balance of the method it came from:
     //  • net salaries that have been paid
-    //  • salary advances (stored as category 'salary' expenses)
+    //  • every expense (incl. salary advances, which are category 'salary' expenses)
     const Salary = require('../models/Salary');
     const { Expense } = require('../models/Expense');
-    const [salRows, advRows] = await Promise.all([
+    const [salRows, expRows] = await Promise.all([
       Salary.aggregate([
         { $match: { school: new mongoose.Types.ObjectId(schoolId), status: 'paid' } },
         { $group: { _id: '$payment.method', total: { $sum: '$netSalary' } } },
       ]),
       Expense.aggregate([
-        { $match: { school: new mongoose.Types.ObjectId(schoolId), category: 'salary' } },
+        { $match: { school: new mongoose.Types.ObjectId(schoolId) } },
         { $group: { _id: '$paymentMethod', total: { $sum: '$amount' } } },
       ]),
     ]);
     const paidOut = {};
-    [...salRows, ...advRows].forEach(r => { const k = r._id || 'cash'; paidOut[k] = (paidOut[k] || 0) + (r.total || 0); });
+    [...salRows, ...expRows].forEach(r => { const k = r._id || 'cash'; paidOut[k] = (paidOut[k] || 0) + (r.total || 0); });
 
     const keys = ['cash', 'bank_transfer', 'cheque', 'online', ...custom];
     [collected, opening, paidOut].forEach(obj => Object.keys(obj).forEach(k => { if (!keys.includes(k)) keys.push(k); }));

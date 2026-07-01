@@ -1216,6 +1216,14 @@ router.get('/expenses', protect, checkSubscription, async (req, res) => {
     res.json({ success: true, expenses, total });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
+// Upload an invoice/bill (image or PDF) for an expense; returns its URL to
+// store as billDocument on the expense record.
+router.post('/expenses/upload-invoice', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), upload.single('invoice'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+    res.json({ success: true, url: `/uploads/${req.file.filename}` });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
 router.post('/expenses', protect, checkSubscription, authorize('admin', 'correspondent', 'accountant'), async (req, res) => {
   try {
     const exp = await Expense.create({ ...req.body, school: req.user.school, createdBy: req.user._id });

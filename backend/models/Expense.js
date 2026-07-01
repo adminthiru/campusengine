@@ -11,7 +11,9 @@ const expenseSchema = new mongoose.Schema({
   vendor: { type: String },
   amount: { type: Number, required: true },
   date: { type: Date, required: true },
-  paymentMethod: { type: String, enum: ['cash', 'bank_transfer', 'cheque', 'online'] },
+  // Built-in: cash | bank_transfer | cheque | online. Schools may also use a
+  // custom payment category (e.g. a bank name), stored as free text.
+  paymentMethod: { type: String },
   billNumber: { type: String },
   billDocument: { type: String },
   description: { type: String },

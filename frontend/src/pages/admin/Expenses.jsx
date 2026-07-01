@@ -77,9 +77,38 @@ export default function Expenses() {
   const customCategories = schoolData?.school?.expenseCategories || [];
   const categories = [...DEFAULT_CATEGORIES, ...customCategories.filter(c => !DEFAULT_CATEGORIES.includes(c.toLowerCase()))];
 
+  // Payment methods = built-ins + the school's custom fee payment categories,
+  // so an expense is deducted from the same running balance.
+  const paymentMethods = [
+    { value: 'cash',          label: 'Cash' },
+    { value: 'bank_transfer', label: 'Bank Transfer' },
+    { value: 'cheque',        label: 'Cheque' },
+    { value: 'online',        label: 'Online (UPI/NEFT)' },
+    ...(schoolData?.school?.paymentMethods || []).filter(Boolean).map(m => ({ value: m, label: m })),
+  ];
+
+  // Invoice upload for the Add modal.
+  const [invoiceUrl, setInvoiceUrl] = useState('');
+  const [uploadingInvoice, setUploadingInvoice] = useState(false);
+  const uploadInvoice = async (file) => {
+    if (!file) return;
+    setUploadingInvoice(true);
+    try {
+      const fd = new FormData();
+      fd.append('invoice', file);
+      const res = await api.post('/expenses/upload-invoice', fd, { headers: { 'Content-Type': undefined } });
+      setInvoiceUrl(res.url);
+      toast.success('Invoice attached');
+    } catch (err) {
+      toast.error(err.message || 'Upload failed');
+    } finally {
+      setUploadingInvoice(false);
+    }
+  };
+
   const createMutation = useMutation({
-    mutationFn: (d) => api.post('/expenses', d),
-    onSuccess: () => { qc.invalidateQueries(['expenses']); toast.success('Expense recorded!'); setShowModal(false); reset(); },
+    mutationFn: (d) => api.post('/expenses', { ...d, billDocument: invoiceUrl || undefined }),
+    onSuccess: () => { qc.invalidateQueries(['expenses']); qc.invalidateQueries(['fees-method-balances']); toast.success('Expense recorded!'); setShowModal(false); reset(); setInvoiceUrl(''); },
     onError: (err) => toast.error(err.message || 'Failed')
   });
 
@@ -87,6 +116,7 @@ export default function Expenses() {
     mutationFn: () => Promise.all(selected.map(id => api.delete(`/expenses/${id}`))),
     onSuccess: () => {
       qc.invalidateQueries(['expenses']);
+      qc.invalidateQueries(['fees-method-balances']);
       toast.success(`${selected.length} expense${selected.length > 1 ? 's' : ''} deleted`);
       setSelected([]);
       setConfirmDelete(false);
@@ -228,9 +258,9 @@ export default function Expenses() {
       )}
 
       {/* Add Expense Modal */}
-      <Modal open={showModal} onClose={() => setShowModal(false)} title="Add Expense"
+      <Modal open={showModal} onClose={() => { setShowModal(false); setInvoiceUrl(''); }} title="Add Expense"
         footer={<>
-          <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
+          <button className="btn btn-secondary" onClick={() => { setShowModal(false); setInvoiceUrl(''); }}>Cancel</button>
           <button className="btn btn-primary" onClick={handleSubmit(d => createMutation.mutate(d))}>
             {createMutation.isPending ? 'Saving...' : 'Add Expense'}
           </button>
@@ -289,12 +319,7 @@ export default function Expenses() {
                 <AntSelect
                   {...field}
                   style={{ width: '100%' }}
-                  options={[
-                    { value: 'cash', label: 'Cash' },
-                    { value: 'bank_transfer', label: 'Bank Transfer' },
-                    { value: 'cheque', label: 'Cheque' },
-                    { value: 'online', label: 'Online' },
-                  ]}
+                  options={paymentMethods}
                 />
               )} />
             </div>
@@ -307,6 +332,21 @@ export default function Expenses() {
             <label className="form-label">Description</label>
             <textarea className="form-control" {...register('description')} rows={2} placeholder="Additional notes..." />
           </div>
+          <div className="form-group">
+            <label className="form-label">Invoice (image / PDF)</label>
+            {invoiceUrl ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8 }}>
+                <a href={invoiceUrl} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: '#16a34a', fontWeight: 600, flex: 1 }}>Invoice attached — view</a>
+                <button type="button" className="btn btn-secondary btn-sm btn-icon" onClick={() => setInvoiceUrl('')} title="Remove"><X size={14} /></button>
+              </div>
+            ) : (
+              <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                <Plus size={14} /> {uploadingInvoice ? 'Uploading…' : 'Upload Invoice'}
+                <input type="file" accept="image/*,application/pdf" hidden disabled={uploadingInvoice}
+                  onChange={e => { uploadInvoice(e.target.files?.[0]); e.target.value = ''; }} />
+              </label>
+            )}
+          </div>
         </form>
       </Modal>
 
@@ -315,8 +355,9 @@ export default function Expenses() {
         <EditExpenseModal
           expense={editExpense}
           categories={categories}
+          paymentMethods={paymentMethods}
           onClose={() => setEditExpense(null)}
-          onSuccess={() => { qc.invalidateQueries(['expenses']); setEditExpense(null); }}
+          onSuccess={() => { qc.invalidateQueries(['expenses']); qc.invalidateQueries(['fees-method-balances']); setEditExpense(null); }}
         />
       )}
 
@@ -599,7 +640,7 @@ function CategoryModal({ defaultCategories, customCategories, onClose, onSaved }
   );
 }
 
-function EditExpenseModal({ expense, categories, onClose, onSuccess }) {
+function EditExpenseModal({ expense, categories, paymentMethods = [], onClose, onSuccess }) {
   const { register, handleSubmit, control: controlEdit, formState: { errors } } = useForm({
     defaultValues: {
       title: expense.title || '',
@@ -680,12 +721,7 @@ function EditExpenseModal({ expense, categories, onClose, onSuccess }) {
               <AntSelect
                 {...field}
                 style={{ width: '100%' }}
-                options={[
-                  { value: 'cash', label: 'Cash' },
-                  { value: 'bank_transfer', label: 'Bank Transfer' },
-                  { value: 'cheque', label: 'Cheque' },
-                  { value: 'online', label: 'Online' },
-                ]}
+                options={paymentMethods}
               />
             )} />
           </div>
