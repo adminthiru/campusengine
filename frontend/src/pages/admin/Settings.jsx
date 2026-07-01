@@ -1518,11 +1518,10 @@ export function SubscriptionSettings() {
   const amount = sub.amount || plans.find(p => String(p._id) === String(sub.plan))?.price || 0;
   const cycleLabel = sub.billingCycle === 'yearly' ? '/year' : '/month';
 
-  // Persist the chosen plan, then open the checkout for the chosen cycle.
-  const startCheckout = async (plan, cycle) => {
-    try { await api.post('/subscription/select-plan', { planId: plan._id }); qc.invalidateQueries(['my-subscription']); setCheckout({ plan, cycle }); }
-    catch (e) { toast.error(e?.response?.data?.message || 'Failed to select plan'); }
-  };
+  // Open the checkout for the chosen plan + cycle. We do NOT mutate the school's
+  // subscription here — it changes only on a verified payment (verify endpoint),
+  // so the current plan/price on the status card stays accurate until then.
+  const startCheckout = (plan, cycle) => setCheckout({ plan, cycle });
 
   const downloadInvoice = async (p) => {
     try {
@@ -1558,7 +1557,7 @@ export function SubscriptionSettings() {
                 : sub.status === 'trial' && endDate ? `Trial ends ${new Date(endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
             </div>
           </div>
-          {amount > 0
+          {isActive && amount > 0
             ? <span className="text-24-bold" style={{ color: '#1a56e8' }}>₹{amount.toLocaleString('en-IN')}<span className="text-12-regular" style={{ color: 'var(--text-secondary)' }}>{cycleLabel}</span></span>
             : <span className="text-16-bold" style={{ color: '#16a34a' }}>Free</span>}
         </div>
