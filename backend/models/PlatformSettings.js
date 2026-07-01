@@ -40,9 +40,10 @@ platformSettingsSchema.pre('save', function () {
 platformSettingsSchema.methods.gatewayKeys = function () {
   const keyId = decrypt(this.gateway?.keyId) || process.env.RAZORPAY_KEY_ID || '';
   const keySecret = decrypt(this.gateway?.keySecret) || process.env.RAZORPAY_KEY_SECRET || '';
-  // Enabled when the super admin turned it on, OR when both keys are present via
-  // env (.env-driven / self-host setup) — so it works without toggling the UI.
-  const enabled = this.gateway?.enabled === true || (!!keyId && !!keySecret);
+  // Online payment is usable only when BOTH keys actually resolve (from the
+  // super-admin settings or, more commonly, the .env). Keys present ⇒ enabled —
+  // so the Billing page never offers a gateway that create-order would reject.
+  const enabled = !!keyId && !!keySecret;
   return { enabled, keyId, keySecret };
 };
 

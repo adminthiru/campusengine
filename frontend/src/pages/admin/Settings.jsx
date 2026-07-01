@@ -1749,7 +1749,7 @@ function CheckoutModal({ plan, cycle = 'monthly', methods, onClose, onPaid }) {
           try {
             await api.post('/subscription/verify', { razorpayOrderId: r.razorpay_order_id, razorpayPaymentId: r.razorpay_payment_id, razorpaySignature: r.razorpay_signature, planId: plan._id, cycle });
             onPaid(); setStep('success');
-          } catch (e) { toast.error(e?.response?.data?.message || 'Verification failed'); }
+          } catch (e) { toast.error(e?.message || e?.response?.data?.message || 'Verification failed'); }
           finally { setPaying(false); }
         },
         modal: { ondismiss: () => setPaying(false) },
@@ -1759,7 +1759,7 @@ function CheckoutModal({ plan, cycle = 'monthly', methods, onClose, onPaid }) {
         setPaying(false);
       });
       rzp.open();
-    } catch (e) { toast.error(e?.response?.data?.message || 'Failed to start payment'); setPaying(false); }
+    } catch (e) { toast.error(e?.message || e?.response?.data?.message || 'Failed to start payment'); setPaying(false); }
   };
 
   if (step === 'success') {
