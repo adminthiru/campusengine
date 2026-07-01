@@ -2734,7 +2734,7 @@ const mapInventoryToExpenseCategory = (cat) => {
 };
 
 // Auto-create an Expense record from an inventory purchase / repair cost.
-const createInventoryExpense = async (schoolId, userId, { title, category, amount, date, vendor, description }) => {
+const createInventoryExpense = async (schoolId, userId, { title, category, amount, date, vendor, description, paymentMethod }) => {
   const amt = Number(amount);
   if (!amt || amt <= 0) return null;
   const school = await School.findById(schoolId).select('academicYear');
@@ -2749,6 +2749,7 @@ const createInventoryExpense = async (schoolId, userId, { title, category, amoun
     date: date || new Date(),
     vendor: vendor || undefined,
     description,
+    paymentMethod: paymentMethod || undefined,
     createdBy: userId,
     academicYear: academicYearForDate(date || new Date(), sm, em),
   });
@@ -3219,6 +3220,7 @@ router.post('/purchase-requests/:id/receive', protect, checkSubscription, author
         date: new Date(),
         vendor: pr.vendor,
         description: `Purchase request ${pr.requestNumber} received`,
+        paymentMethod: (req.body.paymentMethod || 'cash'),
       });
     }
 

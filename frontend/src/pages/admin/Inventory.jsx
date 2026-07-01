@@ -82,6 +82,15 @@ export default function Inventory() {
   const school = schoolData?.school;
   const categories = [...DEFAULT_CATEGORIES, ...((school?.inventoryCategories) || []).filter(c => !DEFAULT_CATEGORIES.includes(c))];
   const locations  = [...DEFAULT_LOCATIONS,  ...((school?.inventoryLocations)  || []).filter(l => !DEFAULT_LOCATIONS.includes(l))];
+  // Payment methods = built-ins + the school's custom fee payment categories,
+  // so a received purchase's expense deducts from the same running balance.
+  const paymentMethods = [
+    { value: 'cash',          label: 'Cash' },
+    { value: 'bank_transfer', label: 'Bank Transfer' },
+    { value: 'cheque',        label: 'Cheque' },
+    { value: 'online',        label: 'Online (UPI/NEFT)' },
+    ...((school?.paymentMethods) || []).filter(Boolean).map(m => ({ value: m, label: m })),
+  ];
 
   const { data: statsData } = useQuery({ queryKey: ['inventory-stats'], queryFn: () => api.get('/inventory/stats') });
   const stats = statsData?.stats || {};
@@ -151,7 +160,7 @@ export default function Inventory() {
 
   const reverseRequestMutation = useMutation({
     mutationFn: (id) => api.post(`/purchase-requests/${id}/reverse`),
-    onSuccess: () => { refresh(); toast.success('Purchase reversed — items & expense removed'); setReverseTarget(null); },
+    onSuccess: () => { refresh(); qc.invalidateQueries(['fees-method-balances']); toast.success('Purchase reversed — items & expense removed'); setReverseTarget(null); },
     onError: (err) => { toast.error(err.message || 'Failed to reverse'); setReverseTarget(null); },
   });
 
@@ -519,7 +528,7 @@ export default function Inventory() {
       )}
 
       {receiveTarget && (
-        <ReceiveRequestModal request={receiveTarget} onClose={() => setReceiveTarget(null)} onSaved={() => { refresh(); setReceiveTarget(null); }} />
+        <ReceiveRequestModal request={receiveTarget} methods={paymentMethods} onClose={() => setReceiveTarget(null)} onSaved={() => { refresh(); qc.invalidateQueries(['fees-method-balances']); setReceiveTarget(null); }} />
       )}
 
       <ConfirmDialog open={!!deleteRequestId} onClose={() => setDeleteRequestId(null)}
@@ -1321,7 +1330,7 @@ function PurchaseRequestModal({ request, categories, locations, onClose, onSaved
 }
 
 // ── Receive Request Modal ───────────────────────────────────────────────────────
-function ReceiveRequestModal({ request, onClose, onSaved }) {
+function ReceiveRequestModal({ request, methods = [], onClose, onSaved }) {
   const lines = request.items || [];
   const isAsset = request.type !== 'consumable';
   const [prices, setPrices] = useState(() => {
@@ -1329,11 +1338,13 @@ function ReceiveRequestModal({ request, onClose, onSaved }) {
   });
   const setPrice = (id, v) => setPrices(p => ({ ...p, [id]: v }));
   const [vendor, setVendor] = useState(request.vendor || '');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
 
   const mutation = useMutation({
     mutationFn: () => api.post(`/purchase-requests/${request._id}/receive`, {
       items: lines.map(i => ({ _id: i._id, actualPrice: prices[i._id] !== '' ? Number(prices[i._id]) : undefined })),
       vendor: vendor.trim(),
+      paymentMethod,
     }),
     onSuccess: () => { toast.success('Received — units added to inventory & expense booked'); onSaved(); },
     onError: (err) => toast.error(err.message || 'Failed'),
@@ -1367,13 +1378,22 @@ function ReceiveRequestModal({ request, onClose, onSaved }) {
       <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 0, marginBottom: 14 }}>
         Enter the actual <strong>unit price</strong> paid. On receive, each line is created as inventory units under its category, and one expense is booked for the total.
       </p>
-      <div className="form-group" style={{ marginBottom: 14 }}>
-        <label className="form-label">Vendor</label>
-        <input className="form-control" value={vendor} onChange={e => setVendor(e.target.value)}
-          placeholder="Who you purchased from" />
-        <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
-          Pre-filled from the request — update it if you bought from a different vendor.
-        </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label className="form-label">Vendor</label>
+          <input className="form-control" value={vendor} onChange={e => setVendor(e.target.value)}
+            placeholder="Who you purchased from" />
+          <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
+            Pre-filled from the request — update it if you bought from a different vendor.
+          </p>
+        </div>
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label className="form-label">Payment Method</label>
+          <AntSelect style={{ width: '100%' }} value={paymentMethod} onChange={setPaymentMethod} options={methods} />
+          <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
+            The purchase total is deducted from this account's balance.
+          </p>
+        </div>
       </div>
       <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
