@@ -289,7 +289,6 @@ const superAdminCtrl = require('../controllers/superAdminController');
 router.get('/plans', protect, superAdminCtrl.getActivePlans);
 router.get('/subscription/my', protect, subCtrl.getMySubscription);
 router.get('/subscription/payment-methods', protect, subCtrl.getPaymentMethods);
-router.post('/subscription/select-plan', protect, authorize('admin', 'correspondent'), subCtrl.selectPlan);
 router.post('/subscription/create-order', protect, subCtrl.createOrder);
 router.post('/subscription/verify', protect, subCtrl.verifyPayment);
 router.get('/subscription/payments/:id/invoice', protect, subCtrl.getInvoicePdf);

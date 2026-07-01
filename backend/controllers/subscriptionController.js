@@ -6,7 +6,16 @@ const PlatformSettings = require('../models/PlatformSettings');
 const { sendEmail, paymentReceiptEmail } = require('../utils/email');
 
 const addMonths = (date, n) => { const d = new Date(date); d.setMonth(d.getMonth() + n); return d; };
-const genInvoiceNumber = async () => `INV${String(await SubscriptionPayment.countDocuments({}) + 1).padStart(5, '0')}`;
+// Sequential-ish invoice number with a collision retry (countDocuments isn't
+// atomic, so re-derive + check on clash before falling back to a unique stamp).
+const genInvoiceNumber = async () => {
+  const base = await SubscriptionPayment.countDocuments({});
+  for (let i = 1; i <= 6; i++) {
+    const num = `INV${String(base + i).padStart(5, '0')}`;
+    if (!(await SubscriptionPayment.findOne({ invoiceNumber: num }).select('_id').lean())) return num;
+  }
+  return `INV${Date.now().toString().slice(-8)}`;
+};
 
 // Gateway keys (decrypted) come from the super-admin Payment Settings, falling back to env.
 const getGatewayKeys = async () => {
@@ -48,21 +57,6 @@ const getMySubscription = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
-// Optionally switch the school's plan (school admin picks an active plan to pay).
-const selectPlan = async (req, res) => {
-  try {
-    const plan = await SubscriptionPlan.findOne({ _id: req.body.planId, isActive: true });
-    if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
-    await School.findByIdAndUpdate(req.user.school, {
-      $set: {
-        'subscription.plan': plan._id, 'subscription.planName': plan.name, 'subscription.amount': plan.price,
-        'subscription.modules': plan.modules || [], 'subscription.limits': plan.limits || {},
-      },
-    });
-    res.json({ success: true, plan });
-  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
-};
-
 // Resolve the plan + chosen cycle ('monthly'|'yearly') for a checkout request,
 // returning the net amount (₹) and billing months. planId in the body wins;
 // otherwise the school's currently-selected plan is used.
@@ -74,7 +68,7 @@ const resolvePlanCycle = async (req) => {
     const school = await School.findById(req.user.school).populate('subscription.plan');
     plan = school?.subscription?.plan || null;
   }
-  const { amount, months } = plan ? plan.netForCycle(cycle) : { amount: 200, months: 1 };
+  const { amount, months } = plan ? plan.netForCycle(cycle) : { amount: 0, months: 1 };
   return { plan, cycle, amount, months };
 };
 
@@ -97,16 +91,39 @@ const createOrder = async (req, res) => {
 const verifyPayment = async (req, res) => {
   try {
     const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
-    const { keySecret } = await getGatewayKeys();
-    const sig = crypto.createHmac('sha256', keySecret)
-      .update(`${razorpayOrderId}|${razorpayPaymentId}`).digest('hex');
-    if (sig !== razorpaySignature) return res.status(400).json({ success: false, message: 'Payment verification failed' });
+    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature)
+      return res.status(400).json({ success: false, message: 'Missing payment fields' });
+
+    const { keyId, keySecret } = await getGatewayKeys();
+    if (!keySecret) return res.status(500).json({ success: false, message: 'Payment gateway not configured' });
+
+    // Constant-time HMAC-SHA256(order|payment) check.
+    const expected = crypto.createHmac('sha256', keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest('hex');
+    const a = Buffer.from(expected), b = Buffer.from(String(razorpaySignature));
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b))
+      return res.status(400).json({ success: false, message: 'Payment verification failed' });
+
+    // Idempotency: if this payment id was already recorded, return its invoice
+    // instead of activating (and extending the period) a second time.
+    const already = await SubscriptionPayment.findOne({ school: req.user.school, razorpayPaymentId }).lean();
+    if (already) return res.json({ success: true, message: 'Subscription already activated', invoiceNumber: already.invoiceNumber });
+
+    // Recompute the amount/period server-side from the plan + chosen cycle
+    // (never trust a client-sent amount). Reject if there's no priced plan.
+    const { plan, cycle, amount: amt, months } = await resolvePlanCycle(req);
+    if (!plan || amt < 1) return res.status(400).json({ success: false, message: 'No valid plan for this payment' });
+
+    // Bind to the real Razorpay order: it must exist and its amount must equal
+    // what we computed — stops replaying a cheaper/older order's signature.
+    try {
+      const order = await getRazorpay(keyId, keySecret).orders.fetch(razorpayOrderId);
+      if (!order || Number(order.amount) !== Math.round(amt * 100))
+        return res.status(400).json({ success: false, message: 'Order amount mismatch' });
+    } catch {
+      return res.status(400).json({ success: false, message: 'Could not verify the order with the gateway' });
+    }
 
     const school = await School.findById(req.user.school);
-    // Recompute the amount/period server-side from the plan + chosen cycle
-    // (never trust a client-sent amount).
-    const { plan, cycle, amount: amt, months } = await resolvePlanCycle(req);
-
     const start = (school.subscription?.currentPeriodEnd && new Date(school.subscription.currentPeriodEnd) > new Date())
       ? new Date(school.subscription.currentPeriodEnd) : new Date();
     const end = addMonths(start, months);
@@ -193,4 +210,4 @@ const getInvoicePdf = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
-module.exports = { getMySubscription, getPaymentMethods, selectPlan, createOrder, verifyPayment, getInvoicePdf };
+module.exports = { getMySubscription, getPaymentMethods, createOrder, verifyPayment, getInvoicePdf };

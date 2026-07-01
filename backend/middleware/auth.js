@@ -108,7 +108,9 @@ const checkSubscription = async (req, res, next) => {
     return res.status(402).json({ success: false, message: 'Subscription expired. Please renew.', code: 'SUBSCRIPTION_EXPIRED' });
   }
   if (school.subscription.status === 'trial') {
-    if (now > school.subscription.trialEndDate) {
+    // A missing trial end date counts as expired (never grant an endless trial).
+    const trialEnd = school.subscription.trialEndDate;
+    if (!trialEnd || now > new Date(trialEnd)) {
       return res.status(402).json({ success: false, message: 'Trial expired. Please subscribe.', code: 'TRIAL_EXPIRED' });
     }
   } else if (school.subscription.status === 'expired') {

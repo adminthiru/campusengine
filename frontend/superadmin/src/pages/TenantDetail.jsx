@@ -115,7 +115,7 @@ export default function TenantDetail() {
           <h3 className="text-14-semibold" style={{ marginBottom: 14 }}>Subscription</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <Info label="Status" value={<Badge status={school.status} />} />
-            <Info label="Amount" value={`₹${sub.amount || 0}/mo`} />
+            <Info label="Amount" value={(sub.amount || 0) > 0 ? `₹${(sub.amount || 0).toLocaleString('en-IN')}/${sub.billingCycle === 'yearly' ? 'yr' : 'mo'}` : 'Free'} />
             <Info label="Trial ends" value={fmt(sub.trialEndDate)} />
             <Info label="Renews / ends" value={fmt(sub.currentPeriodEnd)} />
           </div>
@@ -123,7 +123,7 @@ export default function TenantDetail() {
             <label className="form-label">Plan</label>
             <select className="form-control" value={String(sub.plan?._id || sub.plan || '')} onChange={e => changePlan.mutate(e.target.value)}>
               <option value="">No plan</option>
-              {plans.map(p => <option key={p._id} value={p._id}>{p.name} — ₹{p.price}/mo</option>)}
+              {plans.map(p => <option key={p._id} value={p._id}>{p.name}{p.trialDays > 0 ? ` — ${p.trialDays}-day trial` : ((p.monthlyPrice || p.price) ? ` — ₹${(Math.max(0,(p.monthlyPrice||p.price)-(p.monthlyDiscount||0))).toLocaleString('en-IN')}/mo` : '')}</option>)}
             </select>
           </div>
           <div className="form-group" style={{ marginTop: 14, marginBottom: 0 }}>

@@ -151,6 +151,9 @@ const createTenant = async (req, res) => {
 const updateSchool = async (req, res) => {
   try {
     const { name, phone, email, principalName, planId, amount } = req.body;
+    const current = await School.findById(req.params.id).select('subscription.status');
+    if (!current) return res.status(404).json({ success: false, message: 'School not found' });
+    const isActivePaid = current.subscription?.status === 'active';
     const set = {};
     if (name !== undefined) set.name = name;
     if (phone !== undefined) set.phone = phone;
@@ -159,13 +162,22 @@ const updateSchool = async (req, res) => {
     if (planId) {
       const plan = await SubscriptionPlan.findById(planId);
       if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
-      set['subscription.plan'] = plan._id; set['subscription.planName'] = plan.name; set['subscription.amount'] = amount ?? plan.price;
+      // Entitlements always follow the assigned plan.
+      set['subscription.plan'] = plan._id; set['subscription.planName'] = plan.name;
       set['subscription.modules'] = plan.modules || []; set['subscription.limits'] = plan.limits || {};
-      // Assigning a free-trial plan (re)starts the trial for its configured length.
-      if ((plan.trialDays || 0) > 0) {
-        set['subscription.status'] = 'trial';
-        set['subscription.trialStartDate'] = new Date();
-        set['subscription.trialEndDate'] = new Date(Date.now() + plan.trialDays * 24 * 60 * 60 * 1000);
+      if (isActivePaid) {
+        // A paid, active school keeps its paid amount/cycle/period; only let the
+        // super admin override the amount explicitly.
+        if (amount !== undefined) set['subscription.amount'] = amount;
+      } else {
+        // Not active: set the price snapshot and, for a trial plan, (re)start the
+        // trial for its configured length.
+        set['subscription.amount'] = amount ?? plan.price;
+        if ((plan.trialDays || 0) > 0) {
+          set['subscription.status'] = 'trial';
+          set['subscription.trialStartDate'] = new Date();
+          set['subscription.trialEndDate'] = new Date(Date.now() + plan.trialDays * 24 * 60 * 60 * 1000);
+        }
       }
     } else if (amount !== undefined) {
       set['subscription.amount'] = amount;
