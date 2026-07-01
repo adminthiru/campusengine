@@ -38,11 +38,19 @@ platformSettingsSchema.pre('save', function () {
 
 // Decrypted gateway keys for internal use (Razorpay order/verify).
 platformSettingsSchema.methods.gatewayKeys = function () {
-  const keyId = decrypt(this.gateway?.keyId) || process.env.RAZORPAY_KEY_ID || '';
-  const keySecret = decrypt(this.gateway?.keySecret) || process.env.RAZORPAY_KEY_SECRET || '';
-  // Online payment is usable only when BOTH keys actually resolve (from the
-  // super-admin settings or, more commonly, the .env). Keys present ⇒ enabled —
-  // so the Billing page never offers a gateway that create-order would reject.
+  // .env is the single source of truth for the gateway now (the settings UI was
+  // removed). Prefer env so a stale DB keyId can't be paired with the env secret
+  // (that mismatch caused Razorpay "Authentication failed"). Fall back to any
+  // legacy DB values only when env is absent — and only as a consistent pair.
+  const envId = process.env.RAZORPAY_KEY_ID || '';
+  const envSecret = process.env.RAZORPAY_KEY_SECRET || '';
+  let keyId, keySecret;
+  if (envId && envSecret) {
+    keyId = envId; keySecret = envSecret;
+  } else {
+    keyId = decrypt(this.gateway?.keyId) || ''; keySecret = decrypt(this.gateway?.keySecret) || '';
+  }
+  // Online payment is usable only when BOTH keys resolve as a pair.
   const enabled = !!keyId && !!keySecret;
   return { enabled, keyId, keySecret };
 };
