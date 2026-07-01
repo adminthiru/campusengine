@@ -206,6 +206,7 @@ export default function Fees() {
     mutationFn: ({ feeId, paymentId }) => api.delete(`/fees/${feeId}/payment/${paymentId}`),
     onSuccess: (res) => {
       qc.invalidateQueries(['fees']);
+      qc.invalidateQueries(['fees-method-balances']);
       setViewFee(res.fee);
       toast.success('Payment reversed successfully');
       setReverseTarget(null);
