@@ -1662,7 +1662,9 @@ class _MarksEntryViewState extends State<_MarksEntryView> {
           Expanded(
             child: p.isLoadingStudents
                 ? const SkeletonList()
-                : p.error != null
+                // Only blank the screen when the LIST failed to load. Action
+                // errors (upload/save) keep the list and surface via snackbar.
+                : (p.error != null && p.students.isEmpty)
                     ? Center(
                         child: Padding(
                           padding: const EdgeInsets.all(24),

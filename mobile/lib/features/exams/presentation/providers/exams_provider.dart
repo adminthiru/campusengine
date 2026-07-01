@@ -613,9 +613,12 @@ class ExamsProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      final MultipartFile multipart = filePath != null
-          ? await MultipartFile.fromFile(filePath, filename: fileName)
-          : MultipartFile.fromBytes(bytes!, filename: fileName);
+      // Prefer bytes (populated via withData: true on every platform). fromFile
+      // needs dart:io and throws on Flutter Web, where file_picker returns a
+      // non-null blob path — so only use it when bytes are genuinely absent.
+      final MultipartFile multipart = bytes != null
+          ? MultipartFile.fromBytes(bytes, filename: fileName)
+          : await MultipartFile.fromFile(filePath!, filename: fileName);
       final formData = FormData.fromMap({
         'examId': examId,
         'classId': classId,
