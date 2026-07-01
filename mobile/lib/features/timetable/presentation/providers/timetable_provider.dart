@@ -30,6 +30,25 @@ class TeacherPeriod {
   String get fullClassName => section.isNotEmpty ? '$className $section' : className;
 }
 
+/// One column of the weekly grid — either a teaching period or a break slot.
+class TimetableColumn {
+  final int periodNumber; // raw slot number
+  final int? displayPeriod; // teaching-period ordinal (null for breaks)
+  final bool isBreak;
+  final String breakName;
+  final String? startTime;
+  final String? endTime;
+
+  TimetableColumn({
+    required this.periodNumber,
+    this.displayPeriod,
+    this.isBreak = false,
+    this.breakName = 'Break',
+    this.startTime,
+    this.endTime,
+  });
+}
+
 class SubstitutionAssignment {
   final String id;
   final DateTime date;
@@ -69,6 +88,11 @@ class TimetableProvider extends ChangeNotifier {
   Map<String, List<TeacherPeriod>> _timetable = {};
   Map<String, List<TeacherPeriod>> get timetable => _timetable;
 
+  // Column layout for the weekly grid (teaching periods + break slots), sent by
+  // the backend so the grid matches the admin timetable structure.
+  List<TimetableColumn> _columns = [];
+  List<TimetableColumn> get columns => _columns;
+
   // Selected date's substitutions
   List<SubstitutionAssignment> _substitutions = [];
   List<SubstitutionAssignment> get substitutions => _substitutions;
@@ -93,7 +117,21 @@ class TimetableProvider extends ChangeNotifier {
       });
 
       final List rawTimetables = res.data['timetables'] ?? [];
-      
+
+      // Column layout (teaching periods + breaks) for the weekly grid.
+      final List rawColumns = res.data['gridStructure'] ?? [];
+      _columns = rawColumns.map((c) {
+        int? asInt(v) => v == null ? null : (v is int ? v : int.tryParse(v.toString()));
+        return TimetableColumn(
+          periodNumber: asInt(c['periodNumber']) ?? 0,
+          displayPeriod: asInt(c['displayPeriod']),
+          isBreak: c['isBreak'] == true,
+          breakName: (c['breakName'] ?? 'Break').toString(),
+          startTime: c['startTime']?.toString(),
+          endTime: c['endTime']?.toString(),
+        );
+      }).toList();
+
       final Map<String, List<TeacherPeriod>> tempSchedule = {
         'monday': [],
         'tuesday': [],

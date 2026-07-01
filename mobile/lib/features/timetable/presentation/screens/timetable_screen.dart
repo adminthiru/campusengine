@@ -695,19 +695,21 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
       'saturday'
     ];
 
-    // Find the max teaching-period number dynamically (breaks are skipped, so
-    // columns are numbered consecutively — matching the admin timetable).
-    int maxPeriod = 8;
-    for (var day in days) {
-      final periods = provider.timetable[day] ?? [];
-      for (var p in periods) {
-        if (p.displayPeriod > maxPeriod) {
-          maxPeriod = p.displayPeriod;
+    // Columns come from the backend's period structure (teaching periods + break
+    // slots) so the grid matches the admin timetable exactly. Fall back to the
+    // teacher's own periods if the structure wasn't provided.
+    List<TimetableColumn> columns = provider.columns;
+    if (columns.isEmpty) {
+      int maxPeriod = 0;
+      for (var day in days) {
+        for (var p in provider.timetable[day] ?? <TeacherPeriod>[]) {
+          if (p.displayPeriod > maxPeriod) maxPeriod = p.displayPeriod;
         }
       }
+      if (maxPeriod == 0) maxPeriod = 8;
+      columns = List.generate(maxPeriod,
+          (i) => TimetableColumn(periodNumber: i + 1, displayPeriod: i + 1));
     }
-
-    final periodsList = List.generate(maxPeriod, (index) => index + 1);
 
     return Expanded(
       child: RefreshIndicator(
@@ -762,18 +764,22 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                             ),
                           ),
                         ),
-                        ...periodsList.map(
-                          (p) => TableCell(
+                        ...columns.map(
+                          (col) => TableCell(
                             verticalAlignment:
                                 TableCellVerticalAlignment.middle,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   vertical: 12, horizontal: 8),
                               child: Text(
-                                'P$p',
+                                col.isBreak
+                                    ? col.breakName.toUpperCase()
+                                    : 'P${col.displayPeriod}',
                                 textAlign: TextAlign.center,
-                                style:
-                                    AppTypography.s12Bold(color: Colors.white),
+                                style: AppTypography.s12Bold(
+                                    color: col.isBreak
+                                        ? const Color(0xFFFDE68A)
+                                        : Colors.white),
                               ),
                             ),
                           ),
@@ -833,9 +839,31 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
                             ),
                           ),
                           // Periods cells
-                          ...periodsList.map((pNum) {
-                            final periodList =
-                                dayPeriods.where((p) => p.displayPeriod == pNum);
+                          ...columns.map((col) {
+                            // Break columns: subtle amber slot with no period.
+                            if (col.isBreak) {
+                              return TableCell(
+                                verticalAlignment:
+                                    TableCellVerticalAlignment.middle,
+                                child: Container(
+                                  alignment: Alignment.center,
+                                  color: isDark
+                                      ? const Color(0x33F59E0B)
+                                      : const Color(0xFFFFFBEB),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 20),
+                                  child: Text(
+                                    '—',
+                                    style: AppTypography.s12Regular(
+                                      color: const Color(0xFFD97706)
+                                          .withValues(alpha: 0.6),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+                            final periodList = dayPeriods
+                                .where((p) => p.displayPeriod == col.displayPeriod);
                             final period =
                                 periodList.isNotEmpty ? periodList.first : null;
 
@@ -1041,13 +1069,21 @@ class _TimetableScreenContentState extends State<_TimetableScreenContent> {
     final regularPeriods = provider.timetable[dayName] ?? [];
     final subs = provider.substitutions;
 
-    int maxPeriod = 8;
+    // Base the number of period rows on the actual teaching-period count from
+    // the timetable structure (not a hard-coded 8), so it matches the admin.
+    int maxPeriod = 0;
+    for (final col in provider.columns) {
+      if (!col.isBreak && (col.displayPeriod ?? 0) > maxPeriod) {
+        maxPeriod = col.displayPeriod!;
+      }
+    }
     for (final p in regularPeriods) {
       if (p.displayPeriod > maxPeriod) maxPeriod = p.displayPeriod;
     }
     for (final s in subs) {
       if (s.displayPeriod > maxPeriod) maxPeriod = s.displayPeriod;
     }
+    if (maxPeriod == 0) maxPeriod = 8;
 
     final List<TimetableItem> items = [];
     for (int pNum = 1; pNum <= maxPeriod; pNum++) {

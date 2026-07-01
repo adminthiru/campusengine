@@ -158,7 +158,39 @@ const getTimetable = async (req, res) => {
         };
       }).filter(tt => tt.schedule.length > 0);
 
-      return res.json({ success: true, timetables: teacherTT });
+      // Build the column layout for the mobile weekly grid: the teaching periods
+      // and break slots of the classes this teacher is assigned to. This lets the
+      // app show exactly the same columns as the admin timetable (e.g. P1–P7 with
+      // a lunch break) instead of a hard-coded 8 columns with no break.
+      const slotMeta = {}; // rawPeriodNumber → { isBreak, breakName, startTime, endTime }
+      for (const tt of allTT) {
+        const teaches = tt.schedule.some(d => d.periods.some(p =>
+          p.teacher?._id?.toString() === teacherId || p.teacher?.toString() === teacherId));
+        if (!teaches) continue;
+        for (const d of tt.schedule) {
+          for (const p of d.periods) {
+            const cur = slotMeta[p.periodNumber];
+            if (!cur) {
+              slotMeta[p.periodNumber] = { isBreak: !!p.isBreak, breakName: p.breakName || 'Break', startTime: p.startTime || '', endTime: p.endTime || '' };
+            } else if (p.isBreak) {
+              cur.isBreak = true;
+              cur.breakName = p.breakName || cur.breakName;
+              cur.startTime = p.startTime || cur.startTime;
+              cur.endTime = p.endTime || cur.endTime;
+            }
+          }
+        }
+      }
+      let teachingN = 0;
+      const gridStructure = Object.keys(slotMeta).map(Number).sort((a, b) => a - b).map(raw => {
+        const m = slotMeta[raw];
+        if (m.isBreak) {
+          return { periodNumber: raw, isBreak: true, breakName: m.breakName, startTime: m.startTime, endTime: m.endTime };
+        }
+        return { periodNumber: raw, isBreak: false, displayPeriod: ++teachingN, startTime: m.startTime, endTime: m.endTime };
+      });
+
+      return res.json({ success: true, timetables: teacherTT, gridStructure });
     }
 
     const query = { school: req.user.school, class: classId, isActive: true };
