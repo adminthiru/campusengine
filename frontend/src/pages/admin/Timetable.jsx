@@ -258,6 +258,11 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
           const cell = activeDays.map(d => getCell(d, p)).find(c => c?.isBreak);
           if (cell) breakInfoByPeriod[p] = cell;
         });
+        // Breaks don't consume a period number — teaching periods are labelled
+        // consecutively (P1, P2, break, P3, P4…), skipping any break slots.
+        const periodLabel = {};
+        let teachingCount = 0;
+        periods.forEach(p => { if (!breakInfoByPeriod[p]) periodLabel[p] = ++teachingCount; });
 
         return (
           <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
@@ -279,7 +284,7 @@ function ClassView({ classes, teachers, workingDays, academicYear, periodsPerDay
                     ) : (
                       <th key={p}
                         style={{ padding: '12px 8px', color: 'white', textAlign: 'center', fontSize: 13, fontWeight: 700, minWidth: 110, userSelect: 'none' }}>
-                        <div>P{p}</div>
+                        <div>P{periodLabel[p]}</div>
                         {getPeriodTimeLabel(p) && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', fontWeight: 400, marginTop: 2 }}>{getPeriodTimeLabel(p)}</div>}
                       </th>
                     );
@@ -589,6 +594,12 @@ function TeacherScheduleGrid({ teacherId, teacher, academicYear, periodsPerDay }
           return null;
         };
         const periods = Array.from({ length: periodsPerDay }, (_, i) => i + 1);
+        // Breaks don't consume a period number — number teaching periods consecutively.
+        const breakPeriodNums = new Set();
+        timetables.forEach(tt => tt.schedule.forEach(ds => (ds.periods || []).forEach(per => { if (per.isBreak) breakPeriodNums.add(per.periodNumber); })));
+        const periodLabel = {};
+        let tCount = 0;
+        periods.forEach(p => { if (!breakPeriodNums.has(p)) periodLabel[p] = ++tCount; });
         return (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ minWidth: 560 }}>
@@ -597,7 +608,7 @@ function TeacherScheduleGrid({ teacherId, teacher, academicYear, periodsPerDay }
                   <th style={{ padding: '10px 16px', color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', width: 100 }}>Day</th>
                   {periods.map(p => (
                     <th key={p} style={{ padding: '12px 8px', color: 'white', textAlign: 'center', fontSize: 13, fontWeight: 700, minWidth: 110 }}>
-                      <div>P{p}</div>
+                      <div>{breakPeriodNums.has(p) ? 'Break' : `P${periodLabel[p]}`}</div>
                       {getPeriodTime(p) && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', fontWeight: 400, marginTop: 2 }}>{getPeriodTime(p)}</div>}
                     </th>
                   ))}
