@@ -1211,7 +1211,9 @@ router.get('/expenses', protect, checkSubscription, async (req, res) => {
       if (startDate) query.date.$gte = new Date(startDate);
       if (endDate) { const e = new Date(endDate); e.setHours(23, 59, 59, 999); query.date.$lte = e; }
     }
-    const expenses = await Expense.find(query).populate('createdBy', 'name').sort({ date: -1 });
+    // Newest-added first: order by creation time so the most recently added
+    // expense always shows on top (expense dates can be same-day or backdated).
+    const expenses = await Expense.find(query).populate('createdBy', 'name').sort({ createdAt: -1 });
     const total = expenses.reduce((s, e) => s + e.amount, 0);
     res.json({ success: true, expenses, total });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
