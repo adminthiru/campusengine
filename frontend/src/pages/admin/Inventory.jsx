@@ -306,8 +306,11 @@ export default function Inventory() {
                         <td><Pill meta={STATUS_META[it.status]} /></td>
                         <td onClick={e => e.stopPropagation()}>
                           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                            {it.status !== 'in_repair' && it.status !== 'disposed' && (
+                            {it.status !== 'in_repair' && it.status !== 'disposed' && it.status !== 'purchase_requested' && (
                               <button className="btn btn-secondary btn-sm btn-icon" title="Send to repair" onClick={() => setSendRepairItems([it])}><Wrench size={14} /></button>
+                            )}
+                            {it.type === 'asset' && it.status !== 'in_repair' && it.status !== 'disposed' && it.status !== 'purchase_requested' && (
+                              <button className="btn btn-secondary btn-sm btn-icon" title="Mark damaged" onClick={() => setDamagedTarget({ itemId: it._id, name: it.name })} style={{ color: '#dc2626' }}><AlertTriangle size={14} /></button>
                             )}
                             <button className="btn btn-secondary btn-sm btn-icon" title="Edit" onClick={() => { setEditItem(it); setShowItemModal(true); }}><Edit2 size={14} /></button>
                           </div>
@@ -1034,15 +1037,18 @@ function DamagedAssetModal({ target, onClose, onSaved }) {
   const busy = requestMutation.isPending || removeMutation.isPending;
 
   return (
-    <Modal open onClose={onClose} title="Asset Damaged — What Next?" dismissable={false}
+    <Modal open onClose={onClose} title="Asset Damaged — What Next?"
       footer={
-        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 8 }}>
-          <button className="btn btn-danger" onClick={() => removeMutation.mutate()} disabled={busy}>
-            <Trash2 size={14} /> {removeMutation.isPending ? 'Removing…' : 'Remove Asset'}
-          </button>
-          <button className="btn btn-primary" onClick={() => requestMutation.mutate()} disabled={busy}>
-            <PackageCheck size={14} /> {requestMutation.isPending ? 'Requesting…' : 'Confirm Purchase Request'}
-          </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 8, alignItems: 'center' }}>
+          <button className="btn btn-secondary" onClick={onClose} disabled={busy}>Cancel</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-danger" onClick={() => removeMutation.mutate()} disabled={busy}>
+              <Trash2 size={14} /> {removeMutation.isPending ? 'Removing…' : 'Remove Asset'}
+            </button>
+            <button className="btn btn-primary" onClick={() => requestMutation.mutate()} disabled={busy}>
+              <PackageCheck size={14} /> {requestMutation.isPending ? 'Requesting…' : 'Confirm Purchase Request'}
+            </button>
+          </div>
         </div>
       }>
       <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: 0 }}>
