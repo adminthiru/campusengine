@@ -161,6 +161,12 @@ const updateSchool = async (req, res) => {
       if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
       set['subscription.plan'] = plan._id; set['subscription.planName'] = plan.name; set['subscription.amount'] = amount ?? plan.price;
       set['subscription.modules'] = plan.modules || []; set['subscription.limits'] = plan.limits || {};
+      // Assigning a free-trial plan (re)starts the trial for its configured length.
+      if ((plan.trialDays || 0) > 0) {
+        set['subscription.status'] = 'trial';
+        set['subscription.trialStartDate'] = new Date();
+        set['subscription.trialEndDate'] = new Date(Date.now() + plan.trialDays * 24 * 60 * 60 * 1000);
+      }
     } else if (amount !== undefined) {
       set['subscription.amount'] = amount;
     }
