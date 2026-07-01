@@ -324,16 +324,19 @@ export default function Attendance() {
   const usedLeave    = leaveBalData?.used    || {};  // this month only
   const usedLeaveYtd = leaveBalData?.usedYtd || {};  // year to date
 
-  // Limits: respect carry-forward — if ON, entitlement grows each month
-  const currentMonth = new Date().getMonth() + 1; // 1–12
+  // Limits: respect carry-forward — if ON, entitlement grows each month of the
+  // ACADEMIC year. e.g. an April-start year in July = 4 months accrued (not 7),
+  // so a 1/month leave shows 4/4 — matching the header's academic year.
+  const startMonth = school?.academicYear?.startMonth || 1; // 1–12
+  const monthsElapsed = ((monthNum - startMonth + 12) % 12) + 1;
   const clType = school?.leaveTypes?.find(lt => lt.code === 'cl');
   const slType = school?.leaveTypes?.find(lt => lt.code === 'sl');
   const clDpm  = clType?.daysPerMonth ?? 1;
   const slDpm  = slType?.daysPerMonth ?? 1;
   const clCf   = clType?.carryForward ?? false;
   const slCf   = slType?.carryForward ?? false;
-  const clLimit = clCf ? clDpm * currentMonth : clDpm;
-  const slLimit = slCf ? slDpm * currentMonth : slDpm;
+  const clLimit = clCf ? clDpm * monthsElapsed : clDpm;
+  const slLimit = slCf ? slDpm * monthsElapsed : slDpm;
 
   const getRemaining = (empId, code) => {
     const cf    = code === 'cl' ? clCf  : code === 'sl' ? slCf  : false;

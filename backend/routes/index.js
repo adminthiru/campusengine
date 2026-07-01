@@ -983,10 +983,16 @@ router.get('/attendance/leave-balance', protect, checkSubscription, async (req, 
     const { month, year } = req.query;
     const m = Number(month), y = Number(year);
 
+    // "Year to date" for carry-forward accrual runs from the ACADEMIC year start
+    // (e.g. April), not January — so accrued months match the header's academic year.
+    const school = await School.findById(req.user.school).select('academicYear');
+    const startMonth = school?.academicYear?.startMonth || 1; // 1-12
+    const ayStartYear = m >= startMonth ? y : y - 1;
+
     const monthFrom = new Date(y, m - 1, 1);
     const monthTo   = new Date(y, m, 1);
-    const yearFrom  = new Date(y, 0, 1);
-    const yearTo    = new Date(y + 1, 0, 1);
+    const yearFrom  = new Date(ayStartYear, startMonth - 1, 1);
+    const yearTo    = new Date(ayStartYear + 1, startMonth - 1, 1);
 
     // Fetch month records and year records in parallel
     const [monthRecords, yearRecords] = await Promise.all([
@@ -1808,19 +1814,29 @@ router.post('/leaves', protect, authorize('teacher', 'principal', 'admin', 'corr
 // Teacher: my leave balance (respects carry-forward setting per leave type)
 router.get('/leaves/my-balance', protect, async (req, res) => {
   try {
-    const school = await School.findById(req.user.school).select('leaveTypes');
+    const school = await School.findById(req.user.school).select('leaveTypes academicYear');
     const leaveTypes = school?.leaveTypes ?? [];
 
     const getType = code => leaveTypes.find(l => l.code === code.toLowerCase());
     const clType = getType('cl');
     const slType = getType('sl');
 
+    // Carry-forward accrues from the start of the ACADEMIC year (e.g. April),
+    // not the calendar year — so in July of an April-start year a teacher has
+    // accrued 4 months (Apr,May,Jun,Jul), not 7.
+    const startMonth = school?.academicYear?.startMonth || 1; // 1-12
+
     const now   = new Date();
     const year  = now.getFullYear();
     const month = now.getMonth() + 1; // 1-12
 
-    const yearStart  = new Date(year, 0, 1);
-    const yearEnd    = new Date(year + 1, 0, 1);
+    // Academic year window: begins at the most recent occurrence of startMonth
+    const ayStartYear = month >= startMonth ? year : year - 1;
+    const yearStart  = new Date(ayStartYear, startMonth - 1, 1);
+    const yearEnd    = new Date(ayStartYear + 1, startMonth - 1, 1);
+    // Months elapsed in the academic year, inclusive of the current month (1-based)
+    const monthsElapsed = ((month - startMonth + 12) % 12) + 1;
+
     const monthStart = new Date(year, month - 1, 1);
     const monthEnd   = new Date(year, month, 1);
 
@@ -1866,7 +1882,7 @@ router.get('/leaves/my-balance', protect, async (req, res) => {
         ? [yearStart, yearEnd]
         : [monthStart, monthEnd];
 
-      const entitled = carryForward ? dpm * month : dpm;
+      const entitled = carryForward ? dpm * monthsElapsed : dpm;
       const used     = await countFromAttendance(attCode, from, to);
       const pending  = await pendingFromLeave(leaveTypeCode, from, to);
 
