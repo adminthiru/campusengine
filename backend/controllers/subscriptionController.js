@@ -85,7 +85,12 @@ const createOrder = async (req, res) => {
       receipt: `sub_${req.user.school}_${Date.now()}`.slice(0, 40),
     });
     res.json({ success: true, order, key: keyId, amount, cycle });
-  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+  } catch (err) {
+    // Razorpay SDK errors carry the reason under err.error.description, not err.message.
+    const msg = err?.error?.description || err?.message || 'Could not start payment';
+    console.error('[subscription/create-order] failed:', err?.statusCode || '', err?.error || err?.message || err);
+    res.status(500).json({ success: false, message: `Payment gateway: ${msg}` });
+  }
 };
 
 const verifyPayment = async (req, res) => {
