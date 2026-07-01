@@ -728,6 +728,7 @@ function PaymentMethodsModal({ methods, openingBalances = [], onClose, onSuccess
   });
   const [input, setInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false); // balances locked until Edit is clicked
 
   const setBal = (method, val) => setBalances(p => ({ ...p, [method]: val }));
 
@@ -739,6 +740,7 @@ function PaymentMethodsModal({ methods, openingBalances = [], onClose, onSuccess
     if (list.some(m => m.toLowerCase() === v.toLowerCase())) return toast.error('Already added');
     setList(p => [...p, v]);
     setInput('');
+    setEditing(true); // let them set the new category's opening balance right away
   };
   const remove = (m) => {
     setList(p => p.filter(x => x !== m));
@@ -768,7 +770,9 @@ function PaymentMethodsModal({ methods, openingBalances = [], onClose, onSuccess
         <input className="form-control no-spinner" type="number" min={0}
           value={balances[method] ?? ''} onWheel={e => e.currentTarget.blur()}
           onChange={e => setBal(method, e.target.value)}
-          placeholder="Opening balance ₹" style={{ textAlign: 'right' }} />
+          disabled={!editing}
+          placeholder="Opening balance ₹"
+          style={{ textAlign: 'right', background: editing ? undefined : '#f8fafc', color: editing ? undefined : 'var(--text-secondary)', cursor: editing ? 'text' : 'not-allowed' }} />
       </div>
       {removable && (
         <button onClick={() => remove(method)} className="btn btn-secondary btn-sm btn-icon" title="Remove category">
@@ -788,7 +792,12 @@ function PaymentMethodsModal({ methods, openingBalances = [], onClose, onSuccess
         Set the amount already available in each payment mode (opening balance). Newly collected fees add on top, giving a running balance that carries forward every year. Add custom categories (e.g. a specific bank account) below.
       </p>
 
-      <label className="form-label">Built-in Methods</label>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <label className="form-label" style={{ margin: 0 }}>Built-in Methods</label>
+        <button className={`btn btn-sm ${editing ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setEditing(v => !v)}>
+          <Edit2 size={13} /> {editing ? 'Done Editing' : 'Edit Balances'}
+        </button>
+      </div>
       <div style={{ marginBottom: 18 }}>
         {DEFAULT_PAYMENT_METHODS.map(m => balanceRow(m.value, m.label, false))}
       </div>
