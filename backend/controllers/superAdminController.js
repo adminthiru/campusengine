@@ -92,19 +92,25 @@ const getSchool = async (req, res) => {
   try {
     const school = await School.findById(req.params.id).populate('subscription.plan').lean();
     if (!school) return res.status(404).json({ success: false, message: 'School not found' });
-    const [admin, students, employees, classes, payments] = await Promise.all([
+    const [admin, students, employees, classes, payments, totals] = await Promise.all([
       User.findOne({ school: school._id, role: 'admin' }).select('name email phone firstLogin lastLogin isActive').lean(),
       Student.countDocuments({ school: school._id }),
       Employee.countDocuments({ school: school._id }),
       require('../models/Class').countDocuments({ school: school._id }),
       SubscriptionPayment.find({ school: school._id }).populate('plan', 'name').sort({ createdAt: -1 }).limit(50).lean(),
+      SubscriptionPayment.aggregate([
+        { $match: { school: school._id, status: 'paid' } },
+        { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 }, last: { $max: '$createdAt' } } },
+      ]),
     ]);
+    const billing = totals[0] || { total: 0, count: 0, last: null };
     res.json({
       success: true,
       school: { ...school, isActive: school.isActive !== false, status: effectiveStatus(school) },
       admin, usage: { students, employees, classes },
       limits: school.subscription?.limits || {}, modules: school.subscription?.modules || [],
       payments,
+      billing: { totalCollected: billing.total || 0, paymentCount: billing.count || 0, lastPaymentAt: billing.last || null },
     });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
